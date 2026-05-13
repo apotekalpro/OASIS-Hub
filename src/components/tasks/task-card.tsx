@@ -43,6 +43,7 @@ export type TaskCardData = {
   due_date: string | null
   tags: string[]
   created_at: string
+  created_by?: string
   assignees?: Array<{ id: string; full_name: string; avatar_url: string | null }>
   _commentCount?: number
   _timeLogged?: number

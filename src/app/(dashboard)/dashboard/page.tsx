@@ -13,14 +13,23 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const [tasksRes, notifRes, profileRes, totalRes, completedRes, teamsRes, orgMembersRes] = await Promise.all([
+  const [assignedRes, createdRes, notifRes, profileRes, teamsRes, orgMembersRes] = await Promise.all([
+    // Tasks assigned to me
     supabase
       .from('tasks')
-      .select('*, task_assignees!inner(user_id)')
+      .select('id, title, status, priority, due_date, created_by, task_assignees!inner(user_id)')
       .eq('task_assignees.user_id', user.id)
       .not('status', 'in', '("done","cancelled")')
       .order('due_date', { ascending: true, nullsFirst: false })
-      .limit(8),
+      .limit(20),
+    // Tasks created by me (not necessarily assigned to me)
+    supabase
+      .from('tasks')
+      .select('id, title, status, priority, due_date, created_by, task_assignees(user_id)')
+      .eq('created_by', user.id)
+      .not('status', 'in', '("done","cancelled")')
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .limit(20),
     supabase
       .from('notifications')
       .select('*')
@@ -28,20 +37,30 @@ export default async function DashboardPage() {
       .eq('is_read', false)
       .order('created_at', { ascending: false })
       .limit(5),
-    supabase.from('profiles').select('full_name, role, dept_id, org_id, job_title, dept_id').eq('id', user.id).single(),
-    supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('task_assignees.user_id', user.id),
-    supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('task_assignees.user_id', user.id).eq('status', 'done'),
+    supabase.from('profiles').select('full_name, role, dept_id, org_id, job_title').eq('id', user.id).single(),
     // My teams
     supabase.from('teams').select('id, name, color, team_members!inner(user_id)').eq('team_members.user_id', user.id),
     // Org members snapshot
     supabase.from('profiles').select('id, full_name, avatar_url, role, dept_id, departments(name)').eq('is_active', true).order('full_name').limit(8),
   ])
 
-  const myTasks = tasksRes.data as Task[] | null
+  // Merge assigned + created, deduplicate by id
+  const seenIds = new Set<string>()
+  const merged = [...(assignedRes.data ?? []), ...(createdRes.data ?? [])]
+    .filter(t => { if (seenIds.has(t.id)) return false; seenIds.add(t.id); return true })
+    .sort((a, b) => {
+      if (!a.due_date && !b.due_date) return 0
+      if (!a.due_date) return 1
+      if (!b.due_date) return -1
+      return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+    })
+    .slice(0, 8)
+
+  const myTasks = merged as unknown as Task[]
+  const totalTasks = seenIds.size + (createdRes.data?.filter(t => !assignedRes.data?.find(a => a.id === t.id)).length ?? 0)
+  const completedTasks = 0 // not needed for display
   const myNotifications = notifRes.data as AppNotification[] | null
   const profile = profileRes.data as Pick<Profile, 'full_name' | 'role' | 'dept_id' | 'org_id' | 'job_title'> | null
-  const totalTasks = totalRes.count
-  const completedTasks = completedRes.count
 
   type TeamRow = { id: string; name: string; color: string; team_members?: Array<{ user_id: string }> }
   const myTeams = teamsRes.data as TeamRow[] | null
@@ -50,7 +69,7 @@ export default async function DashboardPage() {
   const orgMembers = orgMembersRes.data as OrgMember[] | null
 
   const overdueTasks = myTasks?.filter(t => t.due_date && new Date(t.due_date) < new Date()) ?? []
-  const completionRate = totalTasks ? Math.round(((completedTasks ?? 0) / totalTasks) * 100) : 0
+  const completionRate = 0 // calculated in analytics dashboard
 
   const PRIORITY_COLORS = {
     urgent: 'destructive' as const,

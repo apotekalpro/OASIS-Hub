@@ -41,6 +41,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
   const [filterStatus, setFilterStatus] = useState<string[]>([])
   const [filterPriority, setFilterPriority] = useState<string[]>([])
   const [showFilters, setShowFilters] = useState(false)
+  const [scope, setScope] = useState<'all' | 'mine'>('all')
 
   function refresh() { router.refresh() }
 
@@ -74,11 +75,16 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
       }
       setTasks(prev => [newTask, ...prev])
     }
-    router.refresh()
   }
 
   const filtered = useMemo(() => {
     let result = tasks
+    if (scope === 'mine') {
+      result = result.filter(t =>
+        t.assignees?.some(a => a.id === currentUserId) ||
+        t.created_by === currentUserId
+      )
+    }
     if (search) {
       const q = search.toLowerCase()
       result = result.filter(t =>
@@ -120,7 +126,19 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
             <span className="text-green-600">{counts.done} done</span>
           </div>
         </div>
-        <TaskForm
+        <div className="flex items-center gap-2">
+          {/* Scope toggle */}
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+            <button
+              onClick={() => setScope('all')}
+              className={cn('px-3 py-1.5 font-medium transition-colors', scope === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}
+            >All Tasks</button>
+            <button
+              onClick={() => setScope('mine')}
+              className={cn('px-3 py-1.5 font-medium transition-colors', scope === 'mine' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}
+            >My Tasks</button>
+          </div>
+          <TaskForm
           orgId={orgId}
           currentUserId={currentUserId}
           users={users}
@@ -134,6 +152,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
           }
           onCreated={handleTaskCreated}
         />
+        </div>
       </div>
 
       {/* Toolbar */}

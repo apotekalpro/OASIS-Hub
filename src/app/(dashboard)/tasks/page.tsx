@@ -43,6 +43,7 @@ export default async function TasksPage() {
     due_date: t.due_date,
     tags: t.tags ?? [],
     created_at: t.created_at,
+    created_by: t.created_by,
     assignees: (t.task_assignees ?? [])
       .map(a => a.profiles ? { id: a.profiles.id, full_name: a.profiles.full_name, avatar_url: a.profiles.avatar_url } : null)
       .filter(Boolean) as Array<{ id: string; full_name: string; avatar_url: string | null }>,
