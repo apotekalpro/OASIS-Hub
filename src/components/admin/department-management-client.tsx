@@ -46,20 +46,20 @@ export function DepartmentManagementClient({ departments, orgId, dept, mode = 'c
 
   async function onSubmit(data: FormData) {
     const supabase = createClient()
-    try {
-      if (dept?.id) {
-        await supabase.from('departments').update(data).eq('id', dept.id)
-        toast.success('Department updated')
-      } else {
-        await supabase.from('departments').insert({ ...data, org_id: orgId })
-        toast.success('Department created')
-      }
-      setOpen(false)
-      reset()
-      router.refresh()
-    } catch (err) {
-      toast.error((err as Error).message)
+    const payload = { ...data, parent_id: data.parent_id || null }
+
+    if (dept?.id) {
+      const { error } = await supabase.from('departments').update(payload).eq('id', dept.id)
+      if (error) { toast.error(error.message); return }
+      toast.success('Department updated')
+    } else {
+      const { error } = await supabase.from('departments').insert({ ...payload, org_id: orgId })
+      if (error) { toast.error(error.message); return }
+      toast.success('Department created')
     }
+    setOpen(false)
+    reset()
+    router.refresh()
   }
 
   async function handleDelete() {
