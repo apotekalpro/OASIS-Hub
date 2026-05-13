@@ -106,8 +106,9 @@ export function TeamsClient({ departments, orgId, currentUserId, teamId, team, i
 
   const isPrivate = watch('is_private')
   const colorValue = watch('color')
+  const nameValue = watch('name')
 
-  const FormDialog = () => (
+  const formDialogContent = (
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
       <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-lg bg-white rounded-xl shadow-xl p-6">
@@ -121,7 +122,7 @@ export function TeamsClient({ departments, orgId, currentUserId, teamId, team, i
               className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0"
               style={{ backgroundColor: colorValue || '#8b5cf6' }}
             >
-              {watch('name')?.slice(0, 2).toUpperCase() || 'TM'}
+              {nameValue?.slice(0, 2).toUpperCase() || 'TM'}
             </div>
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-1">Team Name *</label>
@@ -183,7 +184,7 @@ export function TeamsClient({ departments, orgId, currentUserId, teamId, team, i
         <Dialog.Trigger asChild>
           <Button size="sm"><Plus className="h-4 w-4" /> New Team</Button>
         </Dialog.Trigger>
-        <FormDialog />
+        {formDialogContent}
       </Dialog.Root>
     )
   }
@@ -219,7 +220,7 @@ export function TeamsClient({ departments, orgId, currentUserId, teamId, team, i
                 <Edit2 className="h-4 w-4" /> Edit Team
               </DropdownMenu.Item>
             </Dialog.Trigger>
-            <FormDialog />
+            {formDialogContent}
           </Dialog.Root>
 
           <DropdownMenu.Item

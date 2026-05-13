@@ -71,7 +71,7 @@ export function DepartmentManagementClient({ departments, orgId, dept, mode = 'c
     router.refresh()
   }
 
-  const FormDialog = () => (
+  const formDialogContent = (
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
       <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md bg-white rounded-xl shadow-xl p-6">
@@ -131,7 +131,7 @@ export function DepartmentManagementClient({ departments, orgId, dept, mode = 'c
                   <Edit2 className="h-4 w-4" /> Edit
                 </DropdownMenu.Item>
               </Dialog.Trigger>
-              <FormDialog />
+              {formDialogContent}
             </Dialog.Root>
             <DropdownMenu.Item
               className="flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 cursor-pointer outline-none"
@@ -152,7 +152,7 @@ export function DepartmentManagementClient({ departments, orgId, dept, mode = 'c
           <Plus className="h-4 w-4" /> Add Department
         </Button>
       </Dialog.Trigger>
-      <FormDialog />
+      {formDialogContent}
     </Dialog.Root>
   )
 }
