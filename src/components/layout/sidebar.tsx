@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, CheckSquare, MessageSquare, FileText,
@@ -69,11 +70,15 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-gray-200 bg-white">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-100">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
-          <Building2 className="h-4 w-4 text-white" />
-        </div>
-        <span className="font-bold text-gray-900 text-lg">OASIS Hub</span>
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-100">
+        <Image
+          src="/Alpro logo.jpg"
+          alt="Alpro Pharmacy"
+          width={120}
+          height={40}
+          className="h-10 w-auto object-contain"
+          priority
+        />
       </div>
 
       {/* Navigation */}
