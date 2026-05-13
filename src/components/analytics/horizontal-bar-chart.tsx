@@ -32,7 +32,7 @@ export function HorizontalBarChart({ data, color = '#6366f1', height = 220, valu
         />
         <Tooltip
           contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
-          formatter={(v: number) => [v, valueLabel ?? 'Value']}
+          formatter={(v) => [Number(v), valueLabel ?? 'Value']}
         />
         <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={20}>
           {data.map((d, i) => (

@@ -45,7 +45,7 @@ export function SeverityDonut({ data, height = 220 }: Props) {
           </Pie>
           <Tooltip
             contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
-            formatter={(v: number, name: string) => [`${v} (${((v / total) * 100).toFixed(0)}%)`, name]}
+            formatter={(v, name) => [`${Number(v)} (${((Number(v) / total) * 100).toFixed(0)}%)`, String(name)]}
           />
           <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
         </PieChart>
