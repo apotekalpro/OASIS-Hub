@@ -17,25 +17,39 @@ export async function createUser(data: {
   job_title?: string
   phone?: string
 }) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured. Add it to your Netlify environment variables.')
+  }
+
   const adminClient = await createAdminClient()
 
+  // Try to create auth user; if already exists, look up their existing ID
+  let userId: string
   const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
     email: data.email,
     password: DEFAULT_PASSWORD,
     email_confirm: true,
-    user_metadata: {
-      full_name: data.full_name,
-      role: data.role,
-      must_change_password: true,
-    },
+    user_metadata: { full_name: data.full_name, role: data.role, must_change_password: true },
   })
 
-  if (authError) throw new Error(authError.message)
+  if (authError) {
+    if (authError.message.toLowerCase().includes('already') || authError.message.toLowerCase().includes('exists')) {
+      // User exists in auth but may lack a profile — look them up
+      const { data: existing } = await adminClient.auth.admin.listUsers()
+      const found = existing?.users?.find(u => u.email === data.email)
+      if (!found) throw new Error(authError.message)
+      userId = found.id
+    } else {
+      throw new Error(authError.message)
+    }
+  } else {
+    userId = authUser.user.id
+  }
 
   const { error: profileError } = await adminClient
     .from('profiles')
     .upsert({
-      id: authUser.user.id,
+      id: userId,
       email: data.email,
       org_id: data.org_id,
       dept_id: data.dept_id || null,
@@ -50,7 +64,7 @@ export async function createUser(data: {
   if (profileError) throw new Error(profileError.message)
 
   revalidatePath('/admin/users')
-  return { success: true, userId: authUser.user.id }
+  return { success: true, userId }
 }
 
 // ─── Bulk import users from CSV data ─────────────────────────────────────────

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { TaskCardData } from './task-card'
 import { TaskList } from './task-list'
@@ -35,6 +35,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
   const router = useRouter()
   const [view, setView] = useState<View>('list')
   const [tasks, setTasks] = useState<TaskCardData[]>(initialTasks)
+  useEffect(() => { setTasks(initialTasks) }, [initialTasks])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<string[]>([])
   const [filterPriority, setFilterPriority] = useState<string[]>([])
