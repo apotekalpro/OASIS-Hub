@@ -114,7 +114,7 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
       reset()
       setSelectedAssignees([])
       setTags([])
-      router.refresh()
+      if (!onCreated) router.refresh()
     } catch (err) {
       toast.error((err as Error).message)
     }

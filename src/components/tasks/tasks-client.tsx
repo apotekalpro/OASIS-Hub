@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { LayoutList, Columns3, Search, Filter, X, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 
 type View = 'list' | 'kanban'
 type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
@@ -42,6 +43,39 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
   const [showFilters, setShowFilters] = useState(false)
 
   function refresh() { router.refresh() }
+
+  async function handleTaskCreated(taskId: string) {
+    const supabase = createClient()
+    type RawAssignee = { user_id: string; profiles?: { id: string; full_name: string; avatar_url: string | null } | null }
+    type RawTask = {
+      id: string; title: string; description: string | null; status: string; priority: string
+      due_date: string | null; tags: string[]; created_at: string
+      task_assignees?: RawAssignee[]
+    }
+    const { data } = await supabase
+      .from('tasks')
+      .select('id, title, description, status, priority, due_date, tags, created_at, task_assignees(user_id, profiles(id, full_name, avatar_url))')
+      .eq('id', taskId)
+      .single()
+    if (data) {
+      const raw = data as unknown as RawTask
+      const newTask: TaskCardData = {
+        id: raw.id,
+        title: raw.title,
+        description: raw.description,
+        status: raw.status,
+        priority: raw.priority,
+        due_date: raw.due_date,
+        tags: raw.tags ?? [],
+        created_at: raw.created_at,
+        assignees: (raw.task_assignees ?? [])
+          .map(a => a.profiles ? { id: a.profiles.id, full_name: a.profiles.full_name, avatar_url: a.profiles.avatar_url } : null)
+          .filter(Boolean) as Array<{ id: string; full_name: string; avatar_url: string | null }>,
+      }
+      setTasks(prev => [newTask, ...prev])
+    }
+    router.refresh()
+  }
 
   const filtered = useMemo(() => {
     let result = tasks
@@ -98,7 +132,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
               New Task
             </Button>
           }
-          onCreated={() => refresh()}
+          onCreated={handleTaskCreated}
         />
       </div>
 
