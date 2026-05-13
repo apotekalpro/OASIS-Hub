@@ -8,13 +8,21 @@ export default async function SettingsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const [profileRes, orgRes, statsRes] = await Promise.all([
-    supabase.from('profiles').select('org_id, role, full_name').eq('id', user.id).single(),
-    supabase.from('organizations').select('id, name, created_at').limit(1).single(),
-    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_active', true),
-  ])
+  const profileRes = await supabase
+    .from('profiles')
+    .select('org_id, role, full_name')
+    .eq('id', user.id)
+    .single()
 
   const profile = profileRes.data as { org_id: string; role: string; full_name: string } | null
+
+  const [orgRes, statsRes] = await Promise.all([
+    supabase.from('organizations').select('id, name, created_at').eq('id', profile?.org_id ?? '').single(),
+    supabase.from('profiles').select('id', { count: 'exact', head: true })
+      .eq('org_id', profile?.org_id ?? '')
+      .eq('is_active', true),
+  ])
+
   const org = orgRes.data as { id: string; name: string; created_at: string } | null
   const userCount = statsRes.count ?? 0
 
