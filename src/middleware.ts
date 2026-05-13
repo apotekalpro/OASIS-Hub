@@ -43,30 +43,36 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Fetch profile for role-based routing
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, must_change_password')
-    .eq('id', user.id)
-    .single()
+  // Only fetch profile when needed for role-gated routes
+  const needsProfile =
+    ADMIN_ROUTES.some(r => pathname.startsWith(r)) ||
+    SUPERADMIN_ROUTES.some(r => pathname.startsWith(r))
 
-  // Force password change on first login
-  if (profile?.must_change_password && pathname !== '/change-password') {
-    return NextResponse.redirect(new URL('/change-password', request.url))
-  }
+  if (needsProfile) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, must_change_password')
+      .eq('id', user.id)
+      .single()
 
-  // Protect admin routes
-  if (ADMIN_ROUTES.some(r => pathname.startsWith(r))) {
-    const allowedRoles = ['super_admin', 'org_admin', 'dept_head']
-    if (!profile || !allowedRoles.includes(profile.role)) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+    // Force password change on first login
+    if (profile?.must_change_password && pathname !== '/change-password') {
+      return NextResponse.redirect(new URL('/change-password', request.url))
     }
-  }
 
-  // Protect super-admin-only routes
-  if (SUPERADMIN_ROUTES.some(r => pathname.startsWith(r))) {
-    if (!profile || !['super_admin', 'org_admin'].includes(profile.role)) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+    // Protect admin routes
+    if (ADMIN_ROUTES.some(r => pathname.startsWith(r))) {
+      const allowedRoles = ['super_admin', 'org_admin', 'dept_head']
+      if (!profile || !allowedRoles.includes(profile.role)) {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+    }
+
+    // Protect super-admin-only routes
+    if (SUPERADMIN_ROUTES.some(r => pathname.startsWith(r))) {
+      if (!profile || !['super_admin', 'org_admin'].includes(profile.role)) {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
     }
   }
 
