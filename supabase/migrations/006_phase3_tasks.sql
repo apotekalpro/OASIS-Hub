@@ -40,6 +40,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
+drop trigger if exists trg_notify_task_comment on task_comments;
 create trigger trg_notify_task_comment
   after insert on task_comments
   for each row execute function notify_task_comment();
@@ -68,6 +69,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
+drop trigger if exists trg_notify_task_completed on tasks;
 create trigger trg_notify_task_completed
   after update on tasks
   for each row execute function notify_task_completed();

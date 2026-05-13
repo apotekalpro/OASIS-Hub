@@ -3,20 +3,24 @@
 -- ============================================================
 
 -- Allow form_assignments insert by dept_head+
-create policy "form_assignments: dept heads can manage"
-  on form_assignments for all to authenticated
-  using (is_dept_head_or_above())
-  with check (is_dept_head_or_above());
+do $$ begin
+  create policy "form_assignments: dept heads can manage"
+    on form_assignments for all to authenticated
+    using (is_dept_head_or_above())
+    with check (is_dept_head_or_above());
+exception when duplicate_object then null; end $$;
 
 -- Allow assigned users/team members to view their assignments
-create policy "form_assignments: assigned users can view"
-  on form_assignments for select to authenticated
-  using (
-    assigned_to = auth.uid()
-    or assigned_team in (
-      select team_id from team_members where user_id = auth.uid()
-    )
-  );
+do $$ begin
+  create policy "form_assignments: assigned users can view"
+    on form_assignments for select to authenticated
+    using (
+      assigned_to = auth.uid()
+      or assigned_team in (
+        select team_id from team_members where user_id = auth.uid()
+      )
+    );
+exception when duplicate_object then null; end $$;
 
 -- Get submission stats for a form
 create or replace function get_form_stats(p_form_id uuid)
@@ -79,6 +83,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
+drop trigger if exists trg_notify_form_assigned on form_assignments;
 create trigger trg_notify_form_assigned
   after insert on form_assignments
   for each row execute function notify_form_assigned();
@@ -114,6 +119,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
+drop trigger if exists trg_notify_form_submitted on form_submissions;
 create trigger trg_notify_form_submitted
   after update on form_submissions
   for each row execute function notify_form_submitted();

@@ -98,23 +98,30 @@ begin
 end;
 $$ language plpgsql security definer;
 
+drop trigger if exists trg_notify_message_mention on messages;
 create trigger trg_notify_message_mention
   after insert on messages
   for each row execute function notify_message_mention();
 
 -- Allow channel members policy for direct messages
-create policy "channel_members: users can join DM channels"
-  on channel_members for insert to authenticated
-  with check (true);
+do $$ begin
+  create policy "channel_members: users can join DM channels"
+    on channel_members for insert to authenticated
+    with check (true);
+exception when duplicate_object then null; end $$;
 
-create policy "channel_members: users can view memberships in their channels"
-  on channel_members for select to authenticated
-  using (
-    channel_id in (select channel_id from channel_members where user_id = auth.uid())
-    or user_id = auth.uid()
-  );
+do $$ begin
+  create policy "channel_members: users can view memberships in their channels"
+    on channel_members for select to authenticated
+    using (
+      channel_id in (select channel_id from channel_members where user_id = auth.uid())
+      or user_id = auth.uid()
+    );
+exception when duplicate_object then null; end $$;
 
 -- Messages: allow delete own messages
-create policy "messages: owners can delete"
-  on messages for delete to authenticated
-  using (user_id = auth.uid());
+do $$ begin
+  create policy "messages: owners can delete"
+    on messages for delete to authenticated
+    using (user_id = auth.uid());
+exception when duplicate_object then null; end $$;
