@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { UserAvatar } from '@/components/ui/avatar'
 import { MapPin, Phone, Building2, Users } from 'lucide-react'
 import { OutletManagementClient } from '@/components/inspections/outlet-management-client'
+import { OutletImportClient } from '@/components/inspections/outlet-import-client'
 
 export default async function OutletsPage() {
   const supabase = await createClient()
@@ -50,12 +51,15 @@ export default async function OutletsPage() {
             Manage pharmacy outlets, assign staff, and configure inspection coverage.
           </p>
         </div>
-        <OutletManagementClient
-          orgId={orgId}
-          departments={departments}
-          users={users}
-          mode="create"
-        />
+        <div className="flex items-center gap-2">
+          <OutletImportClient orgId={orgId} />
+          <OutletManagementClient
+            orgId={orgId}
+            departments={departments}
+            users={users}
+            mode="create"
+          />
+        </div>
       </div>
 
       {/* Stats */}
