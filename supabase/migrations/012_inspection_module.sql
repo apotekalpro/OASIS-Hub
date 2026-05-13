@@ -303,13 +303,13 @@ create index idx_issue_comments_issue on issue_comments(issue_id);
 -- ============================================================
 
 create trigger set_outlets_updated_at before update on outlets
-  for each row execute function update_updated_at_column();
+  for each row execute function update_updated_at();
 
 create trigger set_inspection_templates_updated_at before update on inspection_templates
-  for each row execute function update_updated_at_column();
+  for each row execute function update_updated_at();
 
 create trigger set_inspection_issues_updated_at before update on inspection_issues
-  for each row execute function update_updated_at_column();
+  for each row execute function update_updated_at();
 
 -- ============================================================
 -- AUTO-CREATE ISSUE FROM FLAGGED RESPONSE
