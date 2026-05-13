@@ -1,0 +1,224 @@
+'use client'
+
+import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import { TaskCardData } from './task-card'
+import { TaskList } from './task-list'
+import { KanbanBoard } from './kanban-board'
+import { TaskForm } from './task-form'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { LayoutList, Columns3, Search, Filter, X, Plus } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+type View = 'list' | 'kanban'
+type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+type Team = { id: string; name: string }
+type Department = { id: string; name: string }
+
+const STATUSES = ['todo', 'in_progress', 'in_review', 'done', 'cancelled']
+const PRIORITIES = ['urgent', 'high', 'medium', 'low']
+const STATUS_LABELS: Record<string, string> = {
+  todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review', done: 'Done', cancelled: 'Cancelled',
+}
+
+interface Props {
+  initialTasks: TaskCardData[]
+  orgId: string
+  currentUserId: string
+  users: OrgUser[]
+  teams: Team[]
+  departments: Department[]
+}
+
+export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, departments }: Props) {
+  const router = useRouter()
+  const [view, setView] = useState<View>('list')
+  const [tasks, setTasks] = useState<TaskCardData[]>(initialTasks)
+  const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState<string[]>([])
+  const [filterPriority, setFilterPriority] = useState<string[]>([])
+  const [showFilters, setShowFilters] = useState(false)
+
+  function refresh() { router.refresh() }
+
+  const filtered = useMemo(() => {
+    let result = tasks
+    if (search) {
+      const q = search.toLowerCase()
+      result = result.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        t.description?.toLowerCase().includes(q) ||
+        t.tags?.some(tag => tag.includes(q))
+      )
+    }
+    if (filterStatus.length > 0) result = result.filter(t => filterStatus.includes(t.status))
+    if (filterPriority.length > 0) result = result.filter(t => filterPriority.includes(t.priority))
+    return result
+  }, [tasks, search, filterStatus, filterPriority])
+
+  const activeFilters = filterStatus.length + filterPriority.length
+  const counts = useMemo(() => ({
+    todo: tasks.filter(t => t.status === 'todo').length,
+    in_progress: tasks.filter(t => t.status === 'in_progress').length,
+    done: tasks.filter(t => t.status === 'done').length,
+  }), [tasks])
+
+  function toggleStatus(s: string) {
+    setFilterStatus(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
+  }
+  function togglePriority(p: string) {
+    setFilterPriority(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
+  }
+
+  return (
+    <div className="p-6 max-w-[1400px] mx-auto space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
+          <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+            <span>{counts.todo} to do</span>
+            <span className="text-gray-300">·</span>
+            <span className="text-blue-600">{counts.in_progress} in progress</span>
+            <span className="text-gray-300">·</span>
+            <span className="text-green-600">{counts.done} done</span>
+          </div>
+        </div>
+        <TaskForm
+          orgId={orgId}
+          currentUserId={currentUserId}
+          users={users}
+          teams={teams}
+          departments={departments}
+          trigger={
+            <Button size="sm">
+              <Plus className="h-4 w-4" />
+              New Task
+            </Button>
+          }
+          onCreated={() => refresh()}
+        />
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="Search tasks..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowFilters(v => !v)}
+          className={cn(activeFilters > 0 && 'border-indigo-400 text-indigo-600 bg-indigo-50')}
+        >
+          <Filter className="h-4 w-4" />
+          Filters
+          {activeFilters > 0 && (
+            <span className="ml-1 bg-indigo-600 text-white rounded-full h-4 w-4 flex items-center justify-center text-xs">
+              {activeFilters}
+            </span>
+          )}
+        </Button>
+
+        {activeFilters > 0 && (
+          <button
+            onClick={() => { setFilterStatus([]); setFilterPriority([]) }}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+          >
+            <X className="h-3 w-3" /> Clear filters
+          </button>
+        )}
+
+        <div className="ml-auto flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => setView('list')}
+            className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all', view === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700')}
+          >
+            <LayoutList className="h-4 w-4" /> List
+          </button>
+          <button
+            onClick={() => setView('kanban')}
+            className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all', view === 'kanban' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700')}
+          >
+            <Columns3 className="h-4 w-4" /> Board
+          </button>
+        </div>
+      </div>
+
+      {/* Filter panel */}
+      {showFilters && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Status</p>
+            <div className="flex flex-wrap gap-2">
+              {STATUSES.map(s => (
+                <button
+                  key={s}
+                  onClick={() => toggleStatus(s)}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-medium border transition-all',
+                    filterStatus.includes(s)
+                      ? 'bg-indigo-600 border-indigo-600 text-white'
+                      : 'border-gray-300 text-gray-600 hover:border-indigo-400'
+                  )}
+                >
+                  {STATUS_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Priority</p>
+            <div className="flex flex-wrap gap-2">
+              {PRIORITIES.map(p => (
+                <button
+                  key={p}
+                  onClick={() => togglePriority(p)}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-medium border capitalize transition-all',
+                    filterPriority.includes(p)
+                      ? 'bg-indigo-600 border-indigo-600 text-white'
+                      : 'border-gray-300 text-gray-600 hover:border-indigo-400'
+                  )}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View */}
+      {view === 'list' ? (
+        <TaskList
+          tasks={filtered}
+          orgId={orgId}
+          currentUserId={currentUserId}
+          users={users}
+          teams={teams}
+          departments={departments}
+          onRefresh={refresh}
+        />
+      ) : (
+        <KanbanBoard
+          tasks={filtered}
+          orgId={orgId}
+          currentUserId={currentUserId}
+          users={users}
+          teams={teams}
+          departments={departments}
+          onTasksChange={setTasks}
+        />
+      )}
+    </div>
+  )
+}
