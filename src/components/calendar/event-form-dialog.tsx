@@ -103,7 +103,8 @@ export function EventFormDialog({ orgId, currentUserId, users, teams, department
         { event_id: eventId, user_id: currentUserId, rsvp: 'accepted' },
         ...attendees.map(a => ({ event_id: eventId, user_id: a.id, rsvp: 'pending' })),
       ]
-      await supabase.from('event_attendees').insert(invites)
+      const { error: attendeeError } = await supabase.from('event_attendees').insert(invites)
+      if (attendeeError) { toast.error(attendeeError.message); setSaving(false); return }
     }
 
     const teamData = teams.find(t => t.id === teamId)

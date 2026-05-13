@@ -34,17 +34,18 @@ export async function createUser(data: {
 
   const { error: profileError } = await adminClient
     .from('profiles')
-    .update({
+    .upsert({
+      id: authUser.user.id,
+      email: data.email,
       org_id: data.org_id,
-      dept_id: data.dept_id ?? null,
-      employee_id: data.employee_id ?? null,
+      dept_id: data.dept_id || null,
+      employee_id: data.employee_id || null,
       full_name: data.full_name,
       role: data.role,
-      job_title: data.job_title ?? null,
-      phone: data.phone ?? null,
+      job_title: data.job_title || null,
+      phone: data.phone || null,
       must_change_password: true,
     })
-    .eq('id', authUser.user.id)
 
   if (profileError) throw new Error(profileError.message)
 
@@ -120,14 +121,16 @@ export async function changePassword(newPassword: string) {
 export async function toggleUserActive(userId: string, isActive: boolean) {
   const adminClient = await createAdminClient()
 
-  await adminClient.auth.admin.updateUserById(userId, {
+  const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
     ban_duration: isActive ? 'none' : '876600h',
   })
+  if (authError) throw new Error(authError.message)
 
-  await adminClient
+  const { error: profileError } = await adminClient
     .from('profiles')
     .update({ is_active: isActive })
     .eq('id', userId)
+  if (profileError) throw new Error(profileError.message)
 
   revalidatePath('/admin/users')
   return { success: true }

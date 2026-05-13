@@ -100,14 +100,11 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
         taskId = (created as { id: string }).id
 
         // Assign members
-        if (selectedAssignees.length > 0) {
-          await supabase.from('task_assignees').insert(
-            selectedAssignees.map(u => ({ task_id: taskId, user_id: u.id, assigned_by: currentUserId }))
-          )
-        } else {
-          // Always assign creator
-          await supabase.from('task_assignees').insert({ task_id: taskId, user_id: currentUserId, assigned_by: currentUserId })
-        }
+        const assigneeRows = selectedAssignees.length > 0
+          ? selectedAssignees.map(u => ({ task_id: taskId, user_id: u.id, assigned_by: currentUserId }))
+          : [{ task_id: taskId, user_id: currentUserId, assigned_by: currentUserId }]
+        const { error: assignError } = await supabase.from('task_assignees').insert(assigneeRows)
+        if (assignError) throw assignError
 
         toast.success('Task created')
         onCreated?.(taskId!)

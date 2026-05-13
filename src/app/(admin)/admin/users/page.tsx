@@ -9,11 +9,15 @@ import type { UserRole } from '@/types/database'
 
 export default async function UsersPage() {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
 
-  const [usersResult, deptsResult, orgsResult] = await Promise.all([
+  const profileRes = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
+  const orgId = profileRes.data?.org_id ?? ''
+
+  const [usersResult, deptsResult] = await Promise.all([
     supabase.from('profiles').select(`*, departments(name)`).order('created_at', { ascending: false }),
-    supabase.from('departments').select('id, name, org_id').order('name'),
-    supabase.from('organizations').select('id, name').limit(1),
+    supabase.from('departments').select('id, name, org_id').eq('org_id', orgId).order('name'),
   ])
   const users = usersResult.data as Array<{
     id: string; full_name: string; email: string; role: UserRole; is_active: boolean;
@@ -22,7 +26,6 @@ export default async function UsersPage() {
     departments?: { name: string } | null
   }> | null
   const departments = deptsResult.data as Array<{ id: string; name: string; org_id: string }> | null
-  const orgs = orgsResult.data?.[0] as { id: string; name: string } | undefined
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -35,7 +38,7 @@ export default async function UsersPage() {
         </div>
         <UserManagementClient
           departments={departments ?? []}
-          orgId={orgs?.id ?? ''}
+          orgId={orgId}
         />
       </div>
 
@@ -117,7 +120,7 @@ export default async function UsersPage() {
                         userId={user.id}
                         user={user}
                         departments={departments ?? []}
-                        orgId={orgs?.id ?? ''}
+                        orgId={orgId}
                         mode="actions"
                       />
                     </td>

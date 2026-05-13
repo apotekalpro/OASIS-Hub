@@ -54,7 +54,8 @@ export function ChannelSidebar({
     const ch = data as Channel
 
     // Add creator as member
-    await supabase.from('channel_members').insert({ channel_id: ch.id, user_id: currentUserId })
+    const { error: memberError } = await supabase.from('channel_members').insert({ channel_id: ch.id, user_id: currentUserId })
+    if (memberError) { toast.error(memberError.message); setCreating(false); return }
 
     onChannelCreated(ch)
     setChannelName('')
