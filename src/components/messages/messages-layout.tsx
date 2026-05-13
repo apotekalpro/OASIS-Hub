@@ -1,0 +1,153 @@
+'use client'
+
+import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { ChannelSidebar } from './channel-sidebar'
+import { MessageFeed } from './message-feed'
+import { UserAvatar } from '@/components/ui/avatar'
+import { Hash, Lock, MessageCircle } from 'lucide-react'
+import { toast } from 'sonner'
+
+export type Channel = {
+  id: string; name: string; description: string | null
+  is_private: boolean; is_direct: boolean
+  team_id: string | null; dept_id: string | null; created_at: string
+  channel_members?: Array<{ user_id: string; last_read_at: string }>
+  otherUser?: OrgUser
+}
+
+export type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+
+interface Props {
+  channels: Channel[]
+  orgUsers: OrgUser[]
+  orgId: string
+  currentUserId: string
+  currentUserName: string
+  currentUserAvatar: string | null
+}
+
+export function MessagesLayout({ channels: initialChannels, orgUsers, orgId, currentUserId, currentUserName, currentUserAvatar }: Props) {
+  const router = useRouter()
+  const supabase = createClient()
+  const [channels, setChannels] = useState<Channel[]>(initialChannels)
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(initialChannels[0]?.id ?? null)
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
+
+  const activeChannel = channels.find(c => c.id === activeChannelId) ?? null
+
+  async function startDM(otherUser: OrgUser) {
+    const { data, error } = await supabase.rpc('get_or_create_dm', { p_other_user_id: otherUser.id })
+    if (error) { toast.error(error.message); return }
+    const channelId = data as string
+
+    // Check if already in list
+    const existing = channels.find(c => c.id === channelId)
+    if (!existing) {
+      const dmChannel: Channel = {
+        id: channelId,
+        name: otherUser.full_name,
+        description: null,
+        is_private: true,
+        is_direct: true,
+        team_id: null,
+        dept_id: null,
+        created_at: new Date().toISOString(),
+        otherUser,
+      }
+      setChannels(prev => [...prev, dmChannel])
+    }
+    setActiveChannelId(channelId)
+  }
+
+  function markRead(channelId: string) {
+    setUnreadCounts(prev => ({ ...prev, [channelId]: 0 }))
+    supabase.rpc('mark_channel_read', { p_channel_id: channelId }).then(() => {})
+  }
+
+  function handleChannelSelect(id: string) {
+    setActiveChannelId(id)
+    markRead(id)
+  }
+
+  function onNewMessage(channelId: string) {
+    if (channelId !== activeChannelId) {
+      setUnreadCounts(prev => ({ ...prev, [channelId]: (prev[channelId] ?? 0) + 1 }))
+    }
+  }
+
+  const channelHeader = activeChannel ? (
+    <div className="flex items-center gap-2">
+      {activeChannel.is_direct ? (
+        <>
+          <UserAvatar
+            name={activeChannel.otherUser?.full_name ?? activeChannel.name}
+            avatarUrl={activeChannel.otherUser?.avatar_url ?? null}
+            size="sm"
+            className="w-7 h-7"
+          />
+          <span className="font-semibold text-gray-900">
+            {activeChannel.otherUser?.full_name ?? activeChannel.name}
+          </span>
+        </>
+      ) : (
+        <>
+          {activeChannel.is_private ? <Lock className="h-4 w-4 text-gray-400" /> : <Hash className="h-4 w-4 text-gray-400" />}
+          <span className="font-semibold text-gray-900">{activeChannel.name}</span>
+          {activeChannel.description && (
+            <span className="text-sm text-gray-400 font-normal border-l border-gray-200 pl-3">{activeChannel.description}</span>
+          )}
+        </>
+      )}
+    </div>
+  ) : null
+
+  return (
+    <div className="flex h-[calc(100vh-0px)] overflow-hidden">
+      <ChannelSidebar
+        channels={channels}
+        orgUsers={orgUsers}
+        orgId={orgId}
+        currentUserId={currentUserId}
+        activeChannelId={activeChannelId}
+        unreadCounts={unreadCounts}
+        onSelect={handleChannelSelect}
+        onStartDM={startDM}
+        onChannelCreated={(ch) => {
+          setChannels(prev => [...prev, ch])
+          setActiveChannelId(ch.id)
+        }}
+      />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {activeChannel ? (
+          <>
+            {/* Header */}
+            <div className="flex items-center px-5 py-3 border-b border-gray-200 bg-white shrink-0">
+              {channelHeader}
+            </div>
+            {/* Feed */}
+            <MessageFeed
+              key={activeChannelId}
+              channelId={activeChannel.id}
+              orgId={orgId}
+              currentUserId={currentUserId}
+              currentUserName={currentUserName}
+              currentUserAvatar={currentUserAvatar}
+              orgUsers={orgUsers}
+              onNewMessage={onNewMessage}
+            />
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-gray-400">
+            <div className="text-center">
+              <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Select a channel to start messaging</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

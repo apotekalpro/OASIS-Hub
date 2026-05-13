@@ -1,7 +1,47 @@
-export default function Page() {
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { MessagesLayout } from '@/components/messages/messages-layout'
+
+export default async function MessagesPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const profileRes = await supabase.from('profiles').select('org_id, full_name, avatar_url').eq('id', user.id).single()
+  const profile = profileRes.data as { org_id: string; full_name: string; avatar_url: string | null } | null
+  const orgId = profile?.org_id ?? ''
+
+  const [channelsRes, usersRes] = await Promise.all([
+    supabase.from('channels').select(`
+      id, name, description, is_private, is_direct, team_id, dept_id, created_at,
+      channel_members!inner(user_id, last_read_at)
+    `).eq('org_id', orgId).order('name'),
+    supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).neq('id', user.id).order('full_name'),
+  ])
+
+  type RawChannel = {
+    id: string; name: string; description: string | null; is_private: boolean; is_direct: boolean
+    team_id: string | null; dept_id: string | null; created_at: string
+    channel_members?: Array<{ user_id: string; last_read_at: string }>
+  }
+  type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+
+  const rawChannels = channelsRes.data as unknown as RawChannel[]
+  const orgUsers = usersRes.data as OrgUser[] | null
+
+  // Filter to channels where current user is a member
+  const channels = (rawChannels ?? []).filter(c =>
+    c.channel_members?.some(m => m.user_id === user.id)
+  )
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <p className="text-gray-500 text-sm">Coming soon.</p>
-    </div>
+    <MessagesLayout
+      channels={channels}
+      orgUsers={orgUsers ?? []}
+      orgId={orgId}
+      currentUserId={user.id}
+      currentUserName={profile?.full_name ?? ''}
+      currentUserAvatar={profile?.avatar_url ?? null}
+    />
   )
 }
