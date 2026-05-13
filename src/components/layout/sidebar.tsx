@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, CheckSquare, MessageSquare, FileText,
   Calendar, FolderOpen, Bell, Settings, Users, Building2,
-  LogOut, Shield, BookUser
+  LogOut, Shield, BookUser, BarChart3
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/ui/avatar'
@@ -32,6 +32,7 @@ const ADMIN_NAV_ITEMS = [
   { href: '/admin/users', icon: Users, label: 'Users' },
   { href: '/admin/departments', icon: Building2, label: 'Departments' },
   { href: '/admin/teams', icon: Shield, label: 'Teams' },
+  { href: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/admin/settings', icon: Settings, label: 'Settings' },
 ]
 

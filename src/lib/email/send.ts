@@ -1,6 +1,5 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = process.env.EMAIL_FROM || 'noreply@oasishub.internal'
 
 export async function sendEmail(params: {
@@ -8,11 +7,12 @@ export async function sendEmail(params: {
   subject: string
   html: string
 }) {
-  if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 'your_resend_api_key') {
+  if (!process.env.RESEND_API_KEY) {
     console.log('[Email] Skipped (no API key):', params.subject, '->', params.to)
     return { success: true, skipped: true }
   }
 
+  const resend = new Resend(process.env.RESEND_API_KEY)
   const { data, error } = await resend.emails.send({
     from: FROM,
     to: params.to,
