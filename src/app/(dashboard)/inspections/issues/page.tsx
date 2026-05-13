@@ -59,7 +59,7 @@ export default async function IssuesPage() {
     assignee?: { id: string; full_name: string } | null
   }
 
-  const issues = (issuesData ?? []) as IssueRow[]
+  const issues = (issuesData ?? []) as unknown as IssueRow[]
   const orgUsers = usersRes.data ?? []
 
   const stats = {
