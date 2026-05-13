@@ -5,6 +5,7 @@ import { ProfileProvider } from '@/components/layout/profile-provider'
 import { NotificationProvider } from '@/components/notifications/notification-provider'
 import { Toaster } from 'sonner'
 import type { Profile } from '@/types/database'
+import type { FeaturePermissions } from '@/lib/auth/permissions'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -22,8 +23,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!profile) redirect('/login')
   if (profile.must_change_password) redirect('/change-password')
 
+  const fpRes = await supabase
+    .from('feature_permissions')
+    .select('feature, min_role')
+    .eq('org_id', profile.org_id)
+
+  const featurePermissions: FeaturePermissions = {}
+  for (const row of (fpRes.data ?? []) as { feature: string; min_role: string }[]) {
+    (featurePermissions as Record<string, string>)[row.feature] = row.min_role
+  }
+
   return (
-    <ProfileProvider profile={profile}>
+    <ProfileProvider profile={profile} featurePermissions={featurePermissions}>
       <NotificationProvider>
         <div className="flex h-screen bg-gray-50 overflow-hidden">
           <Sidebar />

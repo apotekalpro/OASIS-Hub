@@ -81,3 +81,24 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   member: 'bg-gray-100 text-gray-800',
   viewer: 'bg-slate-100 text-slate-600',
 }
+
+export type FeatureName = 'teams' | 'outlets' | 'checklists' | 'schedules' | 'analytics'
+
+export const FEATURE_DEFINITIONS: { feature: FeatureName; label: string; description: string; defaultMin: UserRole; locked?: boolean }[] = [
+  { feature: 'analytics', label: 'Analytics', description: 'View analytics dashboards', defaultMin: 'team_leader' },
+  { feature: 'teams', label: 'Teams', description: 'Manage teams and members', defaultMin: 'team_leader' },
+  { feature: 'outlets', label: 'Outlets', description: 'Manage outlet locations', defaultMin: 'dept_head' },
+  { feature: 'checklists', label: 'Checklists', description: 'Manage inspection templates', defaultMin: 'dept_head' },
+  { feature: 'schedules', label: 'Schedules', description: 'Manage inspection schedules', defaultMin: 'dept_head' },
+]
+
+export type FeaturePermissions = Partial<Record<FeatureName, UserRole>>
+
+export function canAccessFeature(
+  userRole: UserRole,
+  feature: FeatureName,
+  permissions: FeaturePermissions
+): boolean {
+  const minRole = permissions[feature] ?? FEATURE_DEFINITIONS.find(f => f.feature === feature)?.defaultMin ?? 'dept_head'
+  return hasRole(userRole, minRole)
+}

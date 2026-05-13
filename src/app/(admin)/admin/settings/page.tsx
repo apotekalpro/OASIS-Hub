@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Building2, Shield, Bell, Database, Key } from 'lucide-react'
+import { Building2, Shield, Bell, Database, Key, Lock } from 'lucide-react'
+import { FeaturePermissionsClient } from '@/components/admin/feature-permissions-client'
+import type { FeaturePermissions } from '@/lib/auth/permissions'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -16,15 +18,23 @@ export default async function SettingsPage() {
 
   const profile = profileRes.data as { org_id: string; role: string; full_name: string } | null
 
-  const [orgRes, statsRes] = await Promise.all([
+  const [orgRes, statsRes, fpRes] = await Promise.all([
     supabase.from('organizations').select('id, name, created_at').eq('id', profile?.org_id ?? '').single(),
     supabase.from('profiles').select('id', { count: 'exact', head: true })
       .eq('org_id', profile?.org_id ?? '')
       .eq('is_active', true),
+    supabase.from('feature_permissions').select('feature, min_role').eq('org_id', profile?.org_id ?? ''),
   ])
 
   const org = orgRes.data as { id: string; name: string; created_at: string } | null
   const userCount = statsRes.count ?? 0
+
+  const featurePermissions: FeaturePermissions = {}
+  for (const row of (fpRes.data ?? []) as { feature: string; min_role: string }[]) {
+    (featurePermissions as Record<string, string>)[row.feature] = row.min_role
+  }
+
+  const isOrgAdmin = profile?.role === 'super_admin' || profile?.role === 'org_admin'
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -113,6 +123,25 @@ export default async function SettingsPage() {
               <li>task_comments</li>
             </ul>
             <p className="pt-1">Create a storage bucket named <code className="bg-gray-100 px-1 rounded text-xs">org-files</code> for the file manager.</p>
+          </CardContent>
+        </Card>
+
+        {/* Feature Access */}
+        <Card className="md:col-span-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Lock className="h-4 w-4 text-indigo-500" /> Feature Access Control
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!isOrgAdmin && (
+              <p className="text-sm text-gray-500 mb-3">Only Organization Admins can change feature access settings.</p>
+            )}
+            <FeaturePermissionsClient
+              orgId={profile?.org_id ?? ''}
+              initial={featurePermissions}
+              canEdit={isOrgAdmin}
+            />
           </CardContent>
         </Card>
 

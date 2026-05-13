@@ -12,7 +12,9 @@ import { UserAvatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/store/auth'
 import { useNotificationStore } from '@/store/notifications'
-import { canAccessAdminPanel } from '@/lib/auth/permissions'
+import { canAccessAdminPanel, canAccessFeature, hasRole } from '@/lib/auth/permissions'
+import type { FeatureName } from '@/lib/auth/permissions'
+import type { UserRole } from '@/types/database'
 import { signOut } from '@/lib/auth/actions'
 import { useRouter } from 'next/navigation'
 
@@ -30,25 +32,33 @@ const NAV_ITEMS = [
 ]
 
 const ADMIN_NAV_ITEMS = [
-  { href: '/admin/users', icon: Users, label: 'Users' },
-  { href: '/admin/departments', icon: Building2, label: 'Departments' },
-  { href: '/admin/teams', icon: Shield, label: 'Teams' },
-  { href: '/admin/outlets', icon: MapPin, label: 'Outlets' },
-  { href: '/admin/inspection-templates', icon: ClipboardCheck, label: 'Checklists' },
-  { href: '/admin/inspection-schedules', icon: CalendarDays, label: 'Schedules' },
-  { href: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
-  { href: '/admin/settings', icon: Settings, label: 'Settings' },
+  { href: '/admin/users', icon: Users, label: 'Users', minRole: 'org_admin' as UserRole },
+  { href: '/admin/departments', icon: Building2, label: 'Departments', minRole: 'org_admin' as UserRole },
+  { href: '/admin/teams', icon: Shield, label: 'Teams', feature: 'teams' as FeatureName },
+  { href: '/admin/outlets', icon: MapPin, label: 'Outlets', feature: 'outlets' as FeatureName },
+  { href: '/admin/inspection-templates', icon: ClipboardCheck, label: 'Checklists', feature: 'checklists' as FeatureName },
+  { href: '/admin/inspection-schedules', icon: CalendarDays, label: 'Schedules', feature: 'schedules' as FeatureName },
+  { href: '/admin/analytics', icon: BarChart3, label: 'Analytics', feature: 'analytics' as FeatureName },
+  { href: '/admin/settings', icon: Settings, label: 'Settings', minRole: 'org_admin' as UserRole },
 ]
-
 
 
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const profile = useAuthStore(s => s.profile)
+  const featurePermissions = useAuthStore(s => s.featurePermissions)
   const unreadCount = useNotificationStore(s => s.unreadCount)
 
-  const isAdmin = profile && canAccessAdminPanel(profile.role)
+  function canSeeAdminItem(item: typeof ADMIN_NAV_ITEMS[0]): boolean {
+    if (!profile) return false
+    if (item.feature) return canAccessFeature(profile.role, item.feature, featurePermissions)
+    if (item.minRole) return hasRole(profile.role, item.minRole)
+    return canAccessAdminPanel(profile.role)
+  }
+
+  const visibleAdminItems = ADMIN_NAV_ITEMS.filter(canSeeAdminItem)
+  const showAdminSection = visibleAdminItems.length > 0
 
   async function handleSignOut() {
     await signOut()
@@ -90,14 +100,14 @@ export function Sidebar() {
         ))}
 
         {/* Admin Section */}
-        {isAdmin && (
+        {showAdminSection && (
           <>
             <div className="pt-4 pb-2">
               <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 Administration
               </p>
             </div>
-            {ADMIN_NAV_ITEMS.map(item => (
+            {visibleAdminItems.map(item => (
               <Link
                 key={item.href}
                 href={item.href}
