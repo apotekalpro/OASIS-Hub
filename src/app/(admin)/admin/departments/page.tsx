@@ -5,19 +5,22 @@ import { DepartmentManagementClient } from '@/components/admin/department-manage
 export default async function DepartmentsPage() {
   const supabase = await createClient()
 
-  const [deptResult, orgResult] = await Promise.all([
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const [deptResult, profileResult] = await Promise.all([
     supabase
       .from('departments')
       .select('*, parent:parent_id(name)')
       .order('name'),
-    supabase.from('organizations').select('id, name').limit(1),
+    supabase.from('profiles').select('org_id').eq('id', user.id).single(),
   ])
   const departments = deptResult.data as Array<{
     id: string; org_id: string; parent_id: string | null; name: string;
     description: string | null; color: string; created_at: string; updated_at: string;
     parent?: { name: string } | null
   }> | null
-  const org = orgResult.data?.[0] as { id: string; name: string } | undefined
+  const orgId = profileResult.data?.org_id ?? ''
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -28,7 +31,7 @@ export default async function DepartmentsPage() {
         </div>
         <DepartmentManagementClient
           departments={departments ?? []}
-          orgId={org?.id ?? ''}
+          orgId={orgId}
         />
       </div>
 
@@ -68,7 +71,7 @@ export default async function DepartmentsPage() {
                   <td className="px-6 py-4 text-right">
                     <DepartmentManagementClient
                       departments={departments}
-                      orgId={org?.id ?? ''}
+                      orgId={orgId}
                       dept={dept}
                       mode="actions"
                     />
