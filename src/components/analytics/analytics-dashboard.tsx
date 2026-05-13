@@ -61,9 +61,15 @@ export function AnalyticsDashboard({ taskStats, trend, teamStats, contributors, 
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Analytics & Reports</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Organisation-wide performance overview</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Analytics & Reports</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Organisation-wide performance overview</p>
+        </div>
+        <div className="flex gap-2">
+          <a href="/admin/analytics?tab=tasks" className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white">Tasks</a>
+          <a href="/admin/analytics?tab=inspections" className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Inspections</a>
+        </div>
       </div>
 
       {/* KPI row */}
