@@ -5,7 +5,7 @@ import { InspectionAnalyticsDashboard } from '@/components/analytics/inspection-
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: { tab?: string }
+  searchParams: Promise<{ tab?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -14,7 +14,8 @@ export default async function AnalyticsPage({
   const profileRes = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
   const orgId = (profileRes.data as { org_id: string } | null)?.org_id ?? ''
 
-  const tab = searchParams.tab ?? 'tasks'
+  const { tab: tabParam } = await searchParams
+  const tab = tabParam ?? 'tasks'
 
   if (tab === 'inspections') {
     const [irrRes, rcrRes, severityRes, outletStatsRes, issueTrendRes, sessionTrendRes, avgResRes, userStatsRes, issueCountsRes] =
