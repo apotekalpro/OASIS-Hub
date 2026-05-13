@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, CheckSquare, MessageSquare, FileText,
   Calendar, FolderOpen, Bell, Settings, Users, Building2,
-  LogOut, Shield, BookUser, BarChart3
+  LogOut, Shield, BookUser, BarChart3, ClipboardCheck, MapPin, CalendarDays
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/ui/avatar'
@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { href: '/messages', icon: MessageSquare, label: 'Messages' },
   { href: '/teams', icon: Shield, label: 'Teams' },
   { href: '/directory', icon: BookUser, label: 'Directory' },
+  { href: '/inspections', icon: ClipboardCheck, label: 'Inspections' },
   { href: '/forms', icon: FileText, label: 'Forms' },
   { href: '/calendar', icon: Calendar, label: 'Calendar' },
   { href: '/files', icon: FolderOpen, label: 'Files' },
@@ -32,6 +33,9 @@ const ADMIN_NAV_ITEMS = [
   { href: '/admin/users', icon: Users, label: 'Users' },
   { href: '/admin/departments', icon: Building2, label: 'Departments' },
   { href: '/admin/teams', icon: Shield, label: 'Teams' },
+  { href: '/admin/outlets', icon: MapPin, label: 'Outlets' },
+  { href: '/admin/inspection-templates', icon: ClipboardCheck, label: 'Checklists' },
+  { href: '/admin/inspection-schedules', icon: CalendarDays, label: 'Schedules' },
   { href: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/admin/settings', icon: Settings, label: 'Settings' },
 ]
