@@ -74,11 +74,12 @@ export function Sidebar() {
         <Image
           src="/Alpro logo.jpg"
           alt="Alpro Pharmacy"
-          width={120}
-          height={40}
-          className="h-10 w-auto object-contain"
+          width={80}
+          height={32}
+          className="h-8 w-auto object-contain shrink-0"
           priority
         />
+        <span className="font-bold text-gray-900 text-base leading-tight">OASIS Hub</span>
       </div>
 
       {/* Navigation */}

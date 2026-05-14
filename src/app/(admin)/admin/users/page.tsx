@@ -23,6 +23,7 @@ export default async function UsersPage() {
     id: string; full_name: string; email: string; role: UserRole; is_active: boolean;
     must_change_password: boolean; employee_id: string | null; avatar_url: string | null;
     dept_id: string | null; created_at: string; job_title: string | null; phone: string | null;
+    last_login_at: string | null;
     departments?: { name: string } | null
   }> | null
   const departments = deptsResult.data as Array<{ id: string; name: string; org_id: string }> | null
@@ -74,6 +75,7 @@ export default async function UsersPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-500">Department</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500">Joined</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Last Login</th>
                   <th className="text-right px-6 py-3 font-medium text-gray-500">Actions</th>
                 </tr>
               </thead>
@@ -114,6 +116,9 @@ export default async function UsersPage() {
                     </td>
                     <td className="px-4 py-4 text-gray-500">
                       {formatDate(user.created_at)}
+                    </td>
+                    <td className="px-4 py-4 text-gray-500">
+                      {user.last_login_at ? formatDate(user.last_login_at) : <span className="text-gray-300">Never</span>}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <UserManagementClient

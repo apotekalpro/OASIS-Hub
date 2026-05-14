@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, Building2 } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { signIn } from '@/lib/auth/actions'
@@ -42,8 +43,15 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 mb-4 shadow-lg">
-            <Building2 className="w-7 h-7 text-white" />
+          <div className="flex justify-center mb-4">
+            <Image
+              src="/Alpro logo.jpg"
+              alt="Alpro Pharmacy"
+              width={160}
+              height={60}
+              className="h-16 w-auto object-contain"
+              priority
+            />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">OASIS Hub</h1>
           <p className="text-gray-500 text-sm mt-1">Internal Management System</p>
