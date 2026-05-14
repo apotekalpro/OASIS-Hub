@@ -5,6 +5,7 @@ import { UserAvatar } from '@/components/ui/avatar'
 import { MapPin, Phone, Building2, Users } from 'lucide-react'
 import { OutletManagementClient } from '@/components/inspections/outlet-management-client'
 import { OutletImportClient } from '@/components/inspections/outlet-import-client'
+import { OutletSyncClient } from '@/components/inspections/outlet-sync-client'
 
 export default async function OutletsPage() {
   const supabase = await createClient()
@@ -52,6 +53,7 @@ export default async function OutletsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <OutletSyncClient />
           <OutletImportClient orgId={orgId} />
           <OutletManagementClient
             orgId={orgId}
