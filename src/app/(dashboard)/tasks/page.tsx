@@ -31,7 +31,7 @@ export default async function TasksPage() {
     task_assignees?: RawAssignee[]
   }
 
-  const taskSelectFull = `
+  const taskSelect = `
     id, title, description, status, priority, due_date, tags, created_at, created_by,
     task_assignees(user_id, profiles(id, full_name, avatar_url))
   `
@@ -39,54 +39,41 @@ export default async function TasksPage() {
   let allRaw: RawTask[] = []
 
   if (isSuperAdmin) {
-    // Super admin: fetch all tasks (RLS now allows this via is_super_admin())
+    // Super admin sees all tasks directly
     const res = await supabase.from('tasks')
-      .select(taskSelectFull)
+      .select(taskSelect)
       .order('created_at', { ascending: false })
     allRaw = (res.data as unknown as RawTask[]) ?? []
   } else {
-    // Regular users: fetch tasks assigned to me + tasks I created, then merge
-    const taskSelectInner = `
-      id, title, description, status, priority, due_date, tags, created_at, created_by,
-      task_assignees!inner(user_id, profiles(id, full_name, avatar_url))
-    `
+    // Step 1: get task IDs assigned to this user (simple query, no joins)
+    const assignedIdsRes = await supabase
+      .from('task_assignees')
+      .select('task_id')
+      .eq('user_id', user.id)
 
-    const [assignedRes, createdRes] = await Promise.all([
-      supabase.from('tasks')
-        .select(taskSelectInner)
-        .eq('task_assignees.user_id', user.id)
-        .order('created_at', { ascending: false }),
-      supabase.from('tasks')
-        .select(taskSelectFull)
-        .eq('created_by', user.id)
-        .order('created_at', { ascending: false }),
-    ])
+    const assignedTaskIds = ((assignedIdsRes.data ?? []) as Array<{ task_id: string }>)
+      .map(r => r.task_id)
 
-    // For admins with a valid org_id, also fetch all org tasks
-    let orgTasksRaw: RawTask[] = []
+    // Step 2: build OR filter — tasks I'm assigned to OR created by me OR (admin) in my org
+    const orParts: string[] = [`created_by.eq.${user.id}`]
+    if (assignedTaskIds.length > 0) {
+      orParts.push(`id.in.(${assignedTaskIds.join(',')})`)
+    }
     if (isAdmin && orgId) {
-      const orgRes = await supabase.from('tasks')
-        .select(taskSelectFull)
-        .eq('org_id', orgId)
-        .order('created_at', { ascending: false })
-      orgTasksRaw = (orgRes.data as unknown as RawTask[]) ?? []
+      orParts.push(`org_id.eq.${orgId}`)
     }
 
-    // Merge + deduplicate
-    const seenIds = new Set<string>()
-    allRaw = [
-      ...((assignedRes.data as unknown as RawTask[]) ?? []),
-      ...((createdRes.data as unknown as RawTask[]) ?? []),
-      ...orgTasksRaw,
-    ].filter(t => {
-      if (seenIds.has(t.id)) return false
-      seenIds.add(t.id)
-      return true
-    })
+    const res = await supabase.from('tasks')
+      .select(taskSelect)
+      .or(orParts.join(','))
+      .order('created_at', { ascending: false })
+    allRaw = (res.data as unknown as RawTask[]) ?? []
   }
 
+  // Deduplicate (org admin query may overlap with assigned/created)
+  const seenIds = new Set<string>()
   const tasks = allRaw
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .filter(t => { if (seenIds.has(t.id)) return false; seenIds.add(t.id); return true })
     .map(t => ({
       id: t.id,
       title: t.title,
