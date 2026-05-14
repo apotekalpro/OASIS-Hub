@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Upload, RotateCcw, UserX, UserCheck, Edit2, MoreHorizontal } from 'lucide-react'
+import { Plus, Upload, Download, RotateCcw, UserX, UserCheck, Edit2, MoreHorizontal } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Button } from '@/components/ui/button'
@@ -202,6 +202,28 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
               </Button>
               <p className="text-xs text-gray-400 mt-2">All imported users get password: Alpro@123</p>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const csv = [
+                  'email,full_name,role,dept_id,employee_id,job_title',
+                  'ali@example.com,Ali Hassan,member,,EMP001,Pharmacist',
+                  'siti@example.com,Siti Rahimah,team_leader,,EMP002,Senior Pharmacist',
+                  'ahmad@example.com,Ahmad Fadzil,dept_head,,EMP003,Department Head',
+                ].join('\n')
+                const blob = new Blob([csv], { type: 'text/csv' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'user-import-template.csv'
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="flex items-center gap-1.5 text-xs text-indigo-600 hover:underline mx-auto mb-2"
+            >
+              <Download className="h-3.5 w-3.5" /> Download template CSV
+            </button>
 
             {importResults.length > 0 && (
               <div className="max-h-48 overflow-y-auto space-y-1">
