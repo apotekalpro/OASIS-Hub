@@ -12,18 +12,23 @@ export default async function OutletsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const profileRes = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
+  const profileRes = await supabase.from('profiles').select('org_id, role').eq('id', user.id).single()
   const orgId = profileRes.data?.org_id ?? ''
+  const isSuperAdmin = profileRes.data?.role === 'super_admin'
 
-  const [outletsRes, deptsRes, usersRes] = await Promise.all([
-    supabase
-      .from('outlets')
-      .select(`*, profiles!outlets_manager_id_fkey(id, full_name, avatar_url), departments(name)`)
-      .eq('org_id', orgId)
-      .order('name'),
-    supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
-    supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
-  ])
+  const outletsQuery = supabase
+    .from('outlets')
+    .select(`*, profiles!outlets_manager_id_fkey(id, full_name, avatar_url), departments(name)`)
+    .order('name')
+  if (!isSuperAdmin && orgId) outletsQuery.eq('org_id', orgId)
+
+  const deptsQuery = supabase.from('departments').select('id, name').order('name')
+  if (!isSuperAdmin && orgId) deptsQuery.eq('org_id', orgId)
+
+  const usersQuery = supabase.from('profiles').select('id, full_name, email, avatar_url').eq('is_active', true).order('full_name')
+  if (!isSuperAdmin && orgId) usersQuery.eq('org_id', orgId)
+
+  const [outletsRes, deptsRes, usersRes] = await Promise.all([outletsQuery, deptsQuery, usersQuery])
 
   type OutletRow = {
     id: string; name: string; code: string | null; address: string | null; city: string | null

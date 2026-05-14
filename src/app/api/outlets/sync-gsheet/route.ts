@@ -45,11 +45,22 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const profileRes = await supabase.from('profiles').select('org_id, role').eq('id', user.id).single()
-  const orgId = profileRes.data?.org_id
+  let orgId = profileRes.data?.org_id as string | null
   const role = profileRes.data?.role
   const allowedRoles = ['super_admin', 'org_admin', 'dept_head']
   if (!allowedRoles.includes(role ?? '')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // super_admin has no org_id — resolve from the body or fall back to first org
+  if (!orgId) {
+    const body = await req.json().catch(() => ({}))
+    orgId = body.orgId ?? null
+    if (!orgId) {
+      const orgRes = await supabase.from('organizations').select('id').limit(1).single()
+      orgId = orgRes.data?.id ?? null
+    }
+    if (!orgId) return NextResponse.json({ error: 'No organisation found' }, { status: 422 })
   }
 
   // Fetch sheet as CSV export
@@ -97,7 +108,7 @@ export async function POST(req: NextRequest) {
     if (!name) { skipped.push(i + 2); continue }
 
     rows.push({
-      org_id: orgId ?? '',
+      org_id: orgId,
       code: code || name,
       name,
       area_manager_name: cols[COL.area_manager]?.trim() || null,

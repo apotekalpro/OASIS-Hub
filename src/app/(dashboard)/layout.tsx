@@ -36,7 +36,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <ProfileProvider profile={profile} featurePermissions={featurePermissions}>
       <NotificationProvider>
-        <div className="flex h-screen bg-gray-50 overflow-hidden">
+        <div className="flex h-screen bg-gradient-to-br from-slate-100 via-indigo-50/40 to-blue-50/50 overflow-hidden">
           <Sidebar />
           <main className="flex-1 overflow-y-auto">
             {children}
