@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -12,12 +12,21 @@ import { Input } from '@/components/ui/input'
 import { STATUS_VARIANT, STATUS_LABEL, PRIORITY_DOT } from './task-card'
 import {
   ArrowLeft, Calendar, Clock, Tag, Users, Edit2, Plus, Send,
-  Trash2, CheckCircle2, Circle, ChevronDown
+  Trash2, CheckCircle2, Circle, CornerDownRight, Smile, AtSign, X
 } from 'lucide-react'
 import { formatDate, formatRelativeTime, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
-type Comment = { id: string; content: string; created_at: string; user: { id: string; full_name: string; avatar_url: string | null } }
+type Reaction = { emoji: string; count: number; reacted: boolean }
+type Comment = {
+  id: string
+  content: string
+  created_at: string
+  parent_comment_id: string | null
+  user: { id: string; full_name: string; avatar_url: string | null }
+  reactions: Reaction[]
+  replies?: Comment[]
+}
 type TimeLog = { id: string; hours: number; description: string | null; logged_at: string; user: { id: string; full_name: string; avatar_url: string | null } }
 type Subtask = { id: string; title: string; status: string; priority: string }
 type Assignee = { id: string; full_name: string; avatar_url: string | null; email: string }
@@ -48,6 +57,198 @@ interface Props {
 const TABS = ['Comments', 'Time Log', 'Subtasks'] as const
 type Tab = typeof TABS[number]
 
+const QUICK_EMOJIS = ['👍', '👎', '❤️', '😄', '😮', '😢', '🎉', '🔥']
+
+// ─── Mention textarea ─────────────────────────────────────────────────────────
+function MentionTextarea({
+  value, onChange, placeholder, users, rows = 2,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  users: OrgUser[]
+  rows?: number
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const [mentionOpen, setMentionOpen] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [mentionStart, setMentionStart] = useState(-1)
+
+  const filtered = users.filter(u =>
+    u.full_name.toLowerCase().includes(mentionQuery.toLowerCase())
+  ).slice(0, 6)
+
+  function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const text = e.target.value
+    onChange(text)
+    const cursor = e.target.selectionStart ?? 0
+    const before = text.slice(0, cursor)
+    const atIdx = before.lastIndexOf('@')
+    if (atIdx !== -1 && !before.slice(atIdx + 1).includes(' ')) {
+      setMentionOpen(true)
+      setMentionStart(atIdx)
+      setMentionQuery(before.slice(atIdx + 1))
+    } else {
+      setMentionOpen(false)
+    }
+  }
+
+  function pickUser(user: OrgUser) {
+    const before = value.slice(0, mentionStart)
+    const after = value.slice(ref.current?.selectionStart ?? value.length)
+    onChange(`${before}@${user.full_name} ${after}`)
+    setMentionOpen(false)
+    setTimeout(() => ref.current?.focus(), 0)
+  }
+
+  return (
+    <div className="relative flex-1">
+      <textarea
+        ref={ref}
+        rows={rows}
+        value={value}
+        onChange={handleInput}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      />
+      {mentionOpen && filtered.length > 0 && (
+        <div className="absolute z-20 bottom-full mb-1 left-0 w-56 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          {filtered.map(u => (
+            <button
+              key={u.id}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); pickUser(u) }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-indigo-50 text-left"
+            >
+              <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 shrink-0" />
+              <span className="truncate">{u.full_name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Single comment ───────────────────────────────────────────────────────────
+function CommentItem({
+  comment, currentUserId, users,
+  onDelete, onReact, onReply,
+  depth = 0,
+}: {
+  comment: Comment
+  currentUserId: string
+  users: OrgUser[]
+  onDelete: (id: string) => void
+  onReact: (commentId: string, emoji: string) => void
+  onReply: (comment: Comment) => void
+  depth?: number
+}) {
+  const [showEmojis, setShowEmojis] = useState(false)
+
+  return (
+    <div className={cn('flex gap-3 group', depth > 0 && 'ml-8 mt-2')}>
+      {depth > 0 && <CornerDownRight className="h-3.5 w-3.5 text-gray-300 shrink-0 mt-1" />}
+      <UserAvatar name={comment.user.full_name} avatarUrl={comment.user.avatar_url} size="sm" className="w-7 h-7 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium text-gray-900">{comment.user.full_name}</span>
+          <span className="text-xs text-gray-400">{formatRelativeTime(comment.created_at)}</span>
+
+          {/* Actions: show on hover */}
+          <div className="ml-auto hidden group-hover:flex items-center gap-1">
+            <div className="relative">
+              <button
+                onClick={() => setShowEmojis(v => !v)}
+                className="p-0.5 text-gray-300 hover:text-gray-600 transition-colors"
+                title="React"
+              >
+                <Smile className="h-3.5 w-3.5" />
+              </button>
+              {showEmojis && (
+                <div className="absolute right-0 bottom-full mb-1 flex gap-1 bg-white border border-gray-200 rounded-xl px-2 py-1.5 shadow-lg z-10">
+                  {QUICK_EMOJIS.map(em => (
+                    <button
+                      key={em}
+                      onClick={() => { onReact(comment.id, em); setShowEmojis(false) }}
+                      className="text-base hover:scale-125 transition-transform"
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {depth === 0 && (
+              <button
+                onClick={() => onReply(comment)}
+                className="p-0.5 text-gray-300 hover:text-indigo-500 transition-colors"
+                title="Reply"
+              >
+                <CornerDownRight className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {comment.user.id === currentUserId && (
+              <button
+                onClick={() => onDelete(comment.id)}
+                className="p-0.5 text-gray-300 hover:text-red-500 transition-colors"
+                title="Delete"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Content with @mention highlights */}
+        <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap leading-relaxed">
+          {comment.content.split(/(@\w[^@\s]*(?:\s\w+)?)/g).map((part, i) =>
+            part.startsWith('@')
+              ? <span key={i} className="text-indigo-600 font-medium">{part}</span>
+              : part
+          )}
+        </p>
+
+        {/* Reactions */}
+        {comment.reactions.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {comment.reactions.map(r => (
+              <button
+                key={r.emoji}
+                onClick={() => onReact(comment.id, r.emoji)}
+                className={cn(
+                  'flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition-colors',
+                  r.reacted
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                    : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300'
+                )}
+              >
+                <span>{r.emoji}</span>
+                <span className="font-medium">{r.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Replies */}
+        {(comment.replies ?? []).map(reply => (
+          <CommentItem
+            key={reply.id}
+            comment={reply}
+            currentUserId={currentUserId}
+            users={users}
+            onDelete={onDelete}
+            onReact={onReact}
+            onReply={onReply}
+            depth={1}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export function TaskDetailClient({
   task, comments: initialComments, timeLogs: initialLogs, subtasks: initialSubtasks,
   assignees, orgId, currentUserId, currentUserName, currentUserAvatar, users, teams, departments
@@ -60,6 +261,7 @@ export function TaskDetailClient({
   const [subtasks, setSubtasks] = useState<Subtask[]>(initialSubtasks)
   const [commentText, setCommentText] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
+  const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const [logHours, setLogHours] = useState('')
   const [logDesc, setLogDesc] = useState('')
   const [submittingLog, setSubmittingLog] = useState(false)
@@ -68,6 +270,43 @@ export function TaskDetailClient({
   const commentEndRef = useRef<HTMLDivElement>(null)
 
   const totalLogged = timeLogs.reduce((sum, l) => sum + l.hours, 0)
+
+  // Build threaded comment tree
+  const threadedComments = comments
+    .filter(c => !c.parent_comment_id)
+    .map(c => ({
+      ...c,
+      replies: comments.filter(r => r.parent_comment_id === c.id),
+    }))
+
+  const fetchReactions = useCallback(async (commentIds: string[]): Promise<Record<string, Reaction[]>> => {
+    if (!commentIds.length) return {}
+    const { data } = await supabase
+      .from('task_comment_reactions')
+      .select('comment_id, user_id, emoji')
+      .in('comment_id', commentIds)
+    const rows = (data ?? []) as { comment_id: string; user_id: string; emoji: string }[]
+    const map: Record<string, Reaction[]> = {}
+    for (const row of rows) {
+      if (!map[row.comment_id]) map[row.comment_id] = []
+      const existing = map[row.comment_id].find(r => r.emoji === row.emoji)
+      if (existing) {
+        existing.count++
+        if (row.user_id === currentUserId) existing.reacted = true
+      } else {
+        map[row.comment_id].push({ emoji: row.emoji, count: 1, reacted: row.user_id === currentUserId })
+      }
+    }
+    return map
+  }, [supabase, currentUserId])
+
+  useEffect(() => {
+    // Load reactions for all existing comments
+    const ids = comments.map(c => c.id)
+    fetchReactions(ids).then(map => {
+      setComments(prev => prev.map(c => ({ ...c, reactions: map[c.id] ?? [] })))
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const channel = supabase
@@ -78,14 +317,16 @@ export function TaskDetailClient({
         table: 'task_comments',
         filter: `task_id=eq.${task.id}`,
       }, async (payload) => {
-        const newRow = payload.new as { id: string; content: string; created_at: string; user_id: string }
+        const newRow = payload.new as { id: string; content: string; created_at: string; user_id: string; parent_comment_id: string | null }
         const { data: profile } = await supabase.from('profiles').select('id, full_name, avatar_url').eq('id', newRow.user_id).single()
         const p = profile as { id: string; full_name: string; avatar_url: string | null } | null
         setComments(prev => [...prev, {
           id: newRow.id,
           content: newRow.content,
           created_at: newRow.created_at,
+          parent_comment_id: newRow.parent_comment_id,
           user: p ? { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url } : { id: newRow.user_id, full_name: 'Someone', avatar_url: null },
+          reactions: [],
         }])
         setTimeout(() => commentEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
       })
@@ -101,16 +342,48 @@ export function TaskDetailClient({
       task_id: task.id,
       user_id: currentUserId,
       content: commentText.trim(),
+      parent_comment_id: replyTo?.id ?? null,
     })
     if (error) toast.error(error.message)
-    else setCommentText('')
+    else {
+      setCommentText('')
+      setReplyTo(null)
+    }
     setSubmittingComment(false)
   }
 
   async function deleteComment(id: string) {
     const { error } = await supabase.from('task_comments').delete().eq('id', id)
     if (error) toast.error(error.message)
-    else setComments(prev => prev.filter(c => c.id !== id))
+    else setComments(prev => prev.filter(c => c.id !== id && c.parent_comment_id !== id))
+  }
+
+  async function handleReact(commentId: string, emoji: string) {
+    const comment = comments.find(c => c.id === commentId)
+    const existing = comment?.reactions.find(r => r.emoji === emoji)
+    if (existing?.reacted) {
+      // Remove reaction
+      await supabase.from('task_comment_reactions').delete()
+        .eq('comment_id', commentId).eq('user_id', currentUserId).eq('emoji', emoji)
+      setComments(prev => prev.map(c => c.id !== commentId ? c : {
+        ...c,
+        reactions: c.reactions
+          .map(r => r.emoji !== emoji ? r : { ...r, count: r.count - 1, reacted: false })
+          .filter(r => r.count > 0),
+      }))
+    } else {
+      // Add reaction
+      const { error } = await supabase.from('task_comment_reactions').insert({
+        comment_id: commentId, user_id: currentUserId, emoji,
+      })
+      if (error) { toast.error('Could not react'); return }
+      setComments(prev => prev.map(c => c.id !== commentId ? c : {
+        ...c,
+        reactions: existing
+          ? c.reactions.map(r => r.emoji !== emoji ? r : { ...r, count: r.count + 1, reacted: true })
+          : [...c.reactions, { emoji, count: 1, reacted: true }],
+      }))
+    }
   }
 
   async function logTime() {
@@ -283,49 +556,48 @@ export function TaskDetailClient({
                 {/* Comments Tab */}
                 {tab === 'Comments' && (
                   <div className="space-y-4">
-                    <div className="space-y-4 max-h-96 overflow-y-auto">
-                      {comments.length === 0 && (
+                    <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
+                      {threadedComments.length === 0 && (
                         <p className="text-sm text-gray-400 text-center py-6">No comments yet. Start the conversation!</p>
                       )}
-                      {comments.map(c => (
-                        <div key={c.id} className="flex gap-3 group">
-                          <UserAvatar name={c.user.full_name} avatarUrl={c.user.avatar_url} size="sm" className="w-8 h-8 shrink-0 mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-gray-900">{c.user.full_name}</span>
-                              <span className="text-xs text-gray-400">{formatRelativeTime(c.created_at)}</span>
-                              {c.user.id === currentUserId && (
-                                <button
-                                  onClick={() => deleteComment(c.id)}
-                                  className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap">{c.content}</p>
-                          </div>
-                        </div>
+                      {threadedComments.map(c => (
+                        <CommentItem
+                          key={c.id}
+                          comment={c}
+                          currentUserId={currentUserId}
+                          users={users}
+                          onDelete={deleteComment}
+                          onReact={handleReact}
+                          onReply={setReplyTo}
+                        />
                       ))}
                       <div ref={commentEndRef} />
                     </div>
 
-                    <div className="flex gap-2 pt-3 border-t border-gray-100">
-                      <UserAvatar name={currentUserName} avatarUrl={currentUserAvatar} size="sm" className="w-8 h-8 shrink-0" />
-                      <div className="flex-1 flex gap-2">
-                        <textarea
-                          rows={2}
-                          value={commentText}
-                          onChange={e => setCommentText(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment() } }}
-                          placeholder="Write a comment... (Enter to send, Shift+Enter for new line)"
-                          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <Button size="sm" onClick={postComment} loading={submittingComment} disabled={!commentText.trim()}>
-                          <Send className="h-4 w-4" />
-                        </Button>
+                    {/* Reply-to banner */}
+                    {replyTo && (
+                      <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-xs text-indigo-700">
+                        <CornerDownRight className="h-3 w-3 shrink-0" />
+                        <span className="flex-1">Replying to <strong>{replyTo.user.full_name}</strong></span>
+                        <button onClick={() => setReplyTo(null)}>
+                          <X className="h-3 w-3" />
+                        </button>
                       </div>
+                    )}
+
+                    <div className="flex gap-2 pt-3 border-t border-gray-100 items-end">
+                      <UserAvatar name={currentUserName} avatarUrl={currentUserAvatar} size="sm" className="w-8 h-8 shrink-0" />
+                      <MentionTextarea
+                        value={commentText}
+                        onChange={setCommentText}
+                        placeholder={replyTo ? `Reply to ${replyTo.user.full_name}… (@ to mention)` : 'Write a comment… (@ to mention, Enter to send)'}
+                        users={users}
+                      />
+                      <Button size="sm" onClick={postComment} loading={submittingComment} disabled={!commentText.trim()}>
+                        <Send className="h-4 w-4" />
+                      </Button>
                     </div>
+                    <p className="text-xs text-gray-400">Enter to send · Shift+Enter for new line · @ to mention</p>
                   </div>
                 )}
 

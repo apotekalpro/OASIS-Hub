@@ -16,7 +16,8 @@ const STATUS_CONFIG = {
   rejected: { label: 'Rejected', color: 'text-red-600', bg: 'bg-red-100', icon: AlertCircle },
 }
 
-export default async function OutletDetailPage({ params }: { params: { outletId: string } }) {
+export default async function OutletDetailPage({ params }: { params: Promise<{ outletId: string }> }) {
+  const { outletId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -25,23 +26,23 @@ export default async function OutletDetailPage({ params }: { params: { outletId:
     supabase
       .from('outlets')
       .select('*, profiles!outlets_manager_id_fkey(full_name), departments(name)')
-      .eq('id', params.outletId)
+      .eq('id', outletId)
       .single(),
     supabase
       .from('inspection_sessions')
       .select('*, inspection_templates(title, category), profiles!inspection_sessions_conducted_by_fkey(full_name)')
-      .eq('outlet_id', params.outletId)
+      .eq('outlet_id', outletId)
       .order('created_at', { ascending: false })
       .limit(20),
     supabase
       .from('inspection_schedules')
       .select('*, inspection_templates(id, title, category, passing_score)')
-      .eq('outlet_id', params.outletId)
+      .eq('outlet_id', outletId)
       .eq('is_active', true),
     supabase
       .from('inspection_issues')
       .select('id, title, severity, status, created_at')
-      .eq('outlet_id', params.outletId)
+      .eq('outlet_id', outletId)
       .in('status', ['open', 'in_progress', 'escalated'])
       .order('created_at', { ascending: false })
       .limit(5),
@@ -158,7 +159,7 @@ export default async function OutletDetailPage({ params }: { params: { outletId:
                     </span>
                     {schedule.inspection_templates && (
                       <StartSessionClient
-                        outletId={params.outletId}
+                        outletId={outletId}
                         scheduleId={schedule.id}
                         templateId={schedule.inspection_templates.id}
                         templateTitle={schedule.inspection_templates.title}
@@ -218,7 +219,7 @@ export default async function OutletDetailPage({ params }: { params: { outletId:
                           <span className={cn('text-xs font-medium', cfg.color)}>{cfg.label}</span>
                           {isActionable && (
                             <Link
-                              href={`/inspections/${params.outletId}/sessions/${session.id}`}
+                              href={`/inspections/${outletId}/sessions/${session.id}`}
                               className="rounded-lg bg-indigo-600 text-white text-xs font-medium px-3 py-1.5 hover:bg-indigo-700 transition-colors"
                             >
                               {session.status === 'in_progress' ? 'Continue' : 'Start'}

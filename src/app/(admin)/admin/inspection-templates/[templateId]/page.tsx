@@ -5,7 +5,8 @@ import { FileText, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { TemplateBuilder } from '@/components/inspections/template-builder'
 
-export default async function TemplateBuilderPage({ params }: { params: { templateId: string } }) {
+export default async function TemplateBuilderPage({ params }: { params: Promise<{ templateId: string }> }) {
+  const { templateId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -14,12 +15,12 @@ export default async function TemplateBuilderPage({ params }: { params: { templa
     supabase
       .from('inspection_templates')
       .select('*')
-      .eq('id', params.templateId)
+      .eq('id', templateId)
       .single(),
     supabase
       .from('template_sections')
       .select('*, template_questions(*)')
-      .eq('template_id', params.templateId)
+      .eq('template_id', templateId)
       .order('position')
       .order('position', { referencedTable: 'template_questions' }),
   ])

@@ -5,8 +5,9 @@ import { InspectionExecutor } from '@/components/inspections/inspection-executor
 export default async function SessionPage({
   params,
 }: {
-  params: { outletId: string; sessionId: string }
+  params: Promise<{ outletId: string; sessionId: string }>
 }) {
+  const { outletId, sessionId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -15,12 +16,12 @@ export default async function SessionPage({
     supabase
       .from('inspection_sessions')
       .select('*, inspection_templates(title, category, passing_score)')
-      .eq('id', params.sessionId)
+      .eq('id', sessionId)
       .single(),
     supabase
       .from('outlets')
       .select('id, name, code, city')
-      .eq('id', params.outletId)
+      .eq('id', outletId)
       .single(),
   ])
 
@@ -33,7 +34,7 @@ export default async function SessionPage({
   }
 
   if (session.status === 'submitted' || session.status === 'approved') {
-    redirect(`/inspections/${params.outletId}`)
+    redirect(`/inspections/${outletId}`)
   }
 
   // Load template questions with sections
@@ -48,7 +49,7 @@ export default async function SessionPage({
   const { data: existingResponses } = await supabase
     .from('session_responses')
     .select('*')
-    .eq('session_id', params.sessionId)
+    .eq('session_id', sessionId)
 
   type Question = {
     id: string; question_text: string; hint_text: string | null; question_type: string

@@ -18,9 +18,11 @@ import type { FeatureName } from '@/lib/auth/permissions'
 import type { UserRole } from '@/types/database'
 import { signOut } from '@/lib/auth/actions'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/tasks', icon: CheckSquare, label: 'Tasks' },
   { href: '/messages', icon: MessageSquare, label: 'Messages' },
   { href: '/teams', icon: Shield, label: 'Teams' },
@@ -50,6 +52,7 @@ export function Sidebar() {
   const profile = useAuthStore(s => s.profile)
   const featurePermissions = useAuthStore(s => s.featurePermissions)
   const unreadCount = useNotificationStore(s => s.unreadCount)
+  const [signingOut, setSigningOut] = useState(false)
 
   function canSeeAdminItem(item: typeof ADMIN_NAV_ITEMS[0]): boolean {
     if (!profile) return false
@@ -62,6 +65,7 @@ export function Sidebar() {
   const showAdminSection = visibleAdminItems.length > 0
 
   async function handleSignOut() {
+    setSigningOut(true)
     await signOut()
     router.push('/login')
     router.refresh()
@@ -74,11 +78,12 @@ export function Sidebar() {
         <Image
           src="/Alpro logo.jpg"
           alt="Alpro Pharmacy"
-          width={120}
-          height={40}
-          className="h-10 w-auto object-contain"
+          width={80}
+          height={32}
+          className="h-8 w-auto object-contain shrink-0"
           priority
         />
+        <span className="font-bold text-gray-900 text-base leading-tight">OASIS Hub</span>
       </div>
 
       {/* Navigation */}
@@ -142,10 +147,13 @@ export function Sidebar() {
             </div>
             <button
               onClick={handleSignOut}
-              className="text-gray-400 hover:text-red-600 transition-colors"
+              disabled={signingOut}
+              className="text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
               title="Sign out"
             >
-              <LogOut className="h-4 w-4" />
+              {signingOut
+                ? <span className="text-xs text-gray-500 whitespace-nowrap">Logging out...</span>
+                : <LogOut className="h-4 w-4" />}
             </button>
           </div>
         </div>

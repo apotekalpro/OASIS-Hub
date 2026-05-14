@@ -15,8 +15,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
   const [taskRes, commentsRes, timeLogsRes, subtasksRes, assigneesRes, usersRes, teamsRes, deptsRes] = await Promise.all([
     supabase.from('tasks').select(`
       id, title, description, status, priority, due_date, start_date, estimated_hours,
-      tags, created_at, created_by, team_id, dept_id, org_id,
-      teams(name), departments(name)
+      tags, created_at, created_by, team_id, dept_id, org_id
     `).eq('id', taskId).single(),
     supabase.from('task_comments').select(`
       id, content, created_at,

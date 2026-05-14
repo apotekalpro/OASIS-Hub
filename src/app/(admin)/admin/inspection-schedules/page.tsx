@@ -16,7 +16,7 @@ export default async function InspectionSchedulesPage() {
   const profileRes = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
   const orgId = profileRes.data?.org_id ?? ''
 
-  const [schedulesRes, templatesRes, outletsRes, usersRes] = await Promise.all([
+  const [schedulesRes, templatesRes, outletsRes, usersRes, deptsRes] = await Promise.all([
     supabase
       .from('inspection_schedules')
       .select('*, inspection_templates(title, category), outlets(name, code), profiles!inspection_schedules_assigned_to_fkey(full_name)')
@@ -25,10 +25,14 @@ export default async function InspectionSchedulesPage() {
     supabase.from('inspection_templates').select('id, title, category').eq('org_id', orgId).eq('is_active', true).order('title'),
     supabase.from('outlets').select('id, name, code').eq('org_id', orgId).eq('status', 'active').order('name'),
     supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
+    supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
   ])
 
   type ScheduleRow = {
     id: string; frequency: string; scheduled_time: string | null; is_active: boolean; starts_at: string
+    template_id?: string; outlet_id?: string | null; assigned_to?: string | null
+    outlet_scope?: string; assign_type?: string; assigned_role?: string | null; assigned_dept_id?: string | null
+    due_hours?: number | null
     inspection_templates?: { title: string; category: string | null } | null
     outlets?: { name: string; code: string | null } | null
     profiles?: { full_name: string } | null
@@ -38,6 +42,7 @@ export default async function InspectionSchedulesPage() {
   const templates = templatesRes.data ?? []
   const outlets = outletsRes.data ?? []
   const orgUsers = usersRes.data ?? []
+  const departments = deptsRes.data ?? []
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -53,6 +58,7 @@ export default async function InspectionSchedulesPage() {
           templates={templates}
           outlets={outlets}
           users={orgUsers}
+          departments={departments}
           mode="create"
         />
       </div>
@@ -95,20 +101,26 @@ export default async function InspectionSchedulesPage() {
                         {schedule.is_active ? 'Active' : 'Paused'}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                      {schedule.outlets && (
-                        <span className="flex items-center gap-1">
-                          <Building2 className="h-3 w-3" />
-                          {schedule.outlets.name}
-                          {schedule.outlets.code && <span className="font-mono text-gray-400">({schedule.outlets.code})</span>}
-                        </span>
-                      )}
+                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <Building2 className="h-3 w-3" />
+                        {schedule.outlet_scope === 'all' && 'All Outlets'}
+                        {schedule.outlet_scope === 'assignee_area' && "Assignee's Area"}
+                        {(!schedule.outlet_scope || schedule.outlet_scope === 'specific') && schedule.outlets && (
+                          <>{schedule.outlets.name}{schedule.outlets.code && <span className="font-mono text-gray-400"> ({schedule.outlets.code})</span>}</>
+                        )}
+                      </span>
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
                         {FREQ_LABELS[schedule.frequency] ?? schedule.frequency}
                         {schedule.scheduled_time && ` at ${schedule.scheduled_time.slice(0, 5)}`}
+                        {schedule.due_hours && ` · due in ${schedule.due_hours}h`}
                       </span>
-                      {schedule.profiles && <span>→ {schedule.profiles.full_name}</span>}
+                      <span>
+                        {schedule.assign_type === 'user' && schedule.profiles && `→ ${schedule.profiles.full_name}`}
+                        {schedule.assign_type === 'role' && schedule.assigned_role && `→ Role: ${schedule.assigned_role}`}
+                        {(!schedule.assign_type || schedule.assign_type === 'any') && '→ Any Staff'}
+                      </span>
                     </div>
                   </div>
                   <ScheduleManagementClient
@@ -116,6 +128,7 @@ export default async function InspectionSchedulesPage() {
                     templates={templates}
                     outlets={outlets}
                     users={orgUsers}
+                    departments={departments}
                     schedule={schedule}
                     scheduleId={schedule.id}
                     mode="actions"
