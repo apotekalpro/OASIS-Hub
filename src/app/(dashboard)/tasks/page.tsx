@@ -18,6 +18,7 @@ export default async function TasksPage() {
 
   const profile = profileRes.data as { org_id: string | null; full_name: string; role: UserRole } | null
   const orgId = profile?.org_id ?? ''
+  const isSuperAdmin = profile?.role === 'super_admin'
   const isAdmin = hasRole(profile?.role ?? 'member', 'org_admin')
 
   type RawAssignee = {
@@ -30,61 +31,78 @@ export default async function TasksPage() {
     task_assignees?: RawAssignee[]
   }
 
-  const taskSelect = `
+  const taskSelectFull = `
     id, title, description, status, priority, due_date, tags, created_at, created_by,
     task_assignees(user_id, profiles(id, full_name, avatar_url))
   `
 
-  // Always fetch tasks assigned to me and created by me (works regardless of org_id)
-  const [assignedRes, createdRes] = await Promise.all([
-    supabase.from('tasks')
-      .select(taskSelect.replace('task_assignees(', 'task_assignees!inner('))
-      .eq('task_assignees.user_id', user.id)
-      .order('created_at', { ascending: false }),
-    supabase.from('tasks')
-      .select(taskSelect)
-      .eq('created_by', user.id)
-      .order('created_at', { ascending: false }),
-  ])
+  let allRaw: RawTask[] = []
 
-  // For admins with a valid org_id, also fetch all org tasks
-  let orgTasksRaw: RawTask[] = []
-  if (isAdmin && orgId) {
-    const orgRes = await supabase.from('tasks')
-      .select(taskSelect)
-      .eq('org_id', orgId)
+  if (isSuperAdmin) {
+    // Super admin: fetch all tasks (RLS now allows this via is_super_admin())
+    const res = await supabase.from('tasks')
+      .select(taskSelectFull)
       .order('created_at', { ascending: false })
-    orgTasksRaw = (orgRes.data as unknown as RawTask[]) ?? []
+    allRaw = (res.data as unknown as RawTask[]) ?? []
+  } else {
+    // Regular users: fetch tasks assigned to me + tasks I created, then merge
+    const taskSelectInner = `
+      id, title, description, status, priority, due_date, tags, created_at, created_by,
+      task_assignees!inner(user_id, profiles(id, full_name, avatar_url))
+    `
+
+    const [assignedRes, createdRes] = await Promise.all([
+      supabase.from('tasks')
+        .select(taskSelectInner)
+        .eq('task_assignees.user_id', user.id)
+        .order('created_at', { ascending: false }),
+      supabase.from('tasks')
+        .select(taskSelectFull)
+        .eq('created_by', user.id)
+        .order('created_at', { ascending: false }),
+    ])
+
+    // For admins with a valid org_id, also fetch all org tasks
+    let orgTasksRaw: RawTask[] = []
+    if (isAdmin && orgId) {
+      const orgRes = await supabase.from('tasks')
+        .select(taskSelectFull)
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+      orgTasksRaw = (orgRes.data as unknown as RawTask[]) ?? []
+    }
+
+    // Merge + deduplicate
+    const seenIds = new Set<string>()
+    allRaw = [
+      ...((assignedRes.data as unknown as RawTask[]) ?? []),
+      ...((createdRes.data as unknown as RawTask[]) ?? []),
+      ...orgTasksRaw,
+    ].filter(t => {
+      if (seenIds.has(t.id)) return false
+      seenIds.add(t.id)
+      return true
+    })
   }
 
-  // Merge + deduplicate
-  const seenIds = new Set<string>()
-  const allRaw = [
-    ...((assignedRes.data as unknown as RawTask[]) ?? []),
-    ...((createdRes.data as unknown as RawTask[]) ?? []),
-    ...orgTasksRaw,
-  ].filter(t => {
-    if (seenIds.has(t.id)) return false
-    seenIds.add(t.id)
-    return true
-  }).sort((a, b) => b.created_at.localeCompare(a.created_at))
-
-  const tasks = allRaw.map(t => ({
-    id: t.id,
-    title: t.title,
-    description: t.description,
-    status: t.status,
-    priority: t.priority,
-    due_date: t.due_date,
-    tags: t.tags ?? [],
-    created_at: t.created_at,
-    created_by: t.created_by,
-    assignees: (t.task_assignees ?? [])
-      .map(a => a.profiles
-        ? { id: a.profiles.id, full_name: a.profiles.full_name, avatar_url: a.profiles.avatar_url }
-        : null)
-      .filter(Boolean) as Array<{ id: string; full_name: string; avatar_url: string | null }>,
-  }))
+  const tasks = allRaw
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map(t => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      status: t.status,
+      priority: t.priority,
+      due_date: t.due_date,
+      tags: t.tags ?? [],
+      created_at: t.created_at,
+      created_by: t.created_by,
+      assignees: (t.task_assignees ?? [])
+        .map(a => a.profiles
+          ? { id: a.profiles.id, full_name: a.profiles.full_name, avatar_url: a.profiles.avatar_url }
+          : null)
+        .filter(Boolean) as Array<{ id: string; full_name: string; avatar_url: string | null }>,
+    }))
 
   const [usersRes, teamsRes, deptsRes] = await Promise.all([
     supabase.from('profiles').select('id, full_name, email, avatar_url')
