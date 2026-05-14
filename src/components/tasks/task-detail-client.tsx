@@ -113,9 +113,9 @@ function MentionTextarea({
   placeholder: string
   users: OrgUser[]
   rows?: number
-  textareaRef?: React.RefObject<HTMLTextAreaElement>
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>
 }) {
-  const innerRef = useRef<HTMLTextAreaElement>(null)
+  const innerRef = useRef<HTMLTextAreaElement | null>(null)
   const ref = textareaRef ?? innerRef
   const [mentionOpen, setMentionOpen] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
