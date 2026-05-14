@@ -76,7 +76,7 @@ export default async function TemplateBuilderPage({ params }: { params: Promise<
 
       {/* Builder */}
       <div className="max-w-5xl mx-auto px-6 py-6">
-        <TemplateBuilder templateId={params.templateId} initialSections={sections} />
+        <TemplateBuilder templateId={templateId} initialSections={sections} />
       </div>
     </div>
   )
