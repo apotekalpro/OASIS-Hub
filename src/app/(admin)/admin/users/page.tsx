@@ -45,7 +45,7 @@ export default async function UsersPage() {
 
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {(['super_admin', 'org_admin', 'dept_head', 'member'] as UserRole[]).map(role => (
+        {(['super_admin', 'org_admin', 'dept_head', 'lead', 'member'] as UserRole[]).map(role => (
           <Card key={role}>
             <CardContent className="p-4">
               <p className="text-2xl font-bold text-gray-900">

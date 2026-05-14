@@ -15,7 +15,7 @@ const CONFIGURABLE_ROUTES: Record<string, string> = {
 }
 
 const ROLE_LEVELS: Record<string, number> = {
-  super_admin: 100, org_admin: 80, dept_head: 60, team_leader: 40, auditor: 35, member: 20, viewer: 10,
+  super_admin: 100, org_admin: 80, dept_head: 60, lead: 50, team_leader: 40, auditor: 35, member: 20, viewer: 10,
 }
 
 const DEFAULT_FEATURE_MIN: Record<string, string> = {

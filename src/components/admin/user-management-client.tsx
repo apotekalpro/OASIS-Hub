@@ -16,12 +16,12 @@ import { parseCSV } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { UserRole, Profile, Department } from '@/types/database'
 
-const ASSIGNABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'team_leader', 'member', 'auditor', 'viewer']
+const ASSIGNABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'lead', 'team_leader', 'member', 'auditor', 'viewer']
 
 const userSchema = z.object({
   email: z.string().email(),
   full_name: z.string().min(2),
-  role: z.enum(['org_admin', 'dept_head', 'team_leader', 'member', 'auditor', 'viewer']),
+  role: z.enum(['org_admin', 'dept_head', 'lead', 'team_leader', 'member', 'auditor', 'viewer']),
   dept_id: z.string().optional(),
   employee_id: z.string().optional(),
   job_title: z.string().optional(),
