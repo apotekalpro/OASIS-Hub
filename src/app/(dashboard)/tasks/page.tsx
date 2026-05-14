@@ -21,58 +21,59 @@ export default async function TasksPage() {
   const isSuperAdmin = profile?.role === 'super_admin'
   const isAdmin = hasRole(profile?.role ?? 'member', 'org_admin')
 
-  type RawAssignee = {
-    user_id: string
-    profiles?: { id: string; full_name: string; avatar_url: string | null } | null
-  }
+  // Simple task shape — no nested profiles, avoids 3-level join issues
   type RawTask = {
     id: string; title: string; description: string | null; status: string; priority: string
     due_date: string | null; tags: string[] | null; created_at: string; created_by: string
-    task_assignees?: RawAssignee[]
+    task_assignees?: Array<{ user_id: string }>
   }
 
-  const taskSelect = `
-    id, title, description, status, priority, due_date, tags, created_at, created_by,
-    task_assignees(user_id, profiles(id, full_name, avatar_url))
-  `
+  // taskSelect without nested profiles — profiles come from usersRes below
+  const taskSelect = `id, title, description, status, priority, due_date, tags, created_at, created_by, task_assignees(user_id)`
 
-  let allRaw: RawTask[] = []
+  let rawTasks: RawTask[] = []
 
-  if (isSuperAdmin) {
-    // Super admin sees all tasks directly
-    const res = await supabase.from('tasks')
-      .select(taskSelect)
-      .order('created_at', { ascending: false })
-    allRaw = (res.data as unknown as RawTask[]) ?? []
+  if (isSuperAdmin || (isAdmin && orgId)) {
+    // Admins: fetch all org tasks directly
+    const query = supabase.from('tasks').select(taskSelect).order('created_at', { ascending: false })
+    if (!isSuperAdmin && orgId) query.eq('org_id', orgId)
+    const res = await query
+    rawTasks = (res.data as unknown as RawTask[]) ?? []
   } else {
-    // Step 1: get task IDs assigned to this user (simple query, no joins)
-    const assignedIdsRes = await supabase
+    // Step 1: task IDs assigned to this user
+    const assignedRes = await supabase
       .from('task_assignees')
       .select('task_id')
       .eq('user_id', user.id)
+    const assignedIds = ((assignedRes.data ?? []) as Array<{ task_id: string }>).map(r => r.task_id)
 
-    const assignedTaskIds = ((assignedIdsRes.data ?? []) as Array<{ task_id: string }>)
-      .map(r => r.task_id)
-
-    // Step 2: build OR filter — tasks I'm assigned to OR created by me OR (admin) in my org
+    // Step 2: tasks created by me OR assigned to me
     const orParts: string[] = [`created_by.eq.${user.id}`]
-    if (assignedTaskIds.length > 0) {
-      orParts.push(`id.in.(${assignedTaskIds.join(',')})`)
-    }
-    if (isAdmin && orgId) {
-      orParts.push(`org_id.eq.${orgId}`)
-    }
+    if (assignedIds.length > 0) orParts.push(`id.in.(${assignedIds.join(',')})`)
 
     const res = await supabase.from('tasks')
       .select(taskSelect)
       .or(orParts.join(','))
       .order('created_at', { ascending: false })
-    allRaw = (res.data as unknown as RawTask[]) ?? []
+    rawTasks = (res.data as unknown as RawTask[]) ?? []
   }
 
-  // Deduplicate (org admin query may overlap with assigned/created)
+  // Fetch org users to resolve assignee profiles (no nested join needed)
+  const [usersRes, teamsRes, deptsRes] = await Promise.all([
+    supabase.from('profiles').select('id, full_name, email, avatar_url')
+      .eq('org_id', orgId).eq('is_active', true).order('full_name'),
+    supabase.from('teams').select('id, name').eq('org_id', orgId).order('name'),
+    supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
+  ])
+
+  type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+  const userMap = new Map<string, OrgUser>(
+    ((usersRes.data as OrgUser[]) ?? []).map(u => [u.id, u])
+  )
+
+  // Deduplicate and map
   const seenIds = new Set<string>()
-  const tasks = allRaw
+  const tasks = rawTasks
     .filter(t => { if (seenIds.has(t.id)) return false; seenIds.add(t.id); return true })
     .map(t => ({
       id: t.id,
@@ -85,20 +86,10 @@ export default async function TasksPage() {
       created_at: t.created_at,
       created_by: t.created_by,
       assignees: (t.task_assignees ?? [])
-        .map(a => a.profiles
-          ? { id: a.profiles.id, full_name: a.profiles.full_name, avatar_url: a.profiles.avatar_url }
-          : null)
-        .filter(Boolean) as Array<{ id: string; full_name: string; avatar_url: string | null }>,
+        .map(a => userMap.get(a.user_id) ?? null)
+        .filter((u): u is OrgUser => u !== null)
+        .map(u => ({ id: u.id, full_name: u.full_name, avatar_url: u.avatar_url })),
     }))
-
-  const [usersRes, teamsRes, deptsRes] = await Promise.all([
-    supabase.from('profiles').select('id, full_name, email, avatar_url')
-      .eq('org_id', orgId).eq('is_active', true).order('full_name'),
-    supabase.from('teams').select('id, name').eq('org_id', orgId).order('name'),
-    supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
-  ])
-
-  type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
 
   return (
     <TasksClient

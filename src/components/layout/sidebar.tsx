@@ -76,7 +76,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-100">
         <Image
-          src="/Alpro logo.jpg"
+          src="/alpro-logo.jpg"
           alt="Alpro Pharmacy"
           width={80}
           height={32}
