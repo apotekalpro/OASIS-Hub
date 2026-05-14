@@ -12,17 +12,21 @@ import { Input } from '@/components/ui/input'
 import { STATUS_VARIANT, STATUS_LABEL, PRIORITY_DOT } from './task-card'
 import {
   ArrowLeft, Calendar, Clock, Tag, Users, Edit2, Plus, Send,
-  Trash2, CheckCircle2, Circle, CornerDownRight, Smile, AtSign, X
+  Trash2, CheckCircle2, Circle, CornerDownRight, Smile, X,
+  Paperclip, Image as ImageIcon, FileText, Download,
 } from 'lucide-react'
 import { formatDate, formatRelativeTime, cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { createPortal } from 'react-dom'
 
+type Attachment = { name: string; url: string; type: 'image' | 'file' }
 type Reaction = { emoji: string; count: number; reacted: boolean }
 type Comment = {
   id: string
   content: string
   created_at: string
   parent_comment_id: string | null
+  attachments: Attachment[]
   user: { id: string; full_name: string; avatar_url: string | null }
   reactions: Reaction[]
   replies?: Comment[]
@@ -59,17 +63,60 @@ type Tab = typeof TABS[number]
 
 const QUICK_EMOJIS = ['👍', '👎', '❤️', '😄', '😮', '😢', '🎉', '🔥']
 
+// ─── Emoji picker portal ───────────────────────────────────────────────────────
+function EmojiPicker({ anchor, onPick, onClose }: {
+  anchor: DOMRect
+  onPick: (emoji: string) => void
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [onClose])
+
+  const style: React.CSSProperties = {
+    position: 'fixed',
+    top: anchor.top - 48,
+    left: anchor.left,
+    zIndex: 9999,
+  }
+
+  return createPortal(
+    <div ref={ref} style={style} className="flex gap-1 bg-white border border-gray-200 rounded-xl px-2 py-1.5 shadow-lg">
+      {QUICK_EMOJIS.map(em => (
+        <button
+          key={em}
+          onMouseDown={e => { e.preventDefault(); onPick(em); onClose() }}
+          className="text-lg hover:scale-125 transition-transform leading-none"
+        >
+          {em}
+        </button>
+      ))}
+    </div>,
+    document.body
+  )
+}
+
 // ─── Mention textarea ─────────────────────────────────────────────────────────
 function MentionTextarea({
-  value, onChange, placeholder, users, rows = 2,
+  value, onChange, onKeyDown, onPaste, placeholder, users, rows = 2, textareaRef,
 }: {
   value: string
   onChange: (v: string) => void
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  onPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void
   placeholder: string
   users: OrgUser[]
   rows?: number
+  textareaRef?: React.RefObject<HTMLTextAreaElement>
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null)
+  const innerRef = useRef<HTMLTextAreaElement>(null)
+  const ref = textareaRef ?? innerRef
   const [mentionOpen, setMentionOpen] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionStart, setMentionStart] = useState(-1)
@@ -108,6 +155,8 @@ function MentionTextarea({
         rows={rows}
         value={value}
         onChange={handleInput}
+        onKeyDown={onKeyDown}
+        onPaste={onPaste}
         placeholder={placeholder}
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
       />
@@ -130,6 +179,45 @@ function MentionTextarea({
   )
 }
 
+// ─── Render comment content (mentions + images) ────────────────────────────
+function CommentContent({ content, attachments }: { content: string; attachments: Attachment[] }) {
+  const parts = content.split(/(@\w[^@\s]*(?:\s\w+)?)/g)
+  return (
+    <div>
+      <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap leading-relaxed">
+        {parts.map((part, i) =>
+          part.startsWith('@')
+            ? <span key={i} className="text-indigo-600 font-medium">{part}</span>
+            : part
+        )}
+      </p>
+      {attachments.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {attachments.map((att, i) =>
+            att.type === 'image' ? (
+              <a key={i} href={att.url} target="_blank" rel="noreferrer">
+                <img src={att.url} alt={att.name} className="max-h-48 max-w-xs rounded-lg border border-gray-200 object-cover hover:opacity-90 transition-opacity" />
+              </a>
+            ) : (
+              <a
+                key={i}
+                href={att.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <FileText className="h-4 w-4 text-gray-400 shrink-0" />
+                <span className="truncate max-w-[180px]">{att.name}</span>
+                <Download className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+              </a>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Single comment ───────────────────────────────────────────────────────────
 function CommentItem({
   comment, currentUserId, users,
@@ -144,7 +232,8 @@ function CommentItem({
   onReply: (comment: Comment) => void
   depth?: number
 }) {
-  const [showEmojis, setShowEmojis] = useState(false)
+  const [emojiAnchor, setEmojiAnchor] = useState<DOMRect | null>(null)
+  const smileRef = useRef<HTMLButtonElement>(null)
 
   return (
     <div className={cn('flex gap-3 group', depth > 0 && 'ml-8 mt-2')}>
@@ -155,30 +244,22 @@ function CommentItem({
           <span className="text-sm font-medium text-gray-900">{comment.user.full_name}</span>
           <span className="text-xs text-gray-400">{formatRelativeTime(comment.created_at)}</span>
 
-          {/* Actions: show on hover */}
           <div className="ml-auto hidden group-hover:flex items-center gap-1">
-            <div className="relative">
-              <button
-                onClick={() => setShowEmojis(v => !v)}
-                className="p-0.5 text-gray-300 hover:text-gray-600 transition-colors"
-                title="React"
-              >
-                <Smile className="h-3.5 w-3.5" />
-              </button>
-              {showEmojis && (
-                <div className="absolute right-0 bottom-full mb-1 flex gap-1 bg-white border border-gray-200 rounded-xl px-2 py-1.5 shadow-lg z-10">
-                  {QUICK_EMOJIS.map(em => (
-                    <button
-                      key={em}
-                      onClick={() => { onReact(comment.id, em); setShowEmojis(false) }}
-                      className="text-base hover:scale-125 transition-transform"
-                    >
-                      {em}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <button
+              ref={smileRef}
+              onClick={() => setEmojiAnchor(smileRef.current?.getBoundingClientRect() ?? null)}
+              className="p-0.5 text-gray-300 hover:text-gray-600 transition-colors"
+              title="React"
+            >
+              <Smile className="h-3.5 w-3.5" />
+            </button>
+            {emojiAnchor && (
+              <EmojiPicker
+                anchor={emojiAnchor}
+                onPick={em => onReact(comment.id, em)}
+                onClose={() => setEmojiAnchor(null)}
+              />
+            )}
             {depth === 0 && (
               <button
                 onClick={() => onReply(comment)}
@@ -200,16 +281,8 @@ function CommentItem({
           </div>
         </div>
 
-        {/* Content with @mention highlights */}
-        <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap leading-relaxed">
-          {comment.content.split(/(@\w[^@\s]*(?:\s\w+)?)/g).map((part, i) =>
-            part.startsWith('@')
-              ? <span key={i} className="text-indigo-600 font-medium">{part}</span>
-              : part
-          )}
-        </p>
+        <CommentContent content={comment.content} attachments={comment.attachments} />
 
-        {/* Reactions */}
         {comment.reactions.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
             {comment.reactions.map(r => (
@@ -230,7 +303,6 @@ function CommentItem({
           </div>
         )}
 
-        {/* Replies */}
         {(comment.replies ?? []).map(reply => (
           <CommentItem
             key={reply.id}
@@ -262,16 +334,18 @@ export function TaskDetailClient({
   const [commentText, setCommentText] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [logHours, setLogHours] = useState('')
   const [logDesc, setLogDesc] = useState('')
   const [submittingLog, setSubmittingLog] = useState(false)
   const [newSubtask, setNewSubtask] = useState('')
   const [addingSubtask, setAddingSubtask] = useState(false)
   const commentEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const totalLogged = timeLogs.reduce((sum, l) => sum + l.hours, 0)
 
-  // Build threaded comment tree
   const threadedComments = comments
     .filter(c => !c.parent_comment_id)
     .map(c => ({
@@ -301,7 +375,6 @@ export function TaskDetailClient({
   }, [supabase, currentUserId])
 
   useEffect(() => {
-    // Load reactions for all existing comments
     const ids = comments.map(c => c.id)
     fetchReactions(ids).then(map => {
       setComments(prev => prev.map(c => ({ ...c, reactions: map[c.id] ?? [] })))
@@ -327,6 +400,7 @@ export function TaskDetailClient({
             content: newRow.content,
             created_at: newRow.created_at,
             parent_comment_id: newRow.parent_comment_id,
+            attachments: [],
             user: p ? { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url } : { id: newRow.user_id, full_name: 'Someone', avatar_url: null },
             reactions: [],
           }]
@@ -338,20 +412,63 @@ export function TaskDetailClient({
     return () => { supabase.removeChannel(channel) }
   }, [task.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function uploadFiles(files: File[]): Promise<Attachment[]> {
+    const results: Attachment[] = []
+    for (const file of files) {
+      const ext = file.name.split('.').pop() ?? 'bin'
+      const path = `${task.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('task-attachments').upload(path, file)
+      if (error) { toast.error(`Upload failed: ${file.name}`); continue }
+      const { data: urlData } = supabase.storage.from('task-attachments').getPublicUrl(path)
+      results.push({
+        name: file.name,
+        url: urlData.publicUrl,
+        type: file.type.startsWith('image/') ? 'image' : 'file',
+      })
+    }
+    return results
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = Array.from(e.clipboardData.items)
+    const imageItems = items.filter(item => item.type.startsWith('image/'))
+    if (imageItems.length === 0) return
+    e.preventDefault()
+    const files = imageItems.map(item => item.getAsFile()).filter(Boolean) as File[]
+    const named = files.map((f, i) => new File([f], `pasted-image-${Date.now()}-${i}.png`, { type: f.type }))
+    setPendingFiles(prev => [...prev, ...named])
+    toast.success(`${named.length} image(s) ready to attach`)
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+    setPendingFiles(prev => [...prev, ...files])
+    e.target.value = ''
+  }
+
+  function removePendingFile(index: number) {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
   async function postComment() {
-    if (!commentText.trim()) return
+    if (!commentText.trim() && pendingFiles.length === 0) return
     setSubmittingComment(true)
+
+    const attachments = pendingFiles.length > 0 ? await uploadFiles(pendingFiles) : []
+
     const { data, error } = await supabase.from('task_comments').insert({
       task_id: task.id,
       user_id: currentUserId,
       content: commentText.trim(),
       parent_comment_id: replyTo?.id ?? null,
-    }).select('id, content, created_at, parent_comment_id').single()
+      attachments: attachments.length > 0 ? attachments : null,
+    }).select('id, content, created_at, parent_comment_id, attachments').single()
+
     if (error) {
       toast.error(error.message)
     } else if (data) {
-      const row = data as { id: string; content: string; created_at: string; parent_comment_id: string | null }
-      // Add optimistically so it appears immediately without waiting for realtime
+      const row = data as { id: string; content: string; created_at: string; parent_comment_id: string | null; attachments: Attachment[] | null }
       setComments(prev => {
         if (prev.find(c => c.id === row.id)) return prev
         return [...prev, {
@@ -359,15 +476,24 @@ export function TaskDetailClient({
           content: row.content,
           created_at: row.created_at,
           parent_comment_id: row.parent_comment_id,
+          attachments: row.attachments ?? [],
           reactions: [],
           user: { id: currentUserId, full_name: currentUserName, avatar_url: currentUserAvatar },
         }]
       })
       setCommentText('')
       setReplyTo(null)
+      setPendingFiles([])
       setTimeout(() => commentEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
     }
     setSubmittingComment(false)
+  }
+
+  function handleCommentKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      postComment()
+    }
   }
 
   async function deleteComment(id: string) {
@@ -380,7 +506,6 @@ export function TaskDetailClient({
     const comment = comments.find(c => c.id === commentId)
     const existing = comment?.reactions.find(r => r.emoji === emoji)
     if (existing?.reacted) {
-      // Remove reaction
       await supabase.from('task_comment_reactions').delete()
         .eq('comment_id', commentId).eq('user_id', currentUserId).eq('emoji', emoji)
       setComments(prev => prev.map(c => c.id !== commentId ? c : {
@@ -390,7 +515,6 @@ export function TaskDetailClient({
           .filter(r => r.count > 0),
       }))
     } else {
-      // Add reaction
       const { error } = await supabase.from('task_comment_reactions').insert({
         comment_id: commentId, user_id: currentUserId, emoji,
       })
@@ -597,25 +721,77 @@ export function TaskDetailClient({
                       <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-xs text-indigo-700">
                         <CornerDownRight className="h-3 w-3 shrink-0" />
                         <span className="flex-1">Replying to <strong>{replyTo.user.full_name}</strong></span>
-                        <button onClick={() => setReplyTo(null)}>
-                          <X className="h-3 w-3" />
-                        </button>
+                        <button onClick={() => setReplyTo(null)}><X className="h-3 w-3" /></button>
                       </div>
                     )}
 
-                    <div className="flex gap-2 pt-3 border-t border-gray-100 items-end">
-                      <UserAvatar name={currentUserName} avatarUrl={currentUserAvatar} size="sm" className="w-8 h-8 shrink-0" />
-                      <MentionTextarea
-                        value={commentText}
-                        onChange={setCommentText}
-                        placeholder={replyTo ? `Reply to ${replyTo.user.full_name}… (@ to mention)` : 'Write a comment… (@ to mention, Enter to send)'}
-                        users={users}
-                      />
-                      <Button size="sm" onClick={postComment} loading={submittingComment} disabled={!commentText.trim()}>
-                        <Send className="h-4 w-4" />
-                      </Button>
+                    {/* Pending file previews */}
+                    {pendingFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                        {pendingFiles.map((f, i) => (
+                          <div key={i} className="relative group">
+                            {f.type.startsWith('image/') ? (
+                              <img
+                                src={URL.createObjectURL(f)}
+                                alt={f.name}
+                                className="h-16 w-16 object-cover rounded-lg border border-gray-200"
+                              />
+                            ) : (
+                              <div className="h-16 w-32 flex items-center gap-2 px-2 bg-white rounded-lg border border-gray-200 text-xs text-gray-600 truncate">
+                                <FileText className="h-4 w-4 shrink-0 text-gray-400" />
+                                {f.name}
+                              </div>
+                            )}
+                            <button
+                              onClick={() => removePendingFile(i)}
+                              className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Comment input */}
+                    <div className="pt-3 border-t border-gray-100 space-y-2">
+                      <div className="flex gap-2 items-end">
+                        <UserAvatar name={currentUserName} avatarUrl={currentUserAvatar} size="sm" className="w-8 h-8 shrink-0" />
+                        <MentionTextarea
+                          value={commentText}
+                          onChange={setCommentText}
+                          onKeyDown={handleCommentKeyDown}
+                          onPaste={handlePaste}
+                          placeholder={replyTo ? `Reply to ${replyTo.user.full_name}… (@ to mention)` : 'Write a comment… (@ to mention, Ctrl+V to paste image)'}
+                          users={users}
+                          textareaRef={textareaRef}
+                        />
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => fileInputRef.current?.click()}
+                            title="Attach file"
+                            className="px-2"
+                          >
+                            <Paperclip className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" onClick={postComment} loading={submittingComment} disabled={!commentText.trim() && pendingFiles.length === 0}>
+                            <Send className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-400 ml-10">Enter to send · Shift+Enter for new line · @ to mention · Ctrl+V to paste image</p>
                     </div>
-                    <p className="text-xs text-gray-400">Enter to send · Shift+Enter for new line · @ to mention</p>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
                   </div>
                 )}
 
@@ -638,9 +814,7 @@ export function TaskDetailClient({
                         onChange={e => setLogDesc(e.target.value)}
                         className="flex-1"
                       />
-                      <Button size="sm" onClick={logTime} loading={submittingLog}>
-                        Log Time
-                      </Button>
+                      <Button size="sm" onClick={logTime} loading={submittingLog}>Log Time</Button>
                     </div>
 
                     {task.estimated_hours && (
@@ -688,8 +862,7 @@ export function TaskDetailClient({
                         className="flex-1"
                       />
                       <Button size="sm" onClick={addSubtask} loading={addingSubtask}>
-                        <Plus className="h-4 w-4" />
-                        Add
+                        <Plus className="h-4 w-4" />Add
                       </Button>
                     </div>
 
@@ -725,10 +898,8 @@ export function TaskDetailClient({
 
           {/* Sidebar */}
           <div className="space-y-4">
-            {/* Details card */}
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-700">Details</h3>
-
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500">Status</span>
@@ -763,37 +934,25 @@ export function TaskDetailClient({
                 {task.start_date && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500">Start Date</span>
-                    <span className="flex items-center gap-1 text-gray-700">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {formatDate(task.start_date)}
-                    </span>
+                    <span className="flex items-center gap-1 text-gray-700"><Calendar className="h-3.5 w-3.5" />{formatDate(task.start_date)}</span>
                   </div>
                 )}
                 {task.due_date && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500">Due Date</span>
-                    <span className="flex items-center gap-1 text-gray-700">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {formatDate(task.due_date)}
-                    </span>
+                    <span className="flex items-center gap-1 text-gray-700"><Calendar className="h-3.5 w-3.5" />{formatDate(task.due_date)}</span>
                   </div>
                 )}
                 {task.estimated_hours && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500">Estimated</span>
-                    <span className="flex items-center gap-1 text-gray-700">
-                      <Clock className="h-3.5 w-3.5" />
-                      {task.estimated_hours}h
-                    </span>
+                    <span className="flex items-center gap-1 text-gray-700"><Clock className="h-3.5 w-3.5" />{task.estimated_hours}h</span>
                   </div>
                 )}
                 {totalLogged > 0 && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500">Time Logged</span>
-                    <span className="flex items-center gap-1 text-gray-700">
-                      <Clock className="h-3.5 w-3.5" />
-                      {totalLogged}h
-                    </span>
+                    <span className="flex items-center gap-1 text-gray-700"><Clock className="h-3.5 w-3.5" />{totalLogged}h</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
@@ -803,7 +962,6 @@ export function TaskDetailClient({
               </div>
             </div>
 
-            {/* Assignees card */}
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
               <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                 <Users className="h-4 w-4" />
@@ -819,9 +977,7 @@ export function TaskDetailClient({
                     </div>
                   </div>
                 ))}
-                {assignees.length === 0 && (
-                  <p className="text-sm text-gray-400">No assignees</p>
-                )}
+                {assignees.length === 0 && <p className="text-sm text-gray-400">No assignees</p>}
               </div>
             </div>
           </div>

@@ -18,7 +18,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
       tags, created_at, created_by, team_id, dept_id, org_id
     `).eq('id', taskId).single(),
     supabase.from('task_comments').select(`
-      id, content, created_at, parent_comment_id,
+      id, content, created_at, parent_comment_id, attachments,
       profiles(id, full_name, avatar_url)
     `).eq('task_id', taskId).order('created_at', { ascending: true }),
     supabase.from('task_time_logs').select(`
@@ -43,7 +43,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
     tags: string[]; created_at: string; created_by: string; team_id: string | null; dept_id: string | null; org_id: string
     teams?: { name: string } | null; departments?: { name: string } | null
   }
-  type RawComment = { id: string; content: string; created_at: string; parent_comment_id: string | null; profiles?: { id: string; full_name: string; avatar_url: string | null } | null }
+  type RawComment = { id: string; content: string; created_at: string; parent_comment_id: string | null; attachments: Array<{ name: string; url: string; type: 'image' | 'file' }> | null; profiles?: { id: string; full_name: string; avatar_url: string | null } | null }
   type RawTimeLog = { id: string; hours: number; description: string | null; logged_at: string; profiles?: { id: string; full_name: string; avatar_url: string | null } | null }
   type RawSubtask = { id: string; title: string; status: string; priority: string }
   type RawAssignee = { user_id: string; profiles?: { id: string; full_name: string; avatar_url: string | null; email: string } | null }
@@ -64,6 +64,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
         content: c.content,
         created_at: c.created_at,
         parent_comment_id: c.parent_comment_id,
+        attachments: c.attachments ?? [],
         reactions: [],
         user: c.profiles ? { id: c.profiles.id, full_name: c.profiles.full_name, avatar_url: c.profiles.avatar_url } : { id: '', full_name: 'Unknown', avatar_url: null },
       }))}
