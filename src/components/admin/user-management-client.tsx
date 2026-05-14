@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Upload, Download, RotateCcw, UserX, UserCheck, Edit2, MoreHorizontal } from 'lucide-react'
+import { Plus, Upload, Download, RotateCcw, UserX, UserCheck, Edit2, MoreHorizontal, Mail } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ROLE_LABELS } from '@/lib/auth/permissions'
-import { createUser, importUsers, resetUserPassword, toggleUserActive, updateUserProfile } from '@/lib/auth/actions'
+import { createUser, importUsers, resetUserPassword, toggleUserActive, updateUserProfile, sendUserInvite } from '@/lib/auth/actions'
 import { parseCSV } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { UserRole, Profile, Department } from '@/types/database'
@@ -82,14 +82,24 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
     try {
       const text = await file.text()
       const rows = parseCSV(text)
-      const users = rows.map(r => ({
-        email: r.email || r.Email,
-        full_name: r.full_name || r['Full Name'] || r.name,
-        role: (r.role || r.Role || 'member') as UserRole,
-        dept_id: r.dept_id || r.department_id || undefined,
-        employee_id: r.employee_id || r['Employee ID'] || undefined,
-        job_title: r.job_title || r['Job Title'] || undefined,
-      }))
+      const users = rows.map(r => {
+        // Resolve dept_id: accept UUID directly, or look up by department name
+        const deptRaw = r.dept_id || r.department_id || r.department || r.Department || ''
+        let resolvedDeptId: string | undefined
+        if (deptRaw) {
+          const byId = departments.find(d => d.id === deptRaw)
+          const byName = departments.find(d => d.name.toLowerCase() === deptRaw.toLowerCase())
+          resolvedDeptId = (byId ?? byName)?.id
+        }
+        return {
+          email: r.email || r.Email,
+          full_name: r.full_name || r['Full Name'] || r.name,
+          role: (r.role || r.Role || 'member') as UserRole,
+          dept_id: resolvedDeptId,
+          employee_id: r.employee_id || r['Employee ID'] || undefined,
+          job_title: r.job_title || r['Job Title'] || undefined,
+        }
+      })
       const results = await importUsers(users, orgId)
       setImportResults(results)
       router.refresh()
@@ -116,6 +126,16 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
       await toggleUserActive(userId, !user.is_active)
       toast.success(user.is_active ? 'User deactivated' : 'User activated')
       router.refresh()
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
+
+  async function handleSendInvite() {
+    if (!userId) return
+    try {
+      await sendUserInvite(userId)
+      toast.success('Invitation email sent')
     } catch (err) {
       toast.error((err as Error).message)
     }
@@ -155,6 +175,13 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
             </Dialog.Root>
 
             <DropdownMenu.Item
+              className="flex items-center gap-2 px-3 py-2 text-indigo-600 hover:bg-indigo-50 cursor-pointer outline-none"
+              onClick={handleSendInvite}
+            >
+              <Mail className="h-4 w-4" /> Send Invite
+            </DropdownMenu.Item>
+
+            <DropdownMenu.Item
               className="flex items-center gap-2 px-3 py-2 text-amber-600 hover:bg-amber-50 cursor-pointer outline-none"
               onClick={handleReset}
             >
@@ -189,13 +216,39 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
         </Dialog.Trigger>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-lg bg-white rounded-xl shadow-xl p-6">
+          <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-xl bg-white rounded-xl shadow-xl p-6 max-h-[90vh] overflow-y-auto">
             <Dialog.Title className="text-lg font-semibold mb-2">Import Users from CSV</Dialog.Title>
             <Dialog.Description className="text-sm text-gray-500 mb-4">
-              CSV must have columns: <code className="bg-gray-100 px-1 rounded text-xs">email, full_name, role, dept_id (optional), employee_id (optional), job_title (optional)</code>
+              Columns: <code className="bg-gray-100 px-1 rounded text-xs">email, full_name, role, department, employee_id, job_title</code><br />
+              <span className="text-xs">Use the department <strong>name</strong> — see reference below. Roles: <code className="bg-gray-100 px-1 rounded">member, team_leader, dept_head, org_admin, auditor, viewer</code></span>
             </Dialog.Description>
 
-            <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center mb-4">
+            {/* Department reference */}
+            {departments.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Department Reference</p>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 text-gray-500">
+                      <tr>
+                        <th className="px-3 py-1.5 text-left font-medium">Department Name</th>
+                        <th className="px-3 py-1.5 text-left font-mono font-medium text-gray-400">ID (if using UUID)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {departments.map(d => (
+                        <tr key={d.id}>
+                          <td className="px-3 py-1.5 font-medium text-gray-800">{d.name}</td>
+                          <td className="px-3 py-1.5 font-mono text-gray-400 text-[10px]">{d.id}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center mb-3">
               <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleCSVImport} />
               <Button variant="outline" onClick={() => fileRef.current?.click()} loading={importing}>
                 <Upload className="h-4 w-4" /> Choose CSV File
@@ -206,10 +259,11 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
             <button
               type="button"
               onClick={() => {
+                const exampleDept = departments[0]?.name ?? 'PEOPLE MANAGEMENT'
                 const csv = [
-                  'email,full_name,role,dept_id,employee_id,job_title',
-                  'ali@example.com,Ali Hassan,member,,EMP001,Pharmacist',
-                  'siti@example.com,Siti Rahimah,team_leader,,EMP002,Senior Pharmacist',
+                  'email,full_name,role,department,employee_id,job_title',
+                  `ali@example.com,Ali Hassan,member,${exampleDept},EMP001,Pharmacist`,
+                  `siti@example.com,Siti Rahimah,team_leader,${exampleDept},EMP002,Senior Pharmacist`,
                   'ahmad@example.com,Ahmad Fadzil,dept_head,,EMP003,Department Head',
                 ].join('\n')
                 const blob = new Blob([csv], { type: 'text/csv' })
@@ -220,7 +274,7 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
                 a.click()
                 URL.revokeObjectURL(url)
               }}
-              className="flex items-center gap-1.5 text-xs text-indigo-600 hover:underline mx-auto mb-2"
+              className="flex items-center gap-1.5 text-xs text-indigo-600 hover:underline mx-auto mb-4"
             >
               <Download className="h-3.5 w-3.5" /> Download template CSV
             </button>

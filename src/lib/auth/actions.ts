@@ -2,6 +2,8 @@
 
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { sendEmail } from '@/lib/email/send'
+import { welcomeUserEmail } from '@/lib/email/templates'
 import type { UserRole } from '@/types/database'
 
 const DEFAULT_PASSWORD = process.env.DEFAULT_USER_PASSWORD || 'Alpro@123'
@@ -195,4 +197,27 @@ export async function signIn(email: string, password: string) {
 export async function signOut() {
   const supabase = await createClient()
   await supabase.auth.signOut()
+}
+
+// ─── Send invitation email to an existing user ────────────────────────────────
+export async function sendUserInvite(userId: string) {
+  const supabase = await createClient()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('email, full_name')
+    .eq('id', userId)
+    .single()
+
+  if (!profile?.email) throw new Error('User not found')
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.URL ?? 'https://oasishub.netlify.app'
+  const tpl = welcomeUserEmail({
+    recipientName: profile.full_name,
+    email: profile.email,
+    defaultPassword: DEFAULT_PASSWORD,
+    loginUrl: `${appUrl}/login`,
+  })
+
+  const result = await sendEmail({ to: profile.email, subject: tpl.subject, html: tpl.html })
+  if (!result.success && !result.skipped) throw new Error('Failed to send email')
 }
