@@ -320,14 +320,17 @@ export function TaskDetailClient({
         const newRow = payload.new as { id: string; content: string; created_at: string; user_id: string; parent_comment_id: string | null }
         const { data: profile } = await supabase.from('profiles').select('id, full_name, avatar_url').eq('id', newRow.user_id).single()
         const p = profile as { id: string; full_name: string; avatar_url: string | null } | null
-        setComments(prev => [...prev, {
-          id: newRow.id,
-          content: newRow.content,
-          created_at: newRow.created_at,
-          parent_comment_id: newRow.parent_comment_id,
-          user: p ? { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url } : { id: newRow.user_id, full_name: 'Someone', avatar_url: null },
-          reactions: [],
-        }])
+        setComments(prev => {
+          if (prev.find(c => c.id === newRow.id)) return prev
+          return [...prev, {
+            id: newRow.id,
+            content: newRow.content,
+            created_at: newRow.created_at,
+            parent_comment_id: newRow.parent_comment_id,
+            user: p ? { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url } : { id: newRow.user_id, full_name: 'Someone', avatar_url: null },
+            reactions: [],
+          }]
+        })
         setTimeout(() => commentEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
       })
       .subscribe()
@@ -338,16 +341,31 @@ export function TaskDetailClient({
   async function postComment() {
     if (!commentText.trim()) return
     setSubmittingComment(true)
-    const { error } = await supabase.from('task_comments').insert({
+    const { data, error } = await supabase.from('task_comments').insert({
       task_id: task.id,
       user_id: currentUserId,
       content: commentText.trim(),
       parent_comment_id: replyTo?.id ?? null,
-    })
-    if (error) toast.error(error.message)
-    else {
+    }).select('id, content, created_at, parent_comment_id').single()
+    if (error) {
+      toast.error(error.message)
+    } else if (data) {
+      const row = data as { id: string; content: string; created_at: string; parent_comment_id: string | null }
+      // Add optimistically so it appears immediately without waiting for realtime
+      setComments(prev => {
+        if (prev.find(c => c.id === row.id)) return prev
+        return [...prev, {
+          id: row.id,
+          content: row.content,
+          created_at: row.created_at,
+          parent_comment_id: row.parent_comment_id,
+          reactions: [],
+          user: { id: currentUserId, full_name: currentUserName, avatar_url: currentUserAvatar },
+        }]
+      })
       setCommentText('')
       setReplyTo(null)
+      setTimeout(() => commentEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
     }
     setSubmittingComment(false)
   }

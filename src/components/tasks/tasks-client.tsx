@@ -97,7 +97,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
     if (filterStatus.length > 0) result = result.filter(t => filterStatus.includes(t.status))
     if (filterPriority.length > 0) result = result.filter(t => filterPriority.includes(t.priority))
     return result
-  }, [tasks, search, filterStatus, filterPriority])
+  }, [tasks, search, filterStatus, filterPriority, scope, currentUserId])
 
   const activeFilters = filterStatus.length + filterPriority.length
   const counts = useMemo(() => ({
