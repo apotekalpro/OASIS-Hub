@@ -38,8 +38,22 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
   const [tasks, setTasks] = useState<TaskCardData[]>(initialTasks)
   useEffect(() => { setTasks(initialTasks) }, [initialTasks])
   const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState<string[]>([])
+  const [filterStatus, setFilterStatus] = useState<string[]>(['todo', 'in_progress', 'in_review'])
   const [filterPriority, setFilterPriority] = useState<string[]>([])
+
+  // Default active view: excludes done/cancelled
+  const DEFAULT_STATUS_FILTER = ['todo', 'in_progress', 'in_review']
+  const isDefaultFilter = filterStatus.length === DEFAULT_STATUS_FILTER.length &&
+    DEFAULT_STATUS_FILTER.every(s => filterStatus.includes(s))
+
+  function handleStatBadgeClick(status: string) {
+    // If already filtered to exactly this status, reset to default view
+    if (filterStatus.length === 1 && filterStatus[0] === status) {
+      setFilterStatus(DEFAULT_STATUS_FILTER)
+    } else {
+      setFilterStatus([status])
+    }
+  }
   const [showFilters, setShowFilters] = useState(false)
   const [scope, setScope] = useState<'all' | 'mine'>('all')
 
@@ -99,7 +113,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
     return result
   }, [tasks, search, filterStatus, filterPriority, scope, currentUserId])
 
-  const activeFilters = filterStatus.length + filterPriority.length
+  const activeFilters = (isDefaultFilter ? 0 : filterStatus.length) + filterPriority.length
   const counts = useMemo(() => ({
     todo: tasks.filter(t => t.status === 'todo').length,
     in_progress: tasks.filter(t => t.status === 'in_progress').length,
@@ -119,12 +133,36 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
-          <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
-            <span>{counts.todo} to do</span>
+          <div className="flex items-center gap-1 mt-1 text-sm">
+            <button
+              onClick={() => handleStatBadgeClick('todo')}
+              className={cn(
+                'px-2 py-0.5 rounded-md font-medium transition-colors',
+                filterStatus.length === 1 && filterStatus[0] === 'todo'
+                  ? 'bg-gray-200 text-gray-900'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+              )}
+            >{counts.todo} to do</button>
             <span className="text-gray-300">·</span>
-            <span className="text-blue-600">{counts.in_progress} in progress</span>
+            <button
+              onClick={() => handleStatBadgeClick('in_progress')}
+              className={cn(
+                'px-2 py-0.5 rounded-md font-medium transition-colors',
+                filterStatus.length === 1 && filterStatus[0] === 'in_progress'
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'text-blue-600 hover:bg-blue-50'
+              )}
+            >{counts.in_progress} in progress</button>
             <span className="text-gray-300">·</span>
-            <span className="text-green-600">{counts.done} done</span>
+            <button
+              onClick={() => handleStatBadgeClick('done')}
+              className={cn(
+                'px-2 py-0.5 rounded-md font-medium transition-colors',
+                filterStatus.length === 1 && filterStatus[0] === 'done'
+                  ? 'bg-green-100 text-green-800'
+                  : 'text-green-600 hover:bg-green-50'
+              )}
+            >{counts.done} done</button>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -185,7 +223,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
 
         {activeFilters > 0 && (
           <button
-            onClick={() => { setFilterStatus([]); setFilterPriority([]) }}
+            onClick={() => { setFilterStatus(DEFAULT_STATUS_FILTER); setFilterPriority([]) }}
             className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
           >
             <X className="h-3 w-3" /> Clear filters
