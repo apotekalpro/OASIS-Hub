@@ -106,6 +106,22 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
         const { error: assignError } = await supabase.from('task_assignees').insert(assigneeRows)
         if (assignError) throw assignError
 
+        // Send email to assigned users (fire-and-forget)
+        const assignedUserIds = assigneeRows.map(r => r.user_id).filter(id => id !== currentUserId)
+        if (assignedUserIds.length > 0) {
+          const creatorProfile = users.find(u => u.id === currentUserId)
+          fetch('/api/notifications/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'task_assigned',
+              taskId,
+              userIds: assignedUserIds,
+              actorName: creatorProfile?.full_name ?? 'Someone',
+            }),
+          }).catch(() => {})
+        }
+
         toast.success('Task created')
         onCreated?.(taskId!)
       }

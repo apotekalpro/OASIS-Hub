@@ -484,6 +484,26 @@ export function TaskDetailClient({
           user: { id: currentUserId, full_name: currentUserName, avatar_url: currentUserAvatar },
         }]
       })
+
+      // Email @mentioned users in the comment
+      const mentionPattern = /@([^@\n,]+?)(?=\s|$|[,.])/g
+      const mentionedIds: string[] = []
+      let m
+      while ((m = mentionPattern.exec(commentText)) !== null) {
+        const name = m[1].trim()
+        const found = users.find(u => u.full_name.toLowerCase() === name.toLowerCase())
+        if (found && found.id !== currentUserId && !mentionedIds.includes(found.id)) {
+          mentionedIds.push(found.id)
+        }
+      }
+      if (mentionedIds.length > 0) {
+        fetch('/api/notifications/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'task_mention', taskId: task.id, userIds: mentionedIds, actorName: currentUserName }),
+        }).catch(() => {})
+      }
+
       setCommentText('')
       setReplyTo(null)
       setPendingFiles([])

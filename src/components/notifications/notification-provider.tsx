@@ -1,15 +1,41 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useNotificationStore } from '@/store/notifications'
 import { useAuthStore } from '@/store/auth'
 import { toast } from 'sonner'
 import type { AppNotification } from '@/types/database'
 
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+    const now = ctx.currentTime
+
+    // Two-tone chime: high note then slightly lower
+    const freqs = [880, 660]
+    freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      gain.gain.setValueAtTime(0, now + i * 0.15)
+      gain.gain.linearRampToValueAtTime(0.18, now + i * 0.15 + 0.01)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.35)
+      osc.start(now + i * 0.15)
+      osc.stop(now + i * 0.15 + 0.4)
+    })
+  } catch {
+    // AudioContext not available (SSR or browser restriction)
+  }
+}
+
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const profile = useAuthStore(s => s.profile)
   const { setNotifications, addNotification } = useNotificationStore()
+  const initialised = useRef(false)
 
   useEffect(() => {
     if (!profile?.id) return
@@ -24,7 +50,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       .order('created_at', { ascending: false })
       .limit(50)
       .then(({ data }) => {
-        if (data) setNotifications(data as AppNotification[])
+        if (data) {
+          setNotifications(data as AppNotification[])
+          initialised.current = true
+        }
       })
 
     // Subscribe to real-time new notifications
@@ -42,10 +71,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           const notification = payload.new as AppNotification
           addNotification(notification)
 
-          // Show toast
+          // Play chime + show toast
+          if (initialised.current) playNotificationSound()
+
           toast(notification.title, {
             description: notification.body ?? undefined,
-            duration: 5000,
+            duration: 6000,
           })
         }
       )

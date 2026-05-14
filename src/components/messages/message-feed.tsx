@@ -185,6 +185,21 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
 
     if (error) toast.error(error.message)
     else {
+      // Email mentioned users (fire-and-forget)
+      if (mentionedIds.length > 0) {
+        const channelRes = await supabase.from('channels').select('name').eq('id', channelId).single()
+        fetch('/api/notifications/send-mention-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channelId,
+            channelName: channelRes.data?.name ?? 'channel',
+            userIds: mentionedIds,
+            actorName: currentUserName,
+            preview: text.trim(),
+          }),
+        }).catch(() => {})
+      }
       setText('')
       setReplyTo(null)
     }

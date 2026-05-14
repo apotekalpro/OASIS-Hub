@@ -87,7 +87,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+      <nav className="flex-1 overflow-y-auto sidebar-scroll py-4 px-3 space-y-1">
         {NAV_ITEMS.map(item => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
