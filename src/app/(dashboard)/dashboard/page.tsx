@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { UserAvatar } from '@/components/ui/avatar'
 import { CheckSquare, AlertTriangle, Bell, TrendingUp, Users, Shield } from 'lucide-react'
-import { formatDueDate, formatRelativeTime } from '@/lib/utils'
+import { formatRelativeTime, getDueStatus } from '@/lib/utils'
 import { ROLE_COLORS, ROLE_LABELS } from '@/lib/auth/permissions'
 import Link from 'next/link'
 import type { Task, AppNotification, Profile, UserRole } from '@/types/database'
@@ -180,11 +180,25 @@ export default async function DashboardPage() {
                       <Link href={`/tasks/${task.id}`} className="flex items-start gap-3 px-6 py-3 hover:bg-gray-50 transition-colors block">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">{task.title}</p>
-                          {task.due_date && (
-                            <p className={`text-xs mt-0.5 ${new Date(task.due_date) < new Date() ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
-                              {formatDueDate(task.due_date)}
-                            </p>
-                          )}
+                          {task.due_date && (() => {
+                            const due = getDueStatus(task.due_date)
+                            return due ? (
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span className={`text-xs font-medium ${
+                                  due.color === 'red' ? 'text-red-600' :
+                                  due.color === 'orange' ? 'text-orange-600' :
+                                  due.color === 'yellow' ? 'text-yellow-700' : 'text-gray-400'
+                                }`}>{due.label}</span>
+                                {due.badge && (
+                                  <span className={`text-[10px] font-bold px-1 py-0.5 rounded border ${
+                                    due.color === 'red' ? 'text-red-600 bg-red-50 border-red-200' :
+                                    due.color === 'orange' ? 'text-orange-600 bg-orange-50 border-orange-200' :
+                                    'text-yellow-700 bg-yellow-50 border-yellow-200'
+                                  }`}>{due.badge}</span>
+                                )}
+                              </div>
+                            ) : null
+                          })()}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <Badge variant={PRIORITY_COLORS[task.priority as keyof typeof PRIORITY_COLORS]}>

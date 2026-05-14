@@ -72,9 +72,9 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-60 flex-col border-r border-gray-200 bg-white">
+    <aside className="flex h-screen w-60 flex-col bg-gradient-to-b from-indigo-950 via-indigo-900 to-blue-950 border-r-0">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-100">
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10">
         <Image
           src="/alpro-logo.jpg"
           alt="Alpro Pharmacy"
@@ -83,76 +83,82 @@ export function Sidebar() {
           className="h-8 w-auto object-contain shrink-0"
           priority
         />
-        <span className="font-bold text-gray-900 text-base leading-tight">OASIS Hub</span>
+        <span className="font-bold text-white text-base leading-tight">OASIS Hub</span>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-        {NAV_ITEMS.map(item => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              pathname === item.href || pathname.startsWith(item.href + '/')
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-            )}
-          >
-            <item.icon className="h-4 w-4 shrink-0" />
-            <span className="flex-1">{item.label}</span>
-            {item.label === 'Notifications' && unreadCount > 0 && (
-              <Badge variant="destructive" className="text-xs px-1.5 py-0 min-w-[1.2rem] justify-center">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </Badge>
-            )}
-          </Link>
-        ))}
+        {NAV_ITEMS.map(item => {
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 text-sm transition-colors',
+                isActive
+                  ? 'bg-white/15 text-white rounded-lg font-medium'
+                  : 'text-indigo-200 hover:bg-white/10 hover:text-white rounded-lg'
+              )}
+            >
+              <item.icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-white' : 'text-indigo-300 group-hover:text-white')} />
+              <span className="flex-1">{item.label}</span>
+              {item.label === 'Notifications' && unreadCount > 0 && (
+                <Badge variant="destructive" className="text-xs px-1.5 py-0 min-w-[1.2rem] justify-center">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Badge>
+              )}
+            </Link>
+          )
+        })}
 
         {/* Admin Section */}
         {showAdminSection && (
           <>
             <div className="pt-4 pb-2">
-              <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              <p className="px-3 text-xs font-semibold text-indigo-400 uppercase tracking-wider">
                 Administration
               </p>
             </div>
-            {visibleAdminItems.map(item => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  pathname === item.href || pathname.startsWith(item.href + '/')
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                )}
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                {item.label}
-              </Link>
-            ))}
+            {visibleAdminItems.map(item => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 text-sm transition-colors',
+                    isActive
+                      ? 'bg-white/15 text-white rounded-lg font-medium'
+                      : 'text-indigo-200 hover:bg-white/10 hover:text-white rounded-lg'
+                  )}
+                >
+                  <item.icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-white' : 'text-indigo-300 group-hover:text-white')} />
+                  {item.label}
+                </Link>
+              )
+            })}
           </>
         )}
       </nav>
 
       {/* User footer */}
       {profile && (
-        <div className="border-t border-gray-100 p-3">
+        <div className="border-t border-white/10 p-3">
           <div className="flex items-center gap-3 rounded-lg px-2 py-2">
             <UserAvatar name={profile.full_name} avatarUrl={profile.avatar_url} size="sm" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{profile.full_name}</p>
-              <p className="text-xs text-gray-500 truncate">{profile.email}</p>
+              <p className="text-sm font-medium text-white truncate">{profile.full_name}</p>
+              <p className="text-xs text-indigo-300 truncate">{profile.email}</p>
             </div>
             <button
               onClick={handleSignOut}
               disabled={signingOut}
-              className="text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
+              className="text-indigo-300 hover:text-red-400 transition-colors disabled:opacity-50"
               title="Sign out"
             >
               {signingOut
-                ? <span className="text-xs text-gray-500 whitespace-nowrap">Logging out...</span>
+                ? <span className="text-xs text-indigo-300 whitespace-nowrap">Logging out...</span>
                 : <LogOut className="h-4 w-4" />}
             </button>
           </div>

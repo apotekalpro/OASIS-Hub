@@ -13,9 +13,9 @@ import { STATUS_VARIANT, STATUS_LABEL, PRIORITY_DOT } from './task-card'
 import {
   ArrowLeft, Calendar, Clock, Tag, Users, Edit2, Plus, Send,
   Trash2, CheckCircle2, Circle, CornerDownRight, Smile, X,
-  Paperclip, Image as ImageIcon, FileText, Download,
+  Paperclip, FileText, Download,
 } from 'lucide-react'
-import { formatDate, formatRelativeTime, cn } from '@/lib/utils'
+import { formatDate, formatRelativeTime, getDueStatus, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { createPortal } from 'react-dom'
 
@@ -335,6 +335,9 @@ export function TaskDetailClient({
   const [submittingComment, setSubmittingComment] = useState(false)
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [confirmComplete, setConfirmComplete] = useState(false)
+  const [completing, setCompleting] = useState(false)
+  const [taskStatus, setTaskStatus] = useState(task.status)
   const [logHours, setLogHours] = useState('')
   const [logDesc, setLogDesc] = useState('')
   const [submittingLog, setSubmittingLog] = useState(false)
@@ -494,6 +497,17 @@ export function TaskDetailClient({
       e.preventDefault()
       postComment()
     }
+  }
+
+  async function handleComplete() {
+    setCompleting(true)
+    const { error } = await supabase.from('tasks').update({ status: 'done' }).eq('id', task.id)
+    if (error) { toast.error(error.message); setCompleting(false); return }
+    setTaskStatus('done')
+    setConfirmComplete(false)
+    setCompleting(false)
+    toast.success('Task marked as complete!')
+    router.refresh()
   }
 
   async function deleteComment(id: string) {
@@ -900,11 +914,47 @@ export function TaskDetailClient({
           <div className="space-y-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-700">Details</h3>
+
+              {/* Complete button */}
+              {taskStatus !== 'done' && taskStatus !== 'cancelled' && (
+                <div>
+                  {confirmComplete ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleComplete}
+                        disabled={completing}
+                        className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 px-3 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        {completing ? 'Saving…' : 'Confirm Complete'}
+                      </button>
+                      <button onClick={() => setConfirmComplete(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg border border-gray-200">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmComplete(true)}
+                      className="w-full flex items-center justify-center gap-1.5 border-2 border-green-500 text-green-600 hover:bg-green-50 text-sm font-medium py-2 px-3 rounded-lg transition-colors"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Mark as Complete
+                    </button>
+                  )}
+                </div>
+              )}
+              {taskStatus === 'done' && (
+                <div className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm font-medium py-2 px-3 rounded-lg">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Completed
+                </div>
+              )}
+
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500">Status</span>
-                  <Badge variant={STATUS_VARIANT[task.status as keyof typeof STATUS_VARIANT] ?? 'secondary'}>
-                    {STATUS_LABEL[task.status as keyof typeof STATUS_LABEL] ?? task.status}
+                  <Badge variant={STATUS_VARIANT[taskStatus as keyof typeof STATUS_VARIANT] ?? 'secondary'}>
+                    {STATUS_LABEL[taskStatus as keyof typeof STATUS_LABEL] ?? taskStatus}
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between">
@@ -937,12 +987,38 @@ export function TaskDetailClient({
                     <span className="flex items-center gap-1 text-gray-700"><Calendar className="h-3.5 w-3.5" />{formatDate(task.start_date)}</span>
                   </div>
                 )}
-                {task.due_date && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Due Date</span>
-                    <span className="flex items-center gap-1 text-gray-700"><Calendar className="h-3.5 w-3.5" />{formatDate(task.due_date)}</span>
-                  </div>
-                )}
+                {task.due_date && (() => {
+                  const due = getDueStatus(task.due_date)
+                  const isDone = taskStatus === 'done' || taskStatus === 'cancelled'
+                  return (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-gray-500 shrink-0">Due Date</span>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="flex items-center gap-1 text-gray-700 text-xs">
+                          <Calendar className="h-3.5 w-3.5" />{formatDate(task.due_date)}
+                        </span>
+                        {due && !isDone && (
+                          <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border', {
+                            'text-red-600 bg-red-50 border-red-200': due.color === 'red',
+                            'text-orange-600 bg-orange-50 border-orange-200': due.color === 'orange',
+                            'text-yellow-700 bg-yellow-50 border-yellow-200': due.color === 'yellow',
+                            'text-gray-500 bg-gray-50 border-gray-200': due.color === 'gray',
+                          })}>
+                            {due.badge ?? due.label}
+                          </span>
+                        )}
+                        {due && !isDone && (
+                          <span className={cn('text-xs', {
+                            'text-red-600 font-medium': due.color === 'red',
+                            'text-orange-600 font-medium': due.color === 'orange',
+                            'text-yellow-700': due.color === 'yellow',
+                            'text-gray-400': due.color === 'gray',
+                          })}>{due.label}</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
                 {task.estimated_hours && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500">Estimated</span>

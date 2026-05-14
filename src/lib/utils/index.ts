@@ -23,7 +23,7 @@ export function formatDueDate(date: string | null) {
   return format(d, 'MMM d, yyyy')
 }
 
-export function isDueSoon(date: string | null, hoursThreshold = 24) {
+export function isDueSoon(date: string | null, hoursThreshold = 72) {
   if (!date) return false
   const diff = new Date(date).getTime() - Date.now()
   return diff > 0 && diff <= hoursThreshold * 60 * 60 * 1000
@@ -32,6 +32,31 @@ export function isDueSoon(date: string | null, hoursThreshold = 24) {
 export function isOverdue(date: string | null) {
   if (!date) return false
   return isPast(new Date(date))
+}
+
+export type DueStatus = {
+  label: string
+  badge: string | null
+  color: 'red' | 'orange' | 'yellow' | 'gray'
+  urgent: boolean
+}
+
+export function getDueStatus(due_date: string | null): DueStatus | null {
+  if (!due_date) return null
+  const now = new Date()
+  const due = new Date(due_date)
+  const diffMs = due.getTime() - now.getTime()
+  const diffDays = Math.ceil(diffMs / 86400000)
+
+  if (diffMs < 0) {
+    const days = Math.abs(Math.floor(diffMs / 86400000))
+    return { label: days === 0 ? 'Due today' : `${days}d overdue`, badge: 'OVERDUE', color: 'red', urgent: true }
+  }
+  if (diffDays === 0) return { label: 'Due today', badge: 'DUE TODAY', color: 'orange', urgent: true }
+  if (diffDays === 1) return { label: '1 day left', badge: 'DUE SOON', color: 'orange', urgent: true }
+  if (diffDays <= 3) return { label: `${diffDays} days left`, badge: 'DUE SOON', color: 'orange', urgent: true }
+  if (diffDays <= 7) return { label: `${diffDays} days left`, badge: 'DUE SOON', color: 'yellow', urgent: false }
+  return { label: `${diffDays} days left`, badge: null, color: 'gray', urgent: false }
 }
 
 export function getInitials(name: string) {
