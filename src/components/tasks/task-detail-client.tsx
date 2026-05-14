@@ -13,11 +13,13 @@ import { STATUS_VARIANT, STATUS_LABEL, PRIORITY_DOT } from './task-card'
 import {
   ArrowLeft, Calendar, Clock, Tag, Users, Edit2, Plus, Send,
   Trash2, CheckCircle2, Circle, CornerDownRight, Smile, X,
-  Paperclip, FileText, Download,
+  Paperclip, FileText, Download, RotateCcw,
 } from 'lucide-react'
 import { formatDate, formatRelativeTime, getDueStatus, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { createPortal } from 'react-dom'
+import { hasRole } from '@/lib/auth/permissions'
+import type { UserRole } from '@/types/database'
 
 type Attachment = { name: string; url: string; type: 'image' | 'file' }
 type Reaction = { emoji: string; count: number; reacted: boolean }
@@ -51,6 +53,7 @@ interface Props {
   assignees: Assignee[]
   orgId: string
   currentUserId: string
+  currentUserRole: UserRole
   currentUserName: string
   currentUserAvatar: string | null
   users: OrgUser[]
@@ -323,7 +326,7 @@ function CommentItem({
 // ─── Main component ───────────────────────────────────────────────────────────
 export function TaskDetailClient({
   task, comments: initialComments, timeLogs: initialLogs, subtasks: initialSubtasks,
-  assignees, orgId, currentUserId, currentUserName, currentUserAvatar, users, teams, departments
+  assignees, orgId, currentUserId, currentUserRole, currentUserName, currentUserAvatar, users, teams, departments
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -337,6 +340,9 @@ export function TaskDetailClient({
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [confirmComplete, setConfirmComplete] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [reopening, setReopening] = useState(false)
   const [taskStatus, setTaskStatus] = useState(task.status)
   const [logHours, setLogHours] = useState('')
   const [logDesc, setLogDesc] = useState('')
@@ -530,6 +536,41 @@ export function TaskDetailClient({
     router.refresh()
   }
 
+  async function handleDelete() {
+    setDeleting(true)
+    const { error } = await supabase.from('tasks').delete().eq('id', task.id)
+    if (error) { toast.error(error.message); setDeleting(false); return }
+    toast.success('Task deleted')
+    router.push('/tasks')
+  }
+
+  async function handleReopen() {
+    setReopening(true)
+    const { error } = await supabase.from('tasks').update({ status: 'todo' }).eq('id', task.id)
+    if (error) { toast.error(error.message); setReopening(false); return }
+    setTaskStatus('todo')
+    // Notify all assignees + creator
+    const recipientIds = [...new Set([
+      ...assignees.map(a => a.id),
+      task.created_by,
+    ].filter(id => id !== currentUserId))]
+    if (recipientIds.length > 0) {
+      await supabase.from('notifications').insert(
+        recipientIds.map(uid => ({
+          user_id: uid,
+          org_id: task.org_id,
+          type: 'task_assigned',
+          title: 'Task Reopened',
+          body: `"${task.title}" has been reopened and needs attention.`,
+          link: `/tasks/${task.id}`,
+        }))
+      )
+    }
+    setReopening(false)
+    toast.success('Task reopened — team notified')
+    router.refresh()
+  }
+
   async function deleteComment(id: string) {
     const { error } = await supabase.from('task_comments').delete().eq('id', id)
     if (error) toast.error(error.message)
@@ -626,39 +667,63 @@ export function TaskDetailClient({
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto p-6 space-y-6">
-        {/* Back + Edit */}
+        {/* Back + Edit + Delete */}
         <div className="flex items-center justify-between">
           <Link href="/tasks" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors">
             <ArrowLeft className="h-4 w-4" />
             Back to Tasks
           </Link>
-          <TaskForm
-            orgId={orgId}
-            currentUserId={currentUserId}
-            users={users}
-            teams={teams}
-            departments={departments}
-            task={{
-              id: task.id,
-              title: task.title,
-              description: task.description,
-              priority: task.priority,
-              status: task.status,
-              due_date: task.due_date,
-              start_date: task.start_date,
-              estimated_hours: task.estimated_hours,
-              team_id: task.team_id,
-              dept_id: task.dept_id,
-              tags: task.tags,
-            }}
-            trigger={
-              <Button variant="outline" size="sm">
-                <Edit2 className="h-4 w-4" />
-                Edit Task
-              </Button>
-            }
-            onCreated={() => router.refresh()}
-          />
+          <div className="flex items-center gap-2">
+            <TaskForm
+              orgId={orgId}
+              currentUserId={currentUserId}
+              users={users}
+              teams={teams}
+              departments={departments}
+              task={{
+                id: task.id,
+                title: task.title,
+                description: task.description,
+                priority: task.priority,
+                status: task.status,
+                due_date: task.due_date,
+                start_date: task.start_date,
+                estimated_hours: task.estimated_hours,
+                team_id: task.team_id,
+                dept_id: task.dept_id,
+                tags: task.tags,
+              }}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Edit2 className="h-4 w-4" />
+                  Edit Task
+                </Button>
+              }
+              onCreated={() => router.refresh()}
+            />
+            {(task.created_by === currentUserId || hasRole(currentUserRole, 'dept_head')) && (
+              confirmDelete ? (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="flex items-center gap-1 text-sm bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {deleting ? 'Deleting…' : 'Confirm Delete'}
+                  </button>
+                  <button onClick={() => setConfirmDelete(false)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg border border-gray-200">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)} className="text-red-500 hover:text-red-600 hover:border-red-300">
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </Button>
+              )
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -964,9 +1029,19 @@ export function TaskDetailClient({
                 </div>
               )}
               {taskStatus === 'done' && (
-                <div className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm font-medium py-2 px-3 rounded-lg">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Completed
+                <div className="space-y-2">
+                  <div className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm font-medium py-2 px-3 rounded-lg">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Completed
+                  </div>
+                  <button
+                    onClick={handleReopen}
+                    disabled={reopening}
+                    className="w-full flex items-center justify-center gap-1.5 border border-amber-400 text-amber-600 hover:bg-amber-50 text-sm font-medium py-2 px-3 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    {reopening ? 'Reopening…' : 'Reopen Task'}
+                  </button>
                 </div>
               )}
 

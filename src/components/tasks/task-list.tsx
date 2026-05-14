@@ -6,10 +6,12 @@ import { TaskCardData, PRIORITY_DOT, STATUS_LABEL, STATUS_VARIANT } from './task
 import { Badge } from '@/components/ui/badge'
 import { UserAvatar } from '@/components/ui/avatar'
 import { TaskForm } from './task-form'
-import { Calendar, ChevronUp, ChevronDown, ChevronsUpDown, CheckCircle2, X } from 'lucide-react'
+import { Calendar, ChevronUp, ChevronDown, ChevronsUpDown, CheckCircle2, X, Trash2, RotateCcw } from 'lucide-react'
 import { getDueStatus, cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { hasRole } from '@/lib/auth/permissions'
+import type { UserRole } from '@/types/database'
 
 type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
 type Team = { id: string; name: string }
@@ -29,6 +31,7 @@ interface Props {
   tasks: TaskCardData[]
   orgId: string
   currentUserId: string
+  currentUserRole: UserRole
   users: OrgUser[]
   teams: Team[]
   departments: Department[]
@@ -42,11 +45,14 @@ function SortIcon({ field, active, dir }: { field: string; active: string; dir: 
     : <ChevronDown className="h-3.5 w-3.5 text-indigo-500" />
 }
 
-export function TaskList({ tasks, orgId, currentUserId, users, teams, departments, onRefresh }: Props) {
+export function TaskList({ tasks, orgId, currentUserId, currentUserRole, users, teams, departments, onRefresh }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('created_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [completing, setCompleting] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [reopening, setReopening] = useState<string | null>(null)
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -61,6 +67,48 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
     else { toast.success('Task marked as complete!'); onRefresh() }
     setCompleting(null)
     setConfirmId(null)
+  }
+
+  async function handleDelete(taskId: string) {
+    setDeleting(taskId)
+    const supabase = createClient()
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+    if (error) toast.error(error.message)
+    else { toast.success('Task deleted'); onRefresh() }
+    setDeleting(null)
+    setDeleteConfirmId(null)
+  }
+
+  async function handleReopen(taskId: string) {
+    setReopening(taskId)
+    const supabase = createClient()
+    const { error } = await supabase.from('tasks').update({ status: 'todo' }).eq('id', taskId)
+    if (error) { toast.error(error.message); setReopening(null); return }
+    // Notify all assignees about reopen
+    const { data: assigneeRows } = await supabase
+      .from('task_assignees')
+      .select('user_id')
+      .eq('task_id', taskId)
+    const { data: taskData } = await supabase.from('tasks').select('title, created_by, org_id').eq('id', taskId).single()
+    const recipientIds = [...new Set([
+      ...(assigneeRows ?? []).map((a: { user_id: string }) => a.user_id),
+      taskData?.created_by,
+    ].filter((id): id is string => !!id && id !== currentUserId))]
+    if (recipientIds.length > 0 && taskData) {
+      await supabase.from('notifications').insert(
+        recipientIds.map(uid => ({
+          user_id: uid,
+          org_id: taskData.org_id,
+          type: 'task_assigned',
+          title: 'Task Reopened',
+          body: `"${taskData.title}" has been reopened and needs attention.`,
+          link: `/tasks/${taskId}`,
+        }))
+      )
+    }
+    toast.success('Task reopened')
+    onRefresh()
+    setReopening(null)
   }
 
   const sorted = [...tasks].sort((a, b) => {
@@ -104,6 +152,8 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
               task.created_by === currentUserId ||
               task.assignees?.some(a => a.id === currentUserId)
             )
+            const canDelete = task.created_by === currentUserId || hasRole(currentUserRole, 'dept_head')
+            const canReopen = task.status === 'done'
             return (
               <tr key={task.id} className="hover:bg-gray-50 transition-colors group">
                 <td className="px-4 py-3">
@@ -173,6 +223,15 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
+                    {canReopen && (
+                      <button
+                        onClick={() => handleReopen(task.id)}
+                        disabled={reopening === task.id}
+                        className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />{reopening === task.id ? 'Reopening…' : 'Reopen'}
+                      </button>
+                    )}
                     {canComplete && (
                       confirmId === task.id ? (
                         <div className="flex items-center gap-1">
@@ -215,6 +274,30 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
                       }
                       onCreated={onRefresh}
                     />
+                    {canDelete && (
+                      deleteConfirmId === task.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleDelete(task.id)}
+                            disabled={deleting === task.id}
+                            className="flex items-center gap-1 text-xs bg-red-600 text-white px-2 py-1 rounded-md hover:bg-red-700 disabled:opacity-50"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            {deleting === task.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                          <button onClick={() => setDeleteConfirmId(null)} className="text-gray-400 hover:text-gray-600">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setDeleteConfirmId(task.id)}
+                          className="text-xs text-red-400 hover:text-red-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )
+                    )}
                   </div>
                 </td>
               </tr>

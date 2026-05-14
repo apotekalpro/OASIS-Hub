@@ -8,9 +8,9 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const profileRes = await supabase.from('profiles').select('org_id, full_name, avatar_url').eq('id', user.id).single()
+  const profileRes = await supabase.from('profiles').select('org_id, full_name, avatar_url, role').eq('id', user.id).single()
   const orgId = (profileRes.data as { org_id: string } | null)?.org_id ?? ''
-  const currentUser = profileRes.data as { org_id: string; full_name: string; avatar_url: string | null } | null
+  const currentUser = profileRes.data as { org_id: string; full_name: string; avatar_url: string | null; role: string } | null
 
   const [taskRes, commentsRes, timeLogsRes, subtasksRes, assigneesRes, usersRes, teamsRes, deptsRes] = await Promise.all([
     supabase.from('tasks').select(`
@@ -79,6 +79,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
       assignees={assignees.map(a => a.profiles ? { id: a.profiles.id, full_name: a.profiles.full_name, avatar_url: a.profiles.avatar_url, email: a.profiles.email } : null).filter(Boolean) as Array<{ id: string; full_name: string; avatar_url: string | null; email: string }>}
       orgId={orgId}
       currentUserId={user.id}
+      currentUserRole={(currentUser?.role ?? 'member') as import('@/types/database').UserRole}
       currentUserName={currentUser?.full_name ?? 'You'}
       currentUserAvatar={currentUser?.avatar_url ?? null}
       users={users}
