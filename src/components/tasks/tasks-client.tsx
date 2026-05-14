@@ -75,6 +75,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
       }
       setTasks(prev => [newTask, ...prev])
     }
+    router.refresh()
   }
 
   const filtered = useMemo(() => {

@@ -176,8 +176,8 @@ export default async function DashboardPage() {
               ) : (
                 <ul className="divide-y divide-gray-100">
                   {myTasks.map(task => (
-                    <li key={task.id} className="px-6 py-3 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start gap-3">
+                    <li key={task.id}>
+                      <Link href={`/tasks/${task.id}`} className="flex items-start gap-3 px-6 py-3 hover:bg-gray-50 transition-colors block">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">{task.title}</p>
                           {task.due_date && (
@@ -194,7 +194,7 @@ export default async function DashboardPage() {
                             {task.status.replace('_', ' ')}
                           </Badge>
                         </div>
-                      </div>
+                      </Link>
                     </li>
                   ))}
                 </ul>
