@@ -18,7 +18,7 @@ export default async function TasksPage() {
         user_id,
         profiles(id, full_name, avatar_url)
       )
-    `).eq('org_id', orgId).order('created_at', { ascending: false }),
+    `).order('created_at', { ascending: false }),
     supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
     supabase.from('teams').select('id, name').eq('org_id', orgId).order('name'),
     supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
