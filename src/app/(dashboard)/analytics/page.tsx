@@ -3,10 +3,15 @@ import { redirect } from 'next/navigation'
 import { hasRole } from '@/lib/auth/permissions'
 import type { UserRole } from '@/types/database'
 import { AnalyticsDashboard } from '@/components/analytics/analytics-dashboard'
+import { InspectionAnalyticsDashboard } from '@/components/analytics/inspection-analytics-dashboard'
 
 export const dynamic = 'force-dynamic'
 
-export default async function DashboardAnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -18,52 +23,258 @@ export default async function DashboardAnalyticsPage() {
     .single()
 
   const profile = profileRes.data as {
-    org_id: string; role: UserRole; dept_id: string | null; full_name: string
+    org_id: string | null; role: UserRole; dept_id: string | null; full_name: string
   } | null
-
   if (!profile) redirect('/login')
 
-  const { org_id: orgId, role, dept_id: deptId } = profile
+  const { org_id: orgId, role, dept_id: deptId, full_name } = profile
   const isOrgWide = hasRole(role, 'org_admin')
   const isDeptLevel = !isOrgWide && hasRole(role, 'dept_head')
 
-  // Build task query scope
-  let taskQuery = supabase.from('tasks').select(
-    'id, status, priority, due_date, created_at, created_by, dept_id, team_id'
-  )
+  const { tab: tabParam } = await searchParams
+  const tab = tabParam ?? 'tasks'
 
-  if (isOrgWide) {
-    taskQuery = taskQuery.eq('org_id', orgId)
-  } else if (isDeptLevel && deptId) {
-    taskQuery = taskQuery.eq('dept_id', deptId)
-  } else {
-    // member / team_leader / auditor — show tasks assigned to or created by them
-    const [assignedRes, createdRes] = await Promise.all([
-      supabase.from('task_assignees').select('task_id').eq('user_id', user.id),
-      supabase.from('tasks').select('id').eq('created_by', user.id),
-    ])
-    const assignedIds = (assignedRes.data ?? []).map((r: { task_id: string }) => r.task_id)
-    const createdIds = (createdRes.data ?? []).map((r: { id: string }) => r.id)
-    const allIds = [...new Set([...assignedIds, ...createdIds])]
-    if (allIds.length === 0) {
-      return <EmptyAnalytics role={role} name={profile.full_name} />
+  // ── Inspections tab (org-wide RPCs, only for admins) ──────────────────────
+  if (tab === 'inspections' && isOrgWide && orgId) {
+    const [irrRes, rcrRes, severityRes, outletStatsRes, issueTrendRes, sessionTrendRes, avgResRes, userStatsRes, issueCountsRes] =
+      await Promise.all([
+        supabase.rpc('get_inspection_irr', { p_org_id: orgId }),
+        supabase.rpc('get_inspection_rcr', { p_org_id: orgId }),
+        supabase.rpc('get_issues_by_severity', { p_org_id: orgId }),
+        supabase.rpc('get_outlet_issue_stats', { p_org_id: orgId, p_limit: 10 }),
+        supabase.rpc('get_issue_trend', { p_org_id: orgId, p_days: 14 }),
+        supabase.rpc('get_session_trend', { p_org_id: orgId, p_days: 14 }),
+        supabase.rpc('get_avg_resolution_hours', { p_org_id: orgId }),
+        supabase.rpc('get_user_inspection_stats', { p_org_id: orgId, p_limit: 10 }),
+        supabase.from('inspection_issues').select('status').eq('org_id', orgId),
+      ])
+
+    type SeverityRow = { severity: string; total: number; open_count: number; resolved_count: number }
+    type OutletStat = { outlet_id: string; outlet_name: string; outlet_code: string; total_issues: number; open_issues: number; resolved_issues: number; total_sessions: number; completed_sessions: number; completion_rate: number; irr: number }
+    type TrendRow = { day: string; opened: number; resolved: number; escalated: number; in_progress: number }
+    type SessionTrendRow = { day: string; scheduled: number; completed: number; missed: number }
+    type UserStat = { user_id: string; full_name: string; avatar_url: string; sessions_conducted: number; sessions_completed: number; issues_raised: number; issues_resolved: number; completion_rate: number }
+    type IssueStatusRow = { status: string }
+
+    const allIssues = (issueCountsRes.data as IssueStatusRow[]) ?? []
+    const issueCounts = {
+      total: allIssues.length,
+      open: allIssues.filter(i => i.status === 'open').length,
+      in_progress: allIssues.filter(i => i.status === 'in_progress').length,
+      escalated: allIssues.filter(i => i.status === 'escalated').length,
+      resolved: allIssues.filter(i => i.status === 'resolved').length,
+      closed: allIssues.filter(i => i.status === 'closed').length,
     }
-    taskQuery = taskQuery.in('id', allIds)
+    const avgResolutionHours = Number(avgResRes.data ?? 0)
+
+    return (
+      <InspectionAnalyticsDashboard
+        irr={Number(irrRes.data ?? 0)}
+        rcr={Number(rcrRes.data ?? 0)}
+        severity={(severityRes.data as SeverityRow[]) ?? []}
+        outletStats={(outletStatsRes.data as OutletStat[]) ?? []}
+        issueTrend={(issueTrendRes.data as TrendRow[]) ?? []}
+        sessionTrend={(sessionTrendRes.data as SessionTrendRow[]) ?? []}
+        avgResolutionHours={Math.floor(avgResolutionHours)}
+        avgResolutionMins={Math.round((avgResolutionHours - Math.floor(avgResolutionHours)) * 60)}
+        userStats={(userStatsRes.data as UserStat[]) ?? []}
+        issueCounts={issueCounts}
+      />
+    )
   }
 
+  // ── Tasks tab: org admin / super admin — use RPCs ─────────────────────────
+  if (isOrgWide && orgId) {
+    const [
+      taskStatsRes, trendRes, teamStatsRes, contributorsRes,
+      formStatsDeptRes, activeUsersRes, tasksByPriorityRes, recentActivityRes,
+    ] = await Promise.all([
+      supabase.rpc('get_org_task_stats', { p_org_id: orgId }),
+      supabase.rpc('get_task_completion_trend', { p_org_id: orgId, p_days: 30 }),
+      supabase.rpc('get_team_task_stats', { p_org_id: orgId }),
+      supabase.rpc('get_top_contributors', { p_org_id: orgId, p_limit: 8 }),
+      supabase.rpc('get_form_stats_by_dept', { p_org_id: orgId }),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('is_active', true),
+      supabase.from('tasks').select('priority').eq('org_id', orgId).not('status', 'in', '("done","cancelled")'),
+      supabase.from('tasks').select('id, title, status, created_at').eq('org_id', orgId).order('created_at', { ascending: false }).limit(10),
+    ])
+
+    type TaskStats = { total: number; todo: number; in_progress: number; in_review: number; done: number; cancelled: number; overdue: number; urgent: number; high: number }
+    type TrendRow2 = { day: string; completed: number; created: number }
+    type TeamStat = { team_id: string; team_name: string; total: number; done: number; overdue: number }
+    type Contributor = { user_id: string; full_name: string; avatar_url: string | null; completed: number; in_progress: number }
+    type FormDeptStat = { dept_name: string; total: number; approved: number; rejected: number; avg_score: number | null }
+    type RecentTask = { id: string; title: string; status: string; created_at: string }
+    type PriorityRow = { priority: string }
+
+    const taskStats = (taskStatsRes.data as TaskStats | null) ?? { total: 0, todo: 0, in_progress: 0, in_review: 0, done: 0, cancelled: 0, overdue: 0, urgent: 0, high: 0 }
+    const priorityCounts = ((tasksByPriorityRes.data as PriorityRow[]) ?? []).reduce<Record<string, number>>((acc, t) => {
+      acc[t.priority] = (acc[t.priority] ?? 0) + 1; return acc
+    }, {})
+    const completionRate = taskStats.total > 0 ? Math.round((taskStats.done / taskStats.total) * 100) : 0
+
+    return (
+      <AnalyticsDashboard
+        taskStats={taskStats}
+        trend={(trendRes.data as TrendRow2[]) ?? []}
+        teamStats={(teamStatsRes.data as TeamStat[]) ?? []}
+        contributors={(contributorsRes.data as Contributor[]) ?? []}
+        formDeptStats={(formStatsDeptRes.data as FormDeptStat[]) ?? []}
+        activeUsers={activeUsersRes.count ?? 0}
+        priorityCounts={priorityCounts}
+        recentTasks={(recentActivityRes.data as RecentTask[]) ?? []}
+        completionRate={completionRate}
+        scopeLabel="Organisation-wide performance overview"
+      />
+    )
+  }
+
+  // ── Tasks tab: dept_head — dept-scoped direct queries ──────────────────────
+  if (isDeptLevel && deptId) {
+    const now = new Date().toISOString()
+
+    const [tasksRes, membersRes, teamsRes, assigneesRes] = await Promise.all([
+      supabase.from('tasks')
+        .select('id, title, status, priority, due_date, created_at, created_by')
+        .eq('dept_id', deptId)
+        .order('created_at', { ascending: false }),
+      supabase.from('profiles')
+        .select('id, full_name, avatar_url')
+        .eq('dept_id', deptId)
+        .eq('is_active', true),
+      supabase.from('teams').select('id, name').eq('dept_id', deptId),
+      supabase.from('task_assignees').select('task_id, user_id').eq('dept_id' as never, deptId as never),
+    ])
+
+    type TaskRow = { id: string; title: string; status: string; priority: string; due_date: string | null; created_at: string; created_by: string }
+    type MemberRow = { id: string; full_name: string; avatar_url: string | null }
+
+    const allTasks = (tasksRes.data ?? []) as TaskRow[]
+    const members = (membersRes.data ?? []) as MemberRow[]
+    const memberIds = new Set(members.map(m => m.id))
+
+    // For contributor stats, fetch task_assignees for these tasks
+    const taskIds = allTasks.map(t => t.id)
+    const assigneesForDept = taskIds.length > 0
+      ? await supabase.from('task_assignees').select('task_id, user_id').in('task_id', taskIds)
+      : { data: [] }
+    const assigneeRows = (assigneesForDept.data ?? []) as { task_id: string; user_id: string }[]
+
+    const taskStats = {
+      total: allTasks.length,
+      todo: allTasks.filter(t => t.status === 'todo').length,
+      in_progress: allTasks.filter(t => t.status === 'in_progress').length,
+      in_review: allTasks.filter(t => t.status === 'in_review').length,
+      done: allTasks.filter(t => t.status === 'done').length,
+      cancelled: allTasks.filter(t => t.status === 'cancelled').length,
+      overdue: allTasks.filter(t => t.due_date && t.due_date < now && t.status !== 'done' && t.status !== 'cancelled').length,
+      urgent: allTasks.filter(t => t.priority === 'urgent').length,
+      high: allTasks.filter(t => t.priority === 'high').length,
+    }
+
+    const completionRate = taskStats.total > 0 ? Math.round((taskStats.done / taskStats.total) * 100) : 0
+
+    const priorityCounts = allTasks
+      .filter(t => t.status !== 'done' && t.status !== 'cancelled')
+      .reduce<Record<string, number>>((acc, t) => { acc[t.priority] = (acc[t.priority] ?? 0) + 1; return acc }, {})
+
+    // 30-day trend
+    const days30 = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - (29 - i))
+      return d.toISOString().slice(0, 10)
+    })
+    const trend = days30.map(day => ({
+      day,
+      created: allTasks.filter(t => t.created_at.slice(0, 10) === day).length,
+      completed: allTasks.filter(t => t.status === 'done' && t.created_at.slice(0, 10) === day).length,
+    }))
+
+    // Contributors: dept members with task stats
+    const contributors = members
+      .map(m => {
+        const myTaskIds = assigneeRows.filter(a => a.user_id === m.id).map(a => a.task_id)
+        const myTasks = allTasks.filter(t => myTaskIds.includes(t.id) || t.created_by === m.id)
+        return {
+          user_id: m.id,
+          full_name: m.full_name,
+          avatar_url: m.avatar_url,
+          completed: myTasks.filter(t => t.status === 'done').length,
+          in_progress: myTasks.filter(t => t.status === 'in_progress' || t.status === 'todo').length,
+        }
+      })
+      .filter(c => c.completed + c.in_progress > 0)
+      .sort((a, b) => b.completed - a.completed)
+      .slice(0, 8)
+
+    // Team stats for dept teams
+    const deptTeams = (teamsRes.data ?? []) as { id: string; name: string }[]
+    const teamTaskMap = await (deptTeams.length > 0
+      ? supabase.from('tasks').select('id, team_id, status, due_date').in('team_id', deptTeams.map(t => t.id))
+      : Promise.resolve({ data: [] }))
+    const teamTaskRows = (teamTaskMap.data ?? []) as { id: string; team_id: string; status: string; due_date: string | null }[]
+    const teamStats = deptTeams.map(team => {
+      const tTasks = teamTaskRows.filter(t => t.team_id === team.id)
+      return {
+        team_id: team.id,
+        team_name: team.name,
+        total: tTasks.length,
+        done: tTasks.filter(t => t.status === 'done').length,
+        overdue: tTasks.filter(t => t.due_date && t.due_date < now && t.status !== 'done' && t.status !== 'cancelled').length,
+      }
+    })
+
+    // Dept name
+    const deptRes = await supabase.from('departments').select('name').eq('id', deptId).single()
+    const deptName = deptRes.data?.name ?? 'Your Department'
+
+    return (
+      <AnalyticsDashboard
+        taskStats={taskStats}
+        trend={trend}
+        teamStats={teamStats}
+        contributors={contributors}
+        formDeptStats={[]}
+        activeUsers={members.length}
+        priorityCounts={priorityCounts}
+        recentTasks={allTasks.slice(0, 10).map(t => ({ id: t.id, title: t.title, status: t.status, created_at: t.created_at }))}
+        completionRate={completionRate}
+        scopeLabel={`${deptName} · Department view`}
+      />
+    )
+  }
+
+  // ── Tasks tab: member / team_leader / auditor — personal tasks only ────────
   const now = new Date().toISOString()
-  const [tasksRes, usersRes] = await Promise.all([
-    taskQuery,
-    isOrgWide
-      ? supabase.from('profiles').select('id').eq('org_id', orgId).eq('is_active', true)
-      : isDeptLevel && deptId
-        ? supabase.from('profiles').select('id').eq('dept_id', deptId).eq('is_active', true)
-        : Promise.resolve({ data: [{ id: user.id }] }),
+  const [assignedRes, createdRes] = await Promise.all([
+    supabase.from('task_assignees').select('task_id').eq('user_id', user.id),
+    supabase.from('tasks').select('id').eq('created_by', user.id),
+  ])
+  const assignedIds = (assignedRes.data ?? []).map((r: { task_id: string }) => r.task_id)
+  const createdIds = (createdRes.data ?? []).map((r: { id: string }) => r.id)
+  const allIds = [...new Set([...assignedIds, ...createdIds])]
+
+  if (allIds.length === 0) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900">Analytics & Reports</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Your Tasks · {full_name}</p>
+        <div className="mt-8 text-center text-gray-400 py-20">
+          <p className="text-lg">No tasks found yet.</p>
+          <p className="text-sm mt-1">Tasks you create or are assigned to will appear here.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const [tasksRes] = await Promise.all([
+    supabase.from('tasks')
+      .select('id, title, status, priority, due_date, created_at')
+      .in('id', allIds)
+      .order('created_at', { ascending: false }),
   ])
 
-  type TaskRow = { id: string; status: string; priority: string; due_date: string | null; created_at: string; created_by: string; dept_id: string | null; team_id: string | null }
+  type TaskRow = { id: string; title: string; status: string; priority: string; due_date: string | null; created_at: string }
   const allTasks = (tasksRes.data ?? []) as TaskRow[]
-  const activeUsers = (usersRes.data ?? []).length
 
   const taskStats = {
     total: allTasks.length,
@@ -76,148 +287,33 @@ export default async function DashboardAnalyticsPage() {
     urgent: allTasks.filter(t => t.priority === 'urgent').length,
     high: allTasks.filter(t => t.priority === 'high').length,
   }
+  const completionRate = taskStats.total > 0 ? Math.round((taskStats.done / taskStats.total) * 100) : 0
+  const priorityCounts = allTasks
+    .filter(t => t.status !== 'done' && t.status !== 'cancelled')
+    .reduce<Record<string, number>>((acc, t) => { acc[t.priority] = (acc[t.priority] ?? 0) + 1; return acc }, {})
 
-  const completionRate = taskStats.total > 0
-    ? Math.round((taskStats.done / taskStats.total) * 100)
-    : 0
-
-  const priorityCounts: Record<string, number> = {}
-  for (const t of allTasks) {
-    priorityCounts[t.priority] = (priorityCounts[t.priority] ?? 0) + 1
-  }
-
-  // Last 14 days trend
-  const days14 = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (13 - i))
+  const days30 = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - (29 - i))
     return d.toISOString().slice(0, 10)
   })
-  const trend = days14.map(day => ({
+  const trend = days30.map(day => ({
     day,
     created: allTasks.filter(t => t.created_at.slice(0, 10) === day).length,
     completed: allTasks.filter(t => t.status === 'done' && t.created_at.slice(0, 10) === day).length,
   }))
 
-  // Recent tasks (last 8)
-  const recentTasks = [...allTasks]
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(0, 8)
-    .map(t => ({ id: t.id, title: t.id, status: t.status, created_at: t.created_at }))
-
-  const scopeLabel = isOrgWide
-    ? 'Organisation-wide'
-    : isDeptLevel
-      ? 'Your Department'
-      : 'Your Tasks'
-
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{scopeLabel} · {profile.full_name}</p>
-      </div>
-
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Tasks', value: taskStats.total, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-          { label: 'Completion Rate', value: `${completionRate}%`, color: 'text-green-600', bg: 'bg-green-50' },
-          { label: 'Overdue', value: taskStats.overdue, color: 'text-red-600', bg: 'bg-red-50' },
-          { label: 'In Progress', value: taskStats.in_progress, color: 'text-blue-600', bg: 'bg-blue-50' },
-          ...(isOrgWide || isDeptLevel ? [{ label: 'Active Users', value: activeUsers, color: 'text-purple-600', bg: 'bg-purple-50' }] : []),
-        ].map(kpi => (
-          <div key={kpi.label} className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs font-medium text-gray-500">{kpi.label}</p>
-            <p className={`text-2xl font-bold mt-1 ${kpi.color}`}>{kpi.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Status breakdown */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">Task Status Breakdown</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {[
-            { label: 'To Do', count: taskStats.todo, color: 'bg-gray-400' },
-            { label: 'In Progress', count: taskStats.in_progress, color: 'bg-blue-500' },
-            { label: 'In Review', count: taskStats.in_review, color: 'bg-amber-500' },
-            { label: 'Done', count: taskStats.done, color: 'bg-green-500' },
-            { label: 'Cancelled', count: taskStats.cancelled, color: 'bg-gray-200' },
-          ].map(s => (
-            <div key={s.label} className="flex items-center gap-2 p-3 rounded-lg bg-gray-50">
-              <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${s.color}`} />
-              <div>
-                <p className="text-xs text-gray-500">{s.label}</p>
-                <p className="text-lg font-bold text-gray-900">{s.count}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Priority breakdown */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">Priority Distribution</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Urgent', key: 'urgent', color: 'text-red-600 bg-red-50' },
-            { label: 'High', key: 'high', color: 'text-orange-600 bg-orange-50' },
-            { label: 'Medium', key: 'medium', color: 'text-blue-600 bg-blue-50' },
-            { label: 'Low', key: 'low', color: 'text-gray-600 bg-gray-50' },
-          ].map(p => (
-            <div key={p.key} className={`flex items-center justify-between p-3 rounded-lg ${p.color}`}>
-              <span className="text-sm font-medium">{p.label}</span>
-              <span className="text-xl font-bold">{priorityCounts[p.key] ?? 0}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 14-day trend */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">14-Day Activity Trend</h2>
-        <div className="flex items-end gap-1 h-24">
-          {trend.map((t, i) => {
-            const max = Math.max(...trend.map(x => x.created), 1)
-            const pct = Math.round((t.created / max) * 100)
-            return (
-              <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-                <div
-                  className="w-full bg-indigo-400 rounded-t transition-all"
-                  style={{ height: `${pct}%`, minHeight: t.created > 0 ? '4px' : '0' }}
-                  title={`${t.day}: ${t.created} created`}
-                />
-                {i % 3 === 0 && (
-                  <span className="text-[9px] text-gray-400">{t.day.slice(5)}</span>
-                )}
-              </div>
-            )
-          })}
-        </div>
-        <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-400" />Created per day</span>
-        </div>
-      </div>
-
-      {isOrgWide && (
-        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-700">
-          For full analytics with charts, team breakdowns, and inspection reports, visit{' '}
-          <a href="/admin/analytics" className="font-semibold underline hover:text-indigo-900">Admin Analytics</a>.
-        </div>
-      )}
-    </div>
-  )
-}
-
-function EmptyAnalytics({ role, name }: { role: string; name: string }) {
-  return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-      <p className="text-sm text-gray-500 mt-0.5">Your Tasks · {name}</p>
-      <div className="mt-8 text-center text-gray-400">
-        <p className="text-lg">No tasks found yet.</p>
-        <p className="text-sm mt-1">Tasks you create or are assigned to will appear here.</p>
-      </div>
-    </div>
+    <AnalyticsDashboard
+      taskStats={taskStats}
+      trend={trend}
+      teamStats={[]}
+      contributors={[]}
+      formDeptStats={[]}
+      activeUsers={1}
+      priorityCounts={priorityCounts}
+      recentTasks={allTasks.slice(0, 10).map(t => ({ id: t.id, title: t.title, status: t.status, created_at: t.created_at }))}
+      completionRate={completionRate}
+      scopeLabel={`Your Tasks · ${full_name}`}
+    />
   )
 }

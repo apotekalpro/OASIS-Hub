@@ -124,7 +124,7 @@ export function InspectionAnalyticsDashboard({
             ))}
           </div>
           <div className="flex items-center gap-4 text-xs text-gray-400">
-            <Link href="/admin/analytics" className="text-indigo-600 font-medium hover:underline">← Tasks</Link>
+            <Link href="/analytics" className="text-indigo-600 font-medium hover:underline">← Tasks</Link>
             <span>Last Updated: {now}</span>
           </div>
         </div>
