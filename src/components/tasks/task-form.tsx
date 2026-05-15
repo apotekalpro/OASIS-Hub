@@ -10,12 +10,12 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/avatar'
+import { RichTextEditor } from '@/components/ui/rich-text-editor'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
 const schema = z.object({
   title: z.string().min(1, 'Title is required'),
-  description: z.string().optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']),
   status: z.enum(['todo', 'in_progress', 'in_review', 'done', 'cancelled']),
   due_date: z.string().optional(),
@@ -53,6 +53,7 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
   const [open, setOpen] = useState(false)
   const [selectedAssignees, setSelectedAssignees] = useState<OrgUser[]>([])
   const [selectedCC, setSelectedCC] = useState<OrgUser[]>([])
+  const [description, setDescription] = useState<string>(task?.description ?? '')
   const [tags, setTags] = useState<string[]>(task?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
   const [userSearch, setUserSearch] = useState('')
@@ -76,6 +77,7 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
       setSelectedAssignees([])
       setUserSearch('')
       setCcSearch('')
+      setDescription(task?.description ?? '')
     }
   }, [open, task?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -83,7 +85,6 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
     resolver: zodResolver(schema),
     defaultValues: task ? {
       title: task.title,
-      description: task.description ?? '',
       priority: task.priority as FormData['priority'],
       status: task.status as FormData['status'],
       due_date: task.due_date ? task.due_date.split('T')[0] : '',
@@ -102,6 +103,7 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
     try {
       const payload = {
         ...data,
+        description: description || null,
         org_id: orgId,
         created_by: currentUserId,
         due_date: data.due_date ? new Date(data.due_date).toISOString() : null,
@@ -234,11 +236,11 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
               {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  rows={3}
-                  placeholder="Add more details..."
-                  className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 resize-none"
-                  {...register('description')}
+                <RichTextEditor
+                  key={open ? 'open' : 'closed'}
+                  value={description}
+                  onChange={setDescription}
+                  placeholder="Add details, checklist items, or formatted notes..."
                 />
               </div>
 

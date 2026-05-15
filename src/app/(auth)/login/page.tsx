@@ -23,7 +23,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors, isSubmitting }, getValues } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
@@ -93,6 +93,7 @@ export default function LoginPage() {
                   placeholder="Enter your password"
                   className="pr-10 bg-white/10 border-white/20 text-white placeholder:text-indigo-300 focus:border-indigo-400 focus:ring-indigo-400"
                   error={errors.password?.message}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSubmit(onSubmit)() } }}
                   {...register('password')}
                 />
                 <button

@@ -18,6 +18,7 @@ import {
 import { formatDate, formatRelativeTime, getDueStatus, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { createPortal } from 'react-dom'
+import { RichTextContent } from '@/components/ui/rich-text-editor'
 
 type Attachment = { name: string; url: string; type: 'image' | 'file' }
 type Reaction = { emoji: string; count: number; reacted: boolean }
@@ -672,7 +673,7 @@ export function TaskDetailClient({
                 <div className="flex-1">
                   <h1 className="text-xl font-bold text-gray-900">{task.title}</h1>
                   {task.description && (
-                    <p className="mt-2 text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">{task.description}</p>
+                    <RichTextContent html={task.description} className="mt-2" />
                   )}
                 </div>
               </div>

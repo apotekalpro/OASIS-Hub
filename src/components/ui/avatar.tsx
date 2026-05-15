@@ -41,15 +41,21 @@ interface UserAvatarProps {
   avatarUrl?: string | null
   className?: string
   size?: 'sm' | 'md' | 'lg'
+  showTooltip?: boolean
 }
 
 const SIZE_MAP = { sm: 'h-7 w-7 text-xs', md: 'h-9 w-9 text-sm', lg: 'h-12 w-12 text-base' }
 
-function UserAvatar({ name, avatarUrl, className, size = 'md' }: UserAvatarProps) {
+function UserAvatar({ name, avatarUrl, className, size = 'md', showTooltip = true }: UserAvatarProps) {
   return (
-    <Avatar className={cn(SIZE_MAP[size], className)}>
+    <Avatar className={cn(SIZE_MAP[size], 'group relative', className)} title={showTooltip ? name : undefined}>
       {avatarUrl && <AvatarImage src={avatarUrl} alt={name} />}
       <AvatarFallback>{getInitials(name)}</AvatarFallback>
+      {showTooltip && (
+        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+          {name}
+        </span>
+      )}
     </Avatar>
   )
 }

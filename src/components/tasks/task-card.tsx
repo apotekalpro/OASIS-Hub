@@ -76,7 +76,7 @@ export function TaskCard({ task, compact = false }: Props) {
             {task.title}
           </p>
           {!compact && task.description && (
-            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{task.description}</p>
+            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{task.description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}</p>
           )}
         </div>
       </div>

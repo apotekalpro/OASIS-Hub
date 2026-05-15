@@ -44,3 +44,47 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
+
+/* Tiptap rich text editor content styles */
+.tiptap-content p { margin: 0.25rem 0; line-height: 1.6; }
+.tiptap-content ul, .tiptap-content ol { padding-left: 1.5rem; margin: 0.25rem 0; }
+.tiptap-content ul { list-style-type: disc; }
+.tiptap-content ol { list-style-type: decimal; }
+.tiptap-content li { margin: 0.1rem 0; }
+.tiptap-content strong { font-weight: 600; }
+.tiptap-content em { font-style: italic; }
+.tiptap-content p.is-editor-empty:first-child::before {
+  color: #9ca3af;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+/* Task list (checklist) styles */
+.tiptap-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+.tiptap-content ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.tiptap-content ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  cursor: pointer;
+}
+.tiptap-content ul[data-type="taskList"] li > label input[type="checkbox"] {
+  width: 0.9rem;
+  height: 0.9rem;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+.tiptap-content ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through;
+  color: #9ca3af;
+}
+.tiptap-content ul[data-type="taskList"] li > div {
+  flex: 1;
+}
