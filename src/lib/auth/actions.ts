@@ -11,6 +11,7 @@ const DEFAULT_PASSWORD = process.env.DEFAULT_USER_PASSWORD || 'Alpro@123'
 // ─── Create a single user (SuperAdmin / OrgAdmin) ────────────────────────────
 export async function createUser(data: {
   email: string
+  contact_email?: string | null
   full_name: string
   role: UserRole
   org_id: string
@@ -54,6 +55,7 @@ export async function createUser(data: {
     .upsert({
       id: userId,
       email: data.email,
+      contact_email: data.contact_email || null,
       org_id: data.org_id,
       dept_id: data.dept_id || null,
       employee_id: data.employee_id || null,
@@ -170,6 +172,7 @@ export async function updateUserProfile(
     full_name: string
     role: UserRole
     dept_id: string
+    contact_email: string | null
     chief_dept_ids: string[]
     employee_id: string
     job_title: string
@@ -230,11 +233,14 @@ export async function sendUserInvite(userId: string) {
   const supabase = await createClient()
   const { data: profile } = await supabase
     .from('profiles')
-    .select('email, full_name')
+    .select('email, contact_email, full_name')
     .eq('id', userId)
     .single()
 
   if (!profile?.email) throw new Error('User not found')
+
+  // Use contact_email for delivery if set, otherwise fall back to login email
+  const deliveryEmail = profile.contact_email || profile.email
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.URL ?? 'https://oasishub.netlify.app'
   const tpl = welcomeUserEmail({
@@ -244,6 +250,6 @@ export async function sendUserInvite(userId: string) {
     loginUrl: `${appUrl}/login`,
   })
 
-  const result = await sendEmail({ to: profile.email, subject: tpl.subject, html: tpl.html })
+  const result = await sendEmail({ to: deliveryEmail, subject: tpl.subject, html: tpl.html })
   if (!result.success && !result.skipped) throw new Error('Failed to send email')
 }

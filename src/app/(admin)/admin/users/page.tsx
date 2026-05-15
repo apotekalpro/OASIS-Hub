@@ -25,7 +25,7 @@ export default async function UsersPage() {
 
   const [usersResult, deptsResult] = await Promise.all([profilesQuery, deptsQuery])
   const users = usersResult.data as Array<{
-    id: string; full_name: string; email: string; role: UserRole; is_active: boolean;
+    id: string; full_name: string; email: string; contact_email: string | null; role: UserRole; is_active: boolean;
     must_change_password: boolean; employee_id: string | null; avatar_url: string | null;
     dept_id: string | null; created_at: string; job_title: string | null; phone: string | null;
     last_login_at: string | null;
@@ -94,6 +94,9 @@ export default async function UsersPage() {
                         <div>
                           <p className="font-medium text-gray-900">{user.full_name}</p>
                           <p className="text-xs text-gray-500">{user.email}</p>
+                          {user.contact_email && (
+                            <p className="text-xs text-indigo-500">{user.contact_email} <span className="text-gray-300">(contact)</span></p>
+                          )}
                           {user.employee_id && (
                             <p className="text-xs text-gray-400">ID: {user.employee_id}</p>
                           )}

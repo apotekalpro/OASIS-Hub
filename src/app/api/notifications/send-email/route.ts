@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   const [taskRes, usersRes] = await Promise.all([
     supabase.from('tasks').select('id, title, due_date').eq('id', taskId).single(),
-    supabase.from('profiles').select('id, full_name, email').in('id', userIds),
+    supabase.from('profiles').select('id, full_name, email, contact_email').in('id', userIds),
   ])
 
   const task = taskRes.data
@@ -40,10 +40,11 @@ export async function POST(req: NextRequest) {
     recipients
       .filter(r => r.email && r.id !== user.id)
       .map(r => {
+        const deliveryEmail = r.contact_email || r.email
         const tpl = type === 'task_assigned'
           ? taskAssignedEmail({ recipientName: r.full_name, taskTitle: task.title, assignedBy: actorName, dueDate, taskUrl })
           : taskMentionEmail({ recipientName: r.full_name, taskTitle: task.title, mentionedBy: actorName, taskUrl })
-        return sendEmail({ to: r.email, subject: tpl.subject, html: tpl.html })
+        return sendEmail({ to: deliveryEmail, subject: tpl.subject, html: tpl.html })
       })
   )
 

@@ -20,6 +20,7 @@ const ASSIGNABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'chief', 'lead',
 
 const userSchema = z.object({
   email: z.string().email(),
+  contact_email: z.string().email().optional().or(z.literal('')),
   full_name: z.string().min(2),
   role: z.enum(['org_admin', 'dept_head', 'chief', 'lead', 'team_leader', 'member', 'auditor', 'viewer']),
   dept_id: z.string().optional(),
@@ -52,6 +53,7 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
     resolver: zodResolver(userSchema),
     defaultValues: user ? {
       email: user.email,
+      contact_email: user.contact_email ?? '',
       full_name: user.full_name,
       role: user.role as UserFormData['role'],
       dept_id: user.dept_id ?? undefined,
@@ -72,12 +74,14 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
       if (userId) {
         await updateUserProfile(userId, {
           ...data,
+          contact_email: data.contact_email || null,
           chief_dept_ids: watchedRole === 'chief' ? chiefDeptIds : [],
         })
         toast.success('User updated successfully')
       } else {
         await createUser({
           ...data,
+          contact_email: data.contact_email || null,
           org_id: orgId ?? '',
           chief_dept_ids: watchedRole === 'chief' ? chiefDeptIds : [],
         })
@@ -387,9 +391,20 @@ function UserFormDialog({
               <Input placeholder="Ahmad Razif" error={errors.full_name?.message} {...register('full_name')} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Login Email *
+                <span className="ml-1 text-xs font-normal text-gray-400">(used to sign in)</span>
+              </label>
               <Input type="email" placeholder="ahmad@company.com" error={errors.email?.message} {...register('email')} />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Contact Email
+              <span className="ml-1 text-xs font-normal text-gray-400">(for invitations &amp; notifications — defaults to login email if blank)</span>
+            </label>
+            <Input type="email" placeholder="ahmad.personal@gmail.com" error={errors.contact_email?.message} {...register('contact_email')} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

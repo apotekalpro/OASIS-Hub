@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   const { data: recipients } = await supabase
     .from('profiles')
-    .select('id, full_name, email')
+    .select('id, full_name, email, contact_email')
     .in('id', userIds)
 
   const channelUrl = `${APP_URL}/messages`
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       .filter(r => r.email && r.id !== user.id)
       .map(r =>
         sendEmail({
-          to: r.email,
+          to: r.contact_email || r.email,
           subject: `[OASIS Hub] ${actorName} mentioned you in #${channelName}`,
           html: `
             <div style="font-family:sans-serif;max-width:600px;margin:0 auto">

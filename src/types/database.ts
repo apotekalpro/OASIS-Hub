@@ -67,6 +67,7 @@ export interface Profile {
   employee_id: string | null
   full_name: string
   email: string
+  contact_email: string | null
   avatar_url: string | null
   phone: string | null
   job_title: string | null
