@@ -13,7 +13,7 @@ import { STATUS_VARIANT, STATUS_LABEL, PRIORITY_DOT } from './task-card'
 import {
   ArrowLeft, Calendar, Clock, Tag, Users, Edit2, Plus, Send,
   Trash2, CheckCircle2, Circle, CornerDownRight, Smile, X,
-  Paperclip, FileText, Download,
+  Paperclip, FileText, Download, Eye,
 } from 'lucide-react'
 import { formatDate, formatRelativeTime, getDueStatus, cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -49,6 +49,7 @@ interface Props {
   timeLogs: TimeLog[]
   subtasks: Subtask[]
   assignees: Assignee[]
+  watchers: Assignee[]
   orgId: string
   currentUserId: string
   currentUserName: string
@@ -323,7 +324,7 @@ function CommentItem({
 // ─── Main component ───────────────────────────────────────────────────────────
 export function TaskDetailClient({
   task, comments: initialComments, timeLogs: initialLogs, subtasks: initialSubtasks,
-  assignees, orgId, currentUserId, currentUserName, currentUserAvatar, users, teams, departments
+  assignees, watchers, orgId, currentUserId, currentUserName, currentUserAvatar, users, teams, departments
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -1061,7 +1062,7 @@ export function TaskDetailClient({
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
               <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                 <Users className="h-4 w-4" />
-                Assignees ({assignees.length})
+                Assignees / PIC ({assignees.length})
               </h3>
               <div className="space-y-2">
                 {assignees.map(a => (
@@ -1076,6 +1077,26 @@ export function TaskDetailClient({
                 {assignees.length === 0 && <p className="text-sm text-gray-400">No assignees</p>}
               </div>
             </div>
+
+            {watchers.length > 0 && (
+              <div className="bg-amber-50 rounded-xl border border-amber-100 p-5 space-y-3">
+                <h3 className="text-sm font-semibold text-amber-700 flex items-center gap-2">
+                  <Eye className="h-4 w-4" />
+                  CC / Watchers ({watchers.length})
+                </h3>
+                <div className="space-y-2">
+                  {watchers.map(w => (
+                    <div key={w.id} className="flex items-center gap-2">
+                      <UserAvatar name={w.full_name} avatarUrl={w.avatar_url} size="sm" className="w-7 h-7" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{w.full_name}</p>
+                        <p className="text-xs text-gray-400 truncate">{w.email}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

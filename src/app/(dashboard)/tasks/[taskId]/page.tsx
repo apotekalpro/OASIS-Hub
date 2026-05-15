@@ -12,7 +12,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
   const orgId = (profileRes.data as { org_id: string } | null)?.org_id ?? ''
   const currentUser = profileRes.data as { org_id: string; full_name: string; avatar_url: string | null } | null
 
-  const [taskRes, commentsRes, timeLogsRes, subtasksRes, assigneesRes, usersRes, teamsRes, deptsRes] = await Promise.all([
+  const [taskRes, commentsRes, timeLogsRes, subtasksRes, assigneesRes, watchersRes, usersRes, teamsRes, deptsRes] = await Promise.all([
     supabase.from('tasks').select(`
       id, title, description, status, priority, due_date, start_date, estimated_hours,
       tags, created_at, created_by, team_id, dept_id, org_id
@@ -27,6 +27,10 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
     `).eq('task_id', taskId).order('logged_at', { ascending: false }),
     supabase.from('tasks').select('id, title, status, priority').eq('parent_id', taskId).order('created_at'),
     supabase.from('task_assignees').select(`
+      user_id,
+      profiles(id, full_name, avatar_url, email)
+    `).eq('task_id', taskId),
+    supabase.from('task_watchers').select(`
       user_id,
       profiles(id, full_name, avatar_url, email)
     `).eq('task_id', taskId),
@@ -54,6 +58,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
   const timeLogs = (timeLogsRes.data as unknown as RawTimeLog[]) ?? []
   const subtasks = (subtasksRes.data as unknown as RawSubtask[]) ?? []
   const assignees = (assigneesRes.data as unknown as RawAssignee[]) ?? []
+  const watchers = (watchersRes.data as unknown as RawAssignee[]) ?? []
   const users = (usersRes.data as OrgUser[]) ?? []
 
   return (
@@ -77,6 +82,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
       }))}
       subtasks={subtasks}
       assignees={assignees.map(a => a.profiles ? { id: a.profiles.id, full_name: a.profiles.full_name, avatar_url: a.profiles.avatar_url, email: a.profiles.email } : null).filter(Boolean) as Array<{ id: string; full_name: string; avatar_url: string | null; email: string }>}
+      watchers={watchers.map(w => w.profiles ? { id: w.profiles.id, full_name: w.profiles.full_name, avatar_url: w.profiles.avatar_url, email: w.profiles.email } : null).filter(Boolean) as Array<{ id: string; full_name: string; avatar_url: string | null; email: string }>}
       orgId={orgId}
       currentUserId={user.id}
       currentUserName={currentUser?.full_name ?? 'You'}

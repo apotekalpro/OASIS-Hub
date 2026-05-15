@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, X, Tag } from 'lucide-react'
+import { Plus, X, Tag, Eye } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,9 +52,32 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [selectedAssignees, setSelectedAssignees] = useState<OrgUser[]>([])
+  const [selectedCC, setSelectedCC] = useState<OrgUser[]>([])
   const [tags, setTags] = useState<string[]>(task?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
   const [userSearch, setUserSearch] = useState('')
+  const [ccSearch, setCcSearch] = useState('')
+
+  // Load existing watchers when editing
+  useEffect(() => {
+    if (open && task?.id) {
+      const supabase = createClient()
+      supabase
+        .from('task_watchers')
+        .select('user_id')
+        .eq('task_id', task.id)
+        .then(({ data }) => {
+          const watcherIds = data?.map(w => w.user_id) ?? []
+          setSelectedCC(users.filter(u => watcherIds.includes(u.id)))
+        })
+    }
+    if (!open) {
+      setSelectedCC([])
+      setSelectedAssignees([])
+      setUserSearch('')
+      setCcSearch('')
+    }
+  }, [open, task?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -93,6 +116,15 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
       if (task?.id) {
         const { error } = await supabase.from('tasks').update(payload).eq('id', task.id)
         if (error) throw error
+
+        // Sync CC watchers
+        await supabase.from('task_watchers').delete().eq('task_id', task.id)
+        if (selectedCC.length > 0) {
+          await supabase.from('task_watchers').insert(
+            selectedCC.map(u => ({ task_id: task.id, user_id: u.id, added_by: currentUserId }))
+          )
+        }
+
         toast.success('Task updated')
       } else {
         const { data: created, error } = await supabase.from('tasks').insert(payload).select('id').single()
@@ -105,6 +137,13 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
           : [{ task_id: taskId, user_id: currentUserId, assigned_by: currentUserId }]
         const { error: assignError } = await supabase.from('task_assignees').insert(assigneeRows)
         if (assignError) throw assignError
+
+        // Add CC watchers
+        if (selectedCC.length > 0) {
+          await supabase.from('task_watchers').insert(
+            selectedCC.map(u => ({ task_id: taskId, user_id: u.id, added_by: currentUserId }))
+          )
+        }
 
         // Send email to assigned users (fire-and-forget)
         const assignedUserIds = assigneeRows.map(r => r.user_id).filter(id => id !== currentUserId)
@@ -129,6 +168,7 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
       setOpen(false)
       reset()
       setSelectedAssignees([])
+      setSelectedCC([])
       setTags([])
       if (!onCreated) router.refresh()
     } catch (err) {
@@ -146,6 +186,13 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
     u => !selectedAssignees.find(a => a.id === u.id) &&
       (u.full_name.toLowerCase().includes(userSearch.toLowerCase()) ||
        u.email.toLowerCase().includes(userSearch.toLowerCase()))
+  )
+
+  const filteredCCUsers = users.filter(
+    u => !selectedCC.find(c => c.id === u.id) &&
+      !selectedAssignees.find(a => a.id === u.id) &&
+      (u.full_name.toLowerCase().includes(ccSearch.toLowerCase()) ||
+       u.email.toLowerCase().includes(ccSearch.toLowerCase()))
   )
 
   return (
@@ -254,17 +301,17 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
                 </div>
               </div>
 
-              {/* Assignees */}
+              {/* Assignees — create only */}
               {!task && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Assignees</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Assignees (PIC)</label>
                   {selectedAssignees.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
                       {selectedAssignees.map(u => (
-                        <div key={u.id} className="flex items-center gap-1.5 bg-gray-100 rounded-full pl-1 pr-2 py-0.5">
+                        <div key={u.id} className="flex items-center gap-1.5 bg-indigo-50 rounded-full pl-1 pr-2 py-0.5">
                           <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
-                          <span className="text-xs font-medium text-gray-700">{u.full_name.split(' ')[0]}</span>
-                          <button type="button" onClick={() => setSelectedAssignees(selectedAssignees.filter(a => a.id !== u.id))} className="text-gray-400 hover:text-red-500 text-xs">×</button>
+                          <span className="text-xs font-medium text-indigo-700">{u.full_name.split(' ')[0]}</span>
+                          <button type="button" onClick={() => setSelectedAssignees(selectedAssignees.filter(a => a.id !== u.id))} className="text-indigo-300 hover:text-red-500 text-xs">×</button>
                         </div>
                       ))}
                     </div>
@@ -295,6 +342,49 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
                   )}
                 </div>
               )}
+
+              {/* CC — always editable */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                  <Eye className="h-3.5 w-3.5 text-gray-400" />
+                  CC <span className="font-normal text-gray-400">(spectators — can track but are not responsible)</span>
+                </label>
+                {selectedCC.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {selectedCC.map(u => (
+                      <div key={u.id} className="flex items-center gap-1.5 bg-amber-50 rounded-full pl-1 pr-2 py-0.5">
+                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
+                        <span className="text-xs font-medium text-amber-700">{u.full_name.split(' ')[0]}</span>
+                        <button type="button" onClick={() => setSelectedCC(selectedCC.filter(c => c.id !== u.id))} className="text-amber-300 hover:text-red-500 text-xs">×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Input
+                  placeholder="Add people to CC..."
+                  value={ccSearch}
+                  onChange={e => setCcSearch(e.target.value)}
+                />
+                {ccSearch && (
+                  <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                    {filteredCCUsers.slice(0, 8).map(u => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => { setSelectedCC([...selectedCC, u]); setCcSearch('') }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
+                      >
+                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 text-xs" />
+                        <span>{u.full_name}</span>
+                        <span className="text-gray-400 text-xs ml-auto">{u.email}</span>
+                      </button>
+                    ))}
+                    {filteredCCUsers.length === 0 && (
+                      <p className="px-3 py-2 text-sm text-gray-400">No users found</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </form>
           </div>
 

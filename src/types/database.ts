@@ -347,6 +347,12 @@ export type Database = {
         Update: Partial<{ user_id: string; dept_id: string; created_at: string }>
         Relationships: []
       }
+      task_watchers: {
+        Row: { task_id: string; user_id: string; added_by: string | null; added_at: string }
+        Insert: Partial<{ task_id: string; user_id: string; added_by: string | null; added_at: string }>
+        Update: Partial<{ task_id: string; user_id: string; added_by: string | null; added_at: string }>
+        Relationships: []
+      }
       audit_logs: {
         Row: { id: string; org_id: string | null; user_id: string | null; action: string; resource_type: string | null; resource_id: string | null; details: Json; ip_address: string | null; created_at: string }
         Insert: Partial<{ id: string; org_id: string | null; user_id: string | null; action: string; resource_type: string | null; resource_id: string | null; details: Json; ip_address: string | null; created_at: string }>
