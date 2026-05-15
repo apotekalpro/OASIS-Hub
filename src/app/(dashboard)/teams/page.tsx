@@ -11,8 +11,10 @@ export default async function TeamsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  // Fetch profile first to get org_id — needed for explicit filter below
-  const { data: profileData } = await supabase
+  const admin = await createAdminClient()
+
+  // Use admin client for profile fetch to bypass any RLS issues
+  const { data: profileData } = await admin
     .from('profiles')
     .select('org_id, role, dept_id')
     .eq('id', user.id)
@@ -20,11 +22,9 @@ export default async function TeamsPage() {
   const profile = profileData as Pick<Profile, 'org_id' | 'role' | 'dept_id'> | null
   const orgId = profile?.org_id ?? ''
 
-  const admin = await createAdminClient()
   const [teamsRes, deptsRes] = await Promise.all([
     admin.from('teams').select(`
-      id, name, description, color, is_private, created_by, created_at,
-      departments!dept_id(name),
+      id, name, description, color, is_private, created_by, created_at, dept_id,
       team_members(user_id, role, profiles(id, full_name, avatar_url))
     `).eq('org_id', orgId).order('name'),
     admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
@@ -33,7 +33,7 @@ export default async function TeamsPage() {
   type TeamRow = {
     id: string; name: string; description: string | null; color: string;
     is_private: boolean; created_by: string | null; created_at: string;
-    departments?: { name: string } | null;
+    dept_id?: string | null;
     team_members?: Array<{
       user_id: string; role: string;
       profiles?: { id: string; full_name: string; avatar_url: string | null } | null
@@ -120,7 +120,7 @@ export default async function TeamsPage() {
 type TeamRow = {
   id: string; name: string; description: string | null; color: string;
   is_private: boolean; created_by: string | null; created_at: string;
-  departments?: { name: string } | null;
+  dept_id?: string | null;
   team_members?: Array<{
     user_id: string; role: string;
     profiles?: { id: string; full_name: string; avatar_url: string | null } | null
@@ -140,6 +140,7 @@ function TeamCard({
   const myRole = members.find(m => m.user_id === currentUserId)?.role
   const displayMembers = members.slice(0, 5)
   const extraCount = Math.max(0, members.length - 5)
+  const deptName = departments.find(d => d.id === team.dept_id)?.name
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -159,8 +160,8 @@ function TeamCard({
                   ? <Lock className="h-3 w-3 text-gray-400" />
                   : <Globe className="h-3 w-3 text-gray-400" />}
               </div>
-              {team.departments?.name && (
-                <p className="text-xs text-gray-400 mt-0.5">{team.departments.name}</p>
+              {deptName && (
+                <p className="text-xs text-gray-400 mt-0.5">{deptName}</p>
               )}
             </div>
           </div>
