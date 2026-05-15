@@ -22,13 +22,17 @@ export default async function TeamsPage() {
   const profile = profileData as Pick<Profile, 'org_id' | 'role' | 'dept_id'> | null
   const orgId = profile?.org_id ?? ''
 
-  const [teamsRes, deptsRes] = await Promise.all([
-    admin.from('teams').select(`
-      id, name, description, color, is_private, created_by, created_at, dept_id,
-      team_members(user_id, role, profiles(id, full_name, avatar_url))
-    `).eq('org_id', orgId).order('name'),
-    admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
-  ])
+  // super_admin may have null org_id — skip filter so they see all teams
+  let teamsQ = admin.from('teams').select(`
+    id, name, description, color, is_private, created_by, created_at, dept_id,
+    team_members(user_id, role, profiles(id, full_name, avatar_url))
+  `).order('name')
+  if (orgId) teamsQ = teamsQ.eq('org_id', orgId)
+
+  let deptsQ = admin.from('departments').select('id, name').order('name')
+  if (orgId) deptsQ = deptsQ.eq('org_id', orgId)
+
+  const [teamsRes, deptsRes] = await Promise.all([teamsQ, deptsQ])
 
   type TeamRow = {
     id: string; name: string; description: string | null; color: string;

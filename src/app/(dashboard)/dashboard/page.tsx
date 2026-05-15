@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { UserAvatar } from '@/components/ui/avatar'
@@ -6,14 +6,31 @@ import { CheckSquare, AlertTriangle, Bell, TrendingUp, Users, Shield } from 'luc
 import { formatRelativeTime, getDueStatus } from '@/lib/utils'
 import { ROLE_COLORS, ROLE_LABELS } from '@/lib/auth/permissions'
 import Link from 'next/link'
-import type { Task, AppNotification, Profile, UserRole } from '@/types/database'
+import type { AppNotification, Profile, UserRole } from '@/types/database'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const [assignedRes, createdRes, notifRes, profileRes, teamsRes, orgMembersRes] = await Promise.all([
+  // Fetch profile first so we can conditionally build the teams query
+  const profileRes = await supabase.from('profiles').select('full_name, role, dept_id, org_id, job_title').eq('id', user.id).single()
+  const profile = profileRes.data as Pick<Profile, 'full_name' | 'role' | 'dept_id' | 'org_id' | 'job_title'> | null
+  const orgId = profile?.org_id ?? ''
+  const isAdminRole = ['super_admin', 'org_admin'].includes(profile?.role ?? '')
+
+  const admin = await createAdminClient()
+
+  // Build teams query: admins see all org teams, members see only teams they joined
+  let teamsQ = isAdminRole
+    ? (() => {
+        let q = admin.from('teams').select('id, name, color').order('name').limit(8)
+        if (orgId) q = q.eq('org_id', orgId)
+        return q
+      })()
+    : supabase.from('teams').select('id, name, color, team_members!inner(user_id)').eq('team_members.user_id', user.id)
+
+  const [assignedRes, createdRes, notifRes, teamsRes, orgMembersRes] = await Promise.all([
     // Tasks assigned to me (exclude subtasks)
     supabase
       .from('tasks')
@@ -39,9 +56,7 @@ export default async function DashboardPage() {
       .eq('is_read', false)
       .order('created_at', { ascending: false })
       .limit(5),
-    supabase.from('profiles').select('full_name, role, dept_id, org_id, job_title').eq('id', user.id).single(),
-    // My teams
-    supabase.from('teams').select('id, name, color, team_members!inner(user_id)').eq('team_members.user_id', user.id),
+    teamsQ,
     // Org members snapshot
     supabase.from('profiles').select('id, full_name, avatar_url, role, dept_id, departments(name)').eq('is_active', true).order('full_name').limit(8),
   ])
@@ -58,11 +73,25 @@ export default async function DashboardPage() {
     })
     .slice(0, 8)
 
-  const myTasks = merged as unknown as Task[]
-  const totalTasks = seenIds.size + (createdRes.data?.filter(t => !assignedRes.data?.find(a => a.id === t.id)).length ?? 0)
-  const completedTasks = 0 // not needed for display
+  // Fetch subtask counts for the displayed tasks
+  type SubtaskCountRow = { parent_id: string; status: string }
+  const mergedIds = merged.map(t => t.id)
+  const subtaskRows = mergedIds.length > 0
+    ? ((await supabase.from('tasks').select('parent_id, status').in('parent_id', mergedIds)).data ?? []) as SubtaskCountRow[]
+    : [] as SubtaskCountRow[]
+
+  const subtaskMap = new Map<string, { total: number; done: number }>()
+  for (const sub of subtaskRows) {
+    if (!subtaskMap.has(sub.parent_id)) subtaskMap.set(sub.parent_id, { total: 0, done: 0 })
+    const s = subtaskMap.get(sub.parent_id)!
+    s.total++
+    if (sub.status === 'done') s.done++
+  }
+
+  type DashTask = { id: string; title: string; status: string; priority: string; due_date: string | null }
+  const myTasks = merged as unknown as DashTask[]
+
   const myNotifications = notifRes.data as AppNotification[] | null
-  const profile = profileRes.data as Pick<Profile, 'full_name' | 'role' | 'dept_id' | 'org_id' | 'job_title'> | null
 
   type TeamRow = { id: string; name: string; color: string; team_members?: Array<{ user_id: string }> }
   const myTeams = teamsRes.data as TeamRow[] | null
@@ -177,42 +206,52 @@ export default async function DashboardPage() {
                 </div>
               ) : (
                 <ul className="divide-y divide-gray-100">
-                  {myTasks.map(task => (
-                    <li key={task.id}>
-                      <Link href={`/tasks/${task.id}`} className="flex items-start gap-3 px-6 py-3 hover:bg-gray-50 transition-colors block">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{task.title}</p>
-                          {task.due_date && (() => {
-                            const due = getDueStatus(task.due_date)
-                            return due ? (
-                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                <span className={`text-xs font-medium ${
-                                  due.color === 'red' ? 'text-red-600' :
-                                  due.color === 'orange' ? 'text-orange-600' :
-                                  due.color === 'yellow' ? 'text-yellow-700' : 'text-gray-400'
-                                }`}>{due.label}</span>
-                                {due.badge && (
-                                  <span className={`text-[10px] font-bold px-1 py-0.5 rounded border ${
-                                    due.color === 'red' ? 'text-red-600 bg-red-50 border-red-200' :
-                                    due.color === 'orange' ? 'text-orange-600 bg-orange-50 border-orange-200' :
-                                    'text-yellow-700 bg-yellow-50 border-yellow-200'
-                                  }`}>{due.badge}</span>
-                                )}
-                              </div>
-                            ) : null
-                          })()}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant={PRIORITY_COLORS[task.priority as keyof typeof PRIORITY_COLORS]}>
-                            {task.priority}
-                          </Badge>
-                          <Badge variant={STATUS_COLORS[task.status as keyof typeof STATUS_COLORS]}>
-                            {task.status.replace('_', ' ')}
-                          </Badge>
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
+                  {myTasks.map(task => {
+                    const subs = subtaskMap.get(task.id)
+                    return (
+                      <li key={task.id}>
+                        <Link href={`/tasks/${task.id}`} className="flex items-start gap-3 px-6 py-3 hover:bg-gray-50 transition-colors block">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{task.title}</p>
+                            <div className="flex items-center gap-3 flex-wrap mt-0.5">
+                              {subs && (
+                                <span className="text-xs text-gray-400">
+                                  Subtasks {subs.done}/{subs.total}
+                                </span>
+                              )}
+                              {task.due_date && (() => {
+                                const due = getDueStatus(task.due_date)
+                                return due ? (
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className={`text-xs font-medium ${
+                                      due.color === 'red' ? 'text-red-600' :
+                                      due.color === 'orange' ? 'text-orange-600' :
+                                      due.color === 'yellow' ? 'text-yellow-700' : 'text-gray-400'
+                                    }`}>{due.label}</span>
+                                    {due.badge && (
+                                      <span className={`text-[10px] font-bold px-1 py-0.5 rounded border ${
+                                        due.color === 'red' ? 'text-red-600 bg-red-50 border-red-200' :
+                                        due.color === 'orange' ? 'text-orange-600 bg-orange-50 border-orange-200' :
+                                        'text-yellow-700 bg-yellow-50 border-yellow-200'
+                                      }`}>{due.badge}</span>
+                                    )}
+                                  </div>
+                                ) : null
+                              })()}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Badge variant={PRIORITY_COLORS[task.priority as keyof typeof PRIORITY_COLORS]}>
+                              {task.priority}
+                            </Badge>
+                            <Badge variant={STATUS_COLORS[task.status as keyof typeof STATUS_COLORS]}>
+                              {task.status.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                        </Link>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </CardContent>
@@ -224,7 +263,7 @@ export default async function DashboardPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Shield className="h-4 w-4" /> My Teams
+                    <Shield className="h-4 w-4" /> {isAdminRole ? 'Teams' : 'My Teams'}
                   </CardTitle>
                   <Link href="/teams" className="text-xs text-indigo-600 hover:underline">View all</Link>
                 </div>

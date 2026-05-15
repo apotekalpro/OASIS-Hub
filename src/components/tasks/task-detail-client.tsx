@@ -13,7 +13,7 @@ import { STATUS_VARIANT, STATUS_LABEL, PRIORITY_DOT } from './task-card'
 import {
   ArrowLeft, Calendar, Clock, Tag, Users, Edit2, Plus, Send,
   Trash2, CheckCircle2, Circle, CornerDownRight, Smile, X,
-  Paperclip, FileText, Download, Eye,
+  Paperclip, FileText, Download, Eye, UserPlus, Search,
 } from 'lucide-react'
 import { formatDate, formatRelativeTime, getDueStatus, cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -347,6 +347,10 @@ export function TaskDetailClient({
   const [submittingLog, setSubmittingLog] = useState(false)
   const [newSubtask, setNewSubtask] = useState('')
   const [addingSubtask, setAddingSubtask] = useState(false)
+  const [assigneesList, setAssigneesList] = useState<Assignee[]>(assignees)
+  const [showAddAssignee, setShowAddAssignee] = useState(false)
+  const [assigneeSearch, setAssigneeSearch] = useState('')
+  const [addingAssignee, setAddingAssignee] = useState(false)
   const commentEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -654,9 +658,42 @@ export function TaskDetailClient({
     router.push('/tasks')
   }
 
+  async function addAssignee(selectedUser: OrgUser) {
+    if (assigneesList.some(a => a.id === selectedUser.id)) {
+      toast.info(`${selectedUser.full_name} is already an assignee`)
+      setShowAddAssignee(false)
+      return
+    }
+    setAddingAssignee(true)
+    const { error } = await supabase.from('task_assignees').insert({ task_id: task.id, user_id: selectedUser.id })
+    if (error) {
+      toast.error(error.message)
+    } else {
+      setAssigneesList(prev => [...prev, { id: selectedUser.id, full_name: selectedUser.full_name, avatar_url: selectedUser.avatar_url, email: selectedUser.email }])
+      toast.success(`${selectedUser.full_name} added as assignee`)
+      // Notify newly added assignee
+      fetch('/api/notifications/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'task_assigned', taskId: task.id, userIds: [selectedUser.id], actorName: currentUserName }),
+      }).catch(() => {})
+    }
+    setAddingAssignee(false)
+    setShowAddAssignee(false)
+    setAssigneeSearch('')
+  }
+
+  async function removeAssignee(assigneeId: string) {
+    const { error } = await supabase.from('task_assignees').delete().eq('task_id', task.id).eq('user_id', assigneeId)
+    if (error) toast.error(error.message)
+    else setAssigneesList(prev => prev.filter(a => a.id !== assigneeId))
+  }
+
   const isOwner = task.created_by === currentUserId
   const isDeptHeadPlus = ['super_admin', 'org_admin', 'dept_head', 'chief'].includes(currentUserRole)
   const canDelete = isOwner || isDeptHeadPlus
+  const isAssignee = assigneesList.some(a => a.id === currentUserId)
+  const canManageAssignees = isOwner || isAssignee || isDeptHeadPlus
 
   const doneSubs = subtasks.filter(s => s.status === 'done').length
 
@@ -1046,21 +1083,82 @@ export function TaskDetailClient({
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Assignees / PIC ({assignees.length})
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Assignees / PIC ({assigneesList.length})
+                </h3>
+                {canManageAssignees && (
+                  <button
+                    onClick={() => { setShowAddAssignee(v => !v); setAssigneeSearch('') }}
+                    className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                    title="Add assignee"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Add
+                  </button>
+                )}
+              </div>
+
+              {/* Add assignee dropdown */}
+              {showAddAssignee && (
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-gray-100">
+                    <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="Search people…"
+                      value={assigneeSearch}
+                      onChange={e => setAssigneeSearch(e.target.value)}
+                      className="flex-1 text-xs outline-none bg-transparent placeholder-gray-400"
+                    />
+                  </div>
+                  <div className="max-h-40 overflow-y-auto">
+                    {users
+                      .filter(u =>
+                        !assigneesList.some(a => a.id === u.id) &&
+                        u.full_name.toLowerCase().includes(assigneeSearch.toLowerCase())
+                      )
+                      .slice(0, 8)
+                      .map(u => (
+                        <button
+                          key={u.id}
+                          disabled={addingAssignee}
+                          onClick={() => addAssignee(u)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-indigo-50 transition-colors text-left"
+                        >
+                          <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 shrink-0" />
+                          <span className="truncate">{u.full_name}</span>
+                        </button>
+                      ))}
+                    {users.filter(u => !assigneesList.some(a => a.id === u.id) && u.full_name.toLowerCase().includes(assigneeSearch.toLowerCase())).length === 0 && (
+                      <p className="text-xs text-gray-400 text-center py-3">No users found</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
-                {assignees.map(a => (
-                  <div key={a.id} className="flex items-center gap-2">
-                    <UserAvatar name={a.full_name} avatarUrl={a.avatar_url} size="sm" className="w-7 h-7" />
-                    <div className="min-w-0">
+                {assigneesList.map(a => (
+                  <div key={a.id} className="flex items-center gap-2 group">
+                    <UserAvatar name={a.full_name} avatarUrl={a.avatar_url} size="sm" className="w-7 h-7 shrink-0" />
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-gray-900 truncate">{a.full_name}</p>
                       <p className="text-xs text-gray-400 truncate">{a.email}</p>
                     </div>
+                    {canManageAssignees && assigneesList.length > 1 && (
+                      <button
+                        onClick={() => removeAssignee(a.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500 shrink-0"
+                        title="Remove assignee"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 ))}
-                {assignees.length === 0 && <p className="text-sm text-gray-400">No assignees</p>}
+                {assigneesList.length === 0 && <p className="text-sm text-gray-400">No assignees</p>}
               </div>
             </div>
 
