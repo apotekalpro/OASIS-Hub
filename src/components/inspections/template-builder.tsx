@@ -178,57 +178,92 @@ export function TemplateBuilder({ templateId, initialSections }: Props) {
 
       {/* Sections */}
       {sections.map((section, si) => (
-        <div key={section.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          {/* Section header */}
-          <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <GripVertical className="h-4 w-4 text-gray-300 shrink-0" />
-            <button onClick={() => toggleSection(section.id)} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
-              {expandedSections.has(section.id)
-                ? <ChevronDown className="h-4 w-4" />
-                : <ChevronRight className="h-4 w-4" />
-              }
-            </button>
-            <input
-              className="flex-1 bg-transparent font-semibold text-gray-900 focus:outline-none text-sm"
-              value={section.title}
-              onChange={e => setSections(prev => prev.map(s => s.id === section.id ? { ...s, title: e.target.value } : s))}
-              onBlur={e => updateSectionTitle(section.id, e.target.value)}
+        <SectionRow
+          key={section.id}
+          section={section}
+          si={si}
+          expandedSections={expandedSections}
+          expandedQuestions={expandedQuestions}
+          onToggleSection={() => toggleSection(section.id)}
+          onToggleQuestion={(qId) => toggleQuestion(qId)}
+          onUpdateSectionTitle={(title) => updateSectionTitle(section.id, title)}
+          onDeleteSection={() => deleteSection(section.id)}
+          onAddQuestion={() => addQuestion(section.id)}
+          onUpdateQuestion={(qId, patch) => updateQuestion(section.id, qId, patch)}
+          onDeleteQuestion={(qId) => deleteQuestion(section.id, qId)}
+          allSectionQuestions={sections.flatMap(s => s.template_questions)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function SectionRow({
+  section, expandedSections, expandedQuestions,
+  onToggleSection, onToggleQuestion, onUpdateSectionTitle, onDeleteSection,
+  onAddQuestion, onUpdateQuestion, onDeleteQuestion, allSectionQuestions,
+}: {
+  section: Section
+  si: number
+  expandedSections: Set<string>
+  expandedQuestions: Set<string>
+  onToggleSection: () => void
+  onToggleQuestion: (qId: string) => void
+  onUpdateSectionTitle: (title: string) => void
+  onDeleteSection: () => void
+  onAddQuestion: () => void
+  onUpdateQuestion: (qId: string, patch: Partial<Question>) => void
+  onDeleteQuestion: (qId: string) => void
+  allSectionQuestions: Question[]
+}) {
+  const [title, setTitle] = useState(section.title)
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      {/* Section header */}
+      <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-200">
+        <GripVertical className="h-4 w-4 text-gray-300 shrink-0" />
+        <button onClick={onToggleSection} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
+          {expandedSections.has(section.id)
+            ? <ChevronDown className="h-4 w-4" />
+            : <ChevronRight className="h-4 w-4" />}
+        </button>
+        <input
+          className="flex-1 bg-transparent font-semibold text-gray-900 focus:outline-none text-sm"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          onBlur={() => { if (title !== section.title) onUpdateSectionTitle(title) }}
+        />
+        <span className="text-xs text-gray-400">{section.template_questions.length} questions</span>
+        <button onClick={onDeleteSection} className="text-gray-400 hover:text-red-500 transition-colors">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Questions */}
+      {expandedSections.has(section.id) && (
+        <div className="divide-y divide-gray-100">
+          {section.template_questions.map(question => (
+            <QuestionRow
+              key={question.id}
+              question={question}
+              allQuestions={allSectionQuestions.filter(q => q.id !== question.id)}
+              isExpanded={expandedQuestions.has(question.id)}
+              onToggle={() => onToggleQuestion(question.id)}
+              onUpdate={patch => onUpdateQuestion(question.id, patch)}
+              onDelete={() => onDeleteQuestion(question.id)}
             />
-            <span className="text-xs text-gray-400">{section.template_questions.length} questions</span>
+          ))}
+          <div className="p-3">
             <button
-              onClick={() => deleteSection(section.id)}
-              className="text-gray-400 hover:text-red-500 transition-colors"
+              onClick={onAddQuestion}
+              className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
             >
-              <Trash2 className="h-4 w-4" />
+              <Plus className="h-4 w-4" /> Add Question
             </button>
           </div>
-
-          {/* Questions */}
-          {expandedSections.has(section.id) && (
-            <div className="divide-y divide-gray-100">
-              {section.template_questions.map((question, qi) => (
-                <QuestionRow
-                  key={question.id}
-                  question={question}
-                  allQuestions={sections.flatMap(s => s.template_questions).filter(q => q.id !== question.id)}
-                  isExpanded={expandedQuestions.has(question.id)}
-                  onToggle={() => toggleQuestion(question.id)}
-                  onUpdate={patch => updateQuestion(section.id, question.id, patch)}
-                  onDelete={() => deleteQuestion(section.id, question.id)}
-                />
-              ))}
-              <div className="p-3">
-                <button
-                  onClick={() => addQuestion(section.id)}
-                  className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-                >
-                  <Plus className="h-4 w-4" /> Add Question
-                </button>
-              </div>
-            </div>
-          )}
         </div>
-      ))}
+      )}
     </div>
   )
 }
@@ -243,7 +278,17 @@ function QuestionRow({
   onUpdate: (patch: Partial<Question>) => void
   onDelete: () => void
 }) {
+  // Local state for all text inputs — onChange updates local state instantly (no lag),
+  // onBlur persists to DB. This prevents async DB re-renders from dropping keystrokes.
+  const [questionText, setQuestionText] = useState(question.question_text)
+  const [hintText, setHintText] = useState(question.hint_text ?? '')
+  const [referenceNote, setReferenceNote] = useState(question.reference_note ?? '')
+  const [dependsOnValue, setDependsOnValue] = useState(question.depends_on_value ?? '')
+  const [scoreWeight, setScoreWeight] = useState(String(question.score_weight))
   const [optionsText, setOptionsText] = useState((question.options ?? []).join('\n'))
+  const [numericMin, setNumericMin] = useState(question.numeric_min != null ? String(question.numeric_min) : '')
+  const [numericMax, setNumericMax] = useState(question.numeric_max != null ? String(question.numeric_max) : '')
+  const [numericThreshold, setNumericThreshold] = useState(question.numeric_threshold != null ? String(question.numeric_threshold) : '')
 
   function saveOptions() {
     const opts = optionsText.split('\n').map(s => s.trim()).filter(Boolean)
@@ -265,8 +310,9 @@ function QuestionRow({
           {isExpanded ? (
             <input
               className="w-full text-sm font-medium text-gray-900 focus:outline-none border-b border-transparent focus:border-indigo-300 pb-0.5"
-              value={question.question_text}
-              onChange={e => onUpdate({ question_text: e.target.value })}
+              value={questionText}
+              onChange={e => setQuestionText(e.target.value)}
+              onBlur={() => { if (questionText !== question.question_text) onUpdate({ question_text: questionText }) }}
               placeholder="Question text..."
             />
           ) : (
@@ -310,8 +356,9 @@ function QuestionRow({
               min="0"
               step="0.5"
               className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              value={question.score_weight}
-              onChange={e => onUpdate({ score_weight: parseFloat(e.target.value) || 1 })}
+              value={scoreWeight}
+              onChange={e => setScoreWeight(e.target.value)}
+              onBlur={() => onUpdate({ score_weight: parseFloat(scoreWeight) || 1 })}
             />
           </div>
 
@@ -321,8 +368,9 @@ function QuestionRow({
             <input
               className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="Shown beneath the question to guide the auditor"
-              value={question.hint_text ?? ''}
-              onChange={e => onUpdate({ hint_text: e.target.value || null })}
+              value={hintText}
+              onChange={e => setHintText(e.target.value)}
+              onBlur={() => { if (hintText !== (question.hint_text ?? '')) onUpdate({ hint_text: hintText || null }) }}
             />
           </div>
 
@@ -348,8 +396,9 @@ function QuestionRow({
                 <input
                   type="number"
                   className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={question.numeric_min ?? ''}
-                  onChange={e => onUpdate({ numeric_min: e.target.value ? parseFloat(e.target.value) : null })}
+                  value={numericMin}
+                  onChange={e => setNumericMin(e.target.value)}
+                  onBlur={() => onUpdate({ numeric_min: numericMin ? parseFloat(numericMin) : null })}
                 />
               </div>
               <div>
@@ -357,8 +406,9 @@ function QuestionRow({
                 <input
                   type="number"
                   className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={question.numeric_max ?? ''}
-                  onChange={e => onUpdate({ numeric_max: e.target.value ? parseFloat(e.target.value) : null })}
+                  value={numericMax}
+                  onChange={e => setNumericMax(e.target.value)}
+                  onBlur={() => onUpdate({ numeric_max: numericMax ? parseFloat(numericMax) : null })}
                 />
               </div>
               <div>
@@ -366,8 +416,9 @@ function QuestionRow({
                 <input
                   type="number"
                   className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={question.numeric_threshold ?? ''}
-                  onChange={e => onUpdate({ numeric_threshold: e.target.value ? parseFloat(e.target.value) : null })}
+                  value={numericThreshold}
+                  onChange={e => setNumericThreshold(e.target.value)}
+                  onBlur={() => onUpdate({ numeric_threshold: numericThreshold ? parseFloat(numericThreshold) : null })}
                 />
               </div>
             </>
@@ -420,8 +471,9 @@ function QuestionRow({
                   <input
                     className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     placeholder='e.g. "no" or "Yes"'
-                    value={question.depends_on_value ?? ''}
-                    onChange={e => onUpdate({ depends_on_value: e.target.value || null })}
+                    value={dependsOnValue}
+                    onChange={e => setDependsOnValue(e.target.value)}
+                    onBlur={() => { if (dependsOnValue !== (question.depends_on_value ?? '')) onUpdate({ depends_on_value: dependsOnValue || null }) }}
                   />
                 </div>
               )}
@@ -434,8 +486,9 @@ function QuestionRow({
             <input
               className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="e.g. Check the SOP binder at the pharmacy counter"
-              value={question.reference_note ?? ''}
-              onChange={e => onUpdate({ reference_note: e.target.value || null })}
+              value={referenceNote}
+              onChange={e => setReferenceNote(e.target.value)}
+              onBlur={() => { if (referenceNote !== (question.reference_note ?? '')) onUpdate({ reference_note: referenceNote || null }) }}
             />
           </div>
 
