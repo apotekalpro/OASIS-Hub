@@ -88,8 +88,6 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
   }, [channelId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // Ensure session is ready before fetching — on first mount the browser client
-    // may not have hydrated the session yet, causing an empty result.
     supabase.auth.getSession().then(() => fetchMessages())
 
     const channel = supabase
@@ -99,12 +97,13 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
         schema: 'public',
         table: 'messages',
         filter: `channel_id=eq.${channelId}`,
-      }, async (payload) => {
+      }, (payload) => {
         const row = payload.new as { id: string; content: string; created_at: string; edited_at: string | null; parent_id: string | null; mentions: string[]; reactions: Record<string, string[]>; user_id: string }
-        if (row.parent_id) return // skip thread replies in main feed
+        if (row.parent_id) return
 
-        const { data: profile } = await supabase.from('profiles').select('id, full_name, avatar_url').eq('id', row.user_id).single()
-        const p = profile as { id: string; full_name: string; avatar_url: string | null } | null
+        // Look up profile from already-loaded org users — no extra DB call needed
+        const knownUser = orgUsers.find(u => u.id === row.user_id)
+          ?? (row.user_id === currentUserId ? { id: currentUserId, full_name: currentUserName, avatar_url: currentUserAvatar } : null)
 
         const newMsg: Message = {
           id: row.id,
@@ -114,7 +113,9 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
           parent_id: row.parent_id,
           mentions: row.mentions ?? [],
           reactions: row.reactions ?? {},
-          user: p ? { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url } : { id: row.user_id, full_name: 'Someone', avatar_url: null },
+          user: knownUser
+            ? { id: knownUser.id, full_name: knownUser.full_name, avatar_url: knownUser.avatar_url }
+            : { id: row.user_id, full_name: 'Unknown', avatar_url: null },
         }
 
         setMessages(prev => {
@@ -166,46 +167,65 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
   async function sendMessage() {
     if (!text.trim()) return
     setSending(true)
+    const content = text.trim()
 
-    // Extract @mentions — find user IDs for mentioned names
+    // Extract @mentions
     const mentionedIds: string[] = []
     const mentionPattern = /@([^@\n]+?)(?=\s|$)/g
     let match
-    while ((match = mentionPattern.exec(text)) !== null) {
+    while ((match = mentionPattern.exec(content)) !== null) {
       const name = match[1].trim()
       const found = orgUsers.find(u => u.full_name.toLowerCase() === name.toLowerCase())
       if (found) mentionedIds.push(found.id)
     }
 
-    const { error } = await supabase.from('messages').insert({
+    const { data: inserted, error } = await supabase.from('messages').insert({
       channel_id: channelId,
       user_id: currentUserId,
-      content: text.trim(),
+      content,
       parent_id: replyTo?.id ?? null,
       mentions: mentionedIds,
-    })
+    }).select('id, created_at').single()
 
-    if (error) toast.error(error.message)
-    else {
-      // Email mentioned users (fire-and-forget)
-      if (mentionedIds.length > 0) {
-        const channelRes = await supabase.from('channels').select('name').eq('id', channelId).single()
-        fetch('/api/notifications/send-mention-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            channelId,
-            channelName: channelRes.data?.name ?? 'channel',
-            userIds: mentionedIds,
-            actorName: currentUserName,
-            preview: text.trim(),
-          }),
-        }).catch(() => {})
-      }
-      setText('')
-      setReplyTo(null)
+    if (error) {
+      toast.error(error.message)
+      setSending(false)
+      return
     }
+
+    // Optimistic: add sender's own message immediately — no need to wait for Realtime
+    const optimistic: Message = {
+      id: (inserted as { id: string; created_at: string }).id,
+      content,
+      created_at: (inserted as { id: string; created_at: string }).created_at,
+      edited_at: null,
+      parent_id: replyTo?.id ?? null,
+      mentions: mentionedIds,
+      reactions: {},
+      user: { id: currentUserId, full_name: currentUserName, avatar_url: currentUserAvatar },
+    }
+    setMessages(prev => prev.find(m => m.id === optimistic.id) ? prev : [...prev, optimistic])
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+
+    setText('')
+    setReplyTo(null)
     setSending(false)
+
+    // Email mentioned users (fire-and-forget)
+    if (mentionedIds.length > 0) {
+      const channelRes = await supabase.from('channels').select('name').eq('id', channelId).single()
+      fetch('/api/notifications/send-mention-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channelId,
+          channelName: channelRes.data?.name ?? 'channel',
+          userIds: mentionedIds,
+          actorName: currentUserName,
+          preview: content,
+        }),
+      }).catch(() => {})
+    }
   }
 
   async function deleteMessage(id: string) {

@@ -32,22 +32,32 @@ export default async function TasksPage() {
   const taskSelect = `id, title, description, status, priority, due_date, tags, created_at, created_by, task_assignees(user_id)`
 
   let rawTasks: RawTask[] = []
+  let usersRes, teamsRes, deptsRes
 
   if (isSuperAdmin || (isAdmin && orgId)) {
-    // Admins: fetch all org tasks directly
-    const query = supabase.from('tasks').select(taskSelect).order('created_at', { ascending: false })
-    if (!isSuperAdmin && orgId) query.eq('org_id', orgId)
-    const res = await query
-    rawTasks = (res.data as unknown as RawTask[]) ?? []
-  } else {
-    // Step 1: task IDs assigned to this user
-    const assignedRes = await supabase
-      .from('task_assignees')
-      .select('task_id')
-      .eq('user_id', user.id)
-    const assignedIds = ((assignedRes.data ?? []) as Array<{ task_id: string }>).map(r => r.task_id)
+    // Admins: fetch tasks + supporting data all in parallel
+    const tasksQuery = supabase.from('tasks').select(taskSelect).order('created_at', { ascending: false })
+    if (!isSuperAdmin && orgId) tasksQuery.eq('org_id', orgId)
 
-    // Step 2: tasks created by me OR assigned to me
+    const [tasksResult, ...rest] = await Promise.all([
+      tasksQuery,
+      supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
+      supabase.from('teams').select('id, name').eq('org_id', orgId).order('name'),
+      supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
+    ])
+    rawTasks = (tasksResult.data as unknown as RawTask[]) ?? [];
+    [usersRes, teamsRes, deptsRes] = rest
+  } else {
+    // Members: fetch assignees + supporting data in parallel, then tasks
+    const [assignedRes, ...rest] = await Promise.all([
+      supabase.from('task_assignees').select('task_id').eq('user_id', user.id),
+      supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
+      supabase.from('teams').select('id, name').eq('org_id', orgId).order('name'),
+      supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
+    ])
+    ;[usersRes, teamsRes, deptsRes] = rest
+
+    const assignedIds = ((assignedRes.data ?? []) as Array<{ task_id: string }>).map(r => r.task_id)
     const orParts: string[] = [`created_by.eq.${user.id}`]
     if (assignedIds.length > 0) orParts.push(`id.in.(${assignedIds.join(',')})`)
 
@@ -57,14 +67,6 @@ export default async function TasksPage() {
       .order('created_at', { ascending: false })
     rawTasks = (res.data as unknown as RawTask[]) ?? []
   }
-
-  // Fetch org users to resolve assignee profiles (no nested join needed)
-  const [usersRes, teamsRes, deptsRes] = await Promise.all([
-    supabase.from('profiles').select('id, full_name, email, avatar_url')
-      .eq('org_id', orgId).eq('is_active', true).order('full_name'),
-    supabase.from('teams').select('id, name').eq('org_id', orgId).order('name'),
-    supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
-  ])
 
   type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
   const userMap = new Map<string, OrgUser>(
