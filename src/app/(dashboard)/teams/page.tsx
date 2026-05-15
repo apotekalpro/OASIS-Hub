@@ -1,10 +1,20 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { UserAvatar } from '@/components/ui/avatar'
 import { Users, Lock, Globe } from 'lucide-react'
 import { TeamsClient } from '@/components/teams/teams-client'
 import type { Profile } from '@/types/database'
+
+type MemberRow = { team_id: string; user_id: string; role: string }
+type ProfileRow = { id: string; full_name: string; avatar_url: string | null }
+
+type TeamRow = {
+  id: string; name: string; description: string | null; color: string;
+  is_private: boolean; created_by: string | null; created_at: string;
+  dept_id?: string | null;
+  team_members: Array<{ user_id: string; role: string; profiles: ProfileRow | null }>
+}
 
 export default async function TeamsPage() {
   const supabase = await createClient()
@@ -13,7 +23,6 @@ export default async function TeamsPage() {
 
   const admin = await createAdminClient()
 
-  // Use admin client for profile fetch to bypass any RLS issues
   const { data: profileData } = await admin
     .from('profiles')
     .select('org_id, role, dept_id')
@@ -22,40 +31,65 @@ export default async function TeamsPage() {
   const profile = profileData as Pick<Profile, 'org_id' | 'role' | 'dept_id'> | null
   const orgId = profile?.org_id ?? ''
 
-  // super_admin may have null org_id — skip filter so they see all teams
-  let teamsQ = admin.from('teams').select(`
-    id, name, description, color, is_private, created_by, created_at, dept_id,
-    team_members(user_id, role, profiles(id, full_name, avatar_url))
-  `).order('name')
+  // Fetch teams WITHOUT nested join — avoids PostgREST join issues that silently return null
+  let teamsQ = admin.from('teams')
+    .select('id, name, description, color, is_private, created_by, created_at, dept_id')
+    .order('name')
   if (orgId) teamsQ = teamsQ.eq('org_id', orgId)
 
   let deptsQ = admin.from('departments').select('id, name').order('name')
   if (orgId) deptsQ = deptsQ.eq('org_id', orgId)
 
-  const [teamsRes, deptsRes] = await Promise.all([teamsQ, deptsQ])
+  let usersQ = admin.from('profiles').select('id, full_name, avatar_url, email').eq('is_active', true).order('full_name')
+  if (orgId) usersQ = usersQ.eq('org_id', orgId)
 
-  type TeamRow = {
-    id: string; name: string; description: string | null; color: string;
-    is_private: boolean; created_by: string | null; created_at: string;
-    dept_id?: string | null;
-    team_members?: Array<{
-      user_id: string; role: string;
-      profiles?: { id: string; full_name: string; avatar_url: string | null } | null
-    }>
+  const [teamsRes, deptsRes, usersRes] = await Promise.all([teamsQ, deptsQ, usersQ])
+
+  const rawTeams = (teamsRes.data ?? []) as Omit<TeamRow, 'team_members'>[]
+  const departments = (deptsRes.data ?? []) as Array<{ id: string; name: string }>
+  const orgUsers = (usersRes.data ?? []) as Array<{ id: string; full_name: string; avatar_url: string | null; email: string }>
+
+  // Separate member and profile fetches
+  const teamIds = rawTeams.map(t => t.id)
+  const [membersRes, profilesRes] = teamIds.length > 0
+    ? await Promise.all([
+        admin.from('team_members').select('team_id, user_id, role').in('team_id', teamIds),
+        (async () => {
+          const mRes = await admin.from('team_members').select('user_id').in('team_id', teamIds)
+          const uids = [...new Set((mRes.data ?? []).map((m: { user_id: string }) => m.user_id))]
+          return uids.length > 0
+            ? admin.from('profiles').select('id, full_name, avatar_url').in('id', uids)
+            : { data: [] }
+        })(),
+      ])
+    : [{ data: [] }, { data: [] }]
+
+  const memberRows = (membersRes.data ?? []) as MemberRow[]
+  const profileMap = new Map(((profilesRes.data ?? []) as ProfileRow[]).map(p => [p.id, p]))
+
+  // Assemble TeamRow with members
+  const membersByTeam = new Map<string, Array<{ user_id: string; role: string; profiles: ProfileRow | null }>>()
+  for (const m of memberRows) {
+    if (!membersByTeam.has(m.team_id)) membersByTeam.set(m.team_id, [])
+    membersByTeam.get(m.team_id)!.push({
+      user_id: m.user_id,
+      role: m.role,
+      profiles: profileMap.get(m.user_id) ?? null,
+    })
   }
 
-  const teams = teamsRes.data as TeamRow[] | null
-  const departments = deptsRes.data as Array<{ id: string; name: string }> | null
+  const teams: TeamRow[] = rawTeams.map(t => ({
+    ...t,
+    team_members: membersByTeam.get(t.id) ?? [],
+  }))
 
   const isAdmin = ['super_admin', 'org_admin', 'dept_head', 'chief'].includes(profile?.role ?? '')
   const canCreateTeam = ['super_admin', 'org_admin', 'dept_head', 'chief', 'team_leader'].includes(profile?.role ?? '')
 
-  // Separate my teams from other teams
-  // Admins can see ALL teams (including private ones they're not in)
-  const myTeams = teams?.filter(t => t.team_members?.some(m => m.user_id === user.id)) ?? []
-  const otherTeams = teams?.filter(t =>
-    !t.team_members?.some(m => m.user_id === user.id) && (isAdmin || !t.is_private)
-  ) ?? []
+  const myTeams = teams.filter(t => t.team_members.some(m => m.user_id === user.id))
+  const otherTeams = teams.filter(t =>
+    !t.team_members.some(m => m.user_id === user.id) && (isAdmin || !t.is_private)
+  )
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -63,13 +97,16 @@ export default async function TeamsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Teams</h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            Collaborate in focused groups.{(teams?.length ?? 0) > 0 ? ` ${teams!.length} team${teams!.length !== 1 ? 's' : ''} in your organization.` : ''}
+            {teams.length > 0
+              ? `${teams.length} team${teams.length !== 1 ? 's' : ''} in your organization.`
+              : 'No teams yet — create the first one.'}
           </p>
         </div>
         {canCreateTeam && (
           <TeamsClient
-            departments={departments ?? []}
-            orgId={profile?.org_id ?? ''}
+            departments={departments}
+            orgUsers={orgUsers}
+            orgId={orgId}
             currentUserId={user.id}
             mode="create"
           />
@@ -88,8 +125,9 @@ export default async function TeamsPage() {
                 key={team.id}
                 team={team}
                 currentUserId={user.id}
-                departments={departments ?? []}
-                orgId={profile?.org_id ?? ''}
+                departments={departments}
+                orgId={orgId}
+                orgUsers={orgUsers}
                 isMember
               />
             ))}
@@ -101,7 +139,7 @@ export default async function TeamsPage() {
       {otherTeams.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-            Other Teams ({otherTeams.length})
+            {isAdmin ? 'All Other Teams' : 'Other Teams'} ({otherTeams.length})
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {otherTeams.map(team => (
@@ -109,8 +147,9 @@ export default async function TeamsPage() {
                 key={team.id}
                 team={team}
                 currentUserId={user.id}
-                departments={departments ?? []}
-                orgId={profile?.org_id ?? ''}
+                departments={departments}
+                orgId={orgId}
+                orgUsers={orgUsers}
                 isMember={false}
               />
             ))}
@@ -129,26 +168,17 @@ export default async function TeamsPage() {
   )
 }
 
-type TeamRow = {
-  id: string; name: string; description: string | null; color: string;
-  is_private: boolean; created_by: string | null; created_at: string;
-  dept_id?: string | null;
-  team_members?: Array<{
-    user_id: string; role: string;
-    profiles?: { id: string; full_name: string; avatar_url: string | null } | null
-  }>
-}
-
 function TeamCard({
-  team, currentUserId, departments, orgId, isMember
+  team, currentUserId, departments, orgId, orgUsers, isMember
 }: {
   team: TeamRow
   currentUserId: string
   departments: Array<{ id: string; name: string }>
   orgId: string
+  orgUsers: Array<{ id: string; full_name: string; avatar_url: string | null; email: string }>
   isMember: boolean
 }) {
-  const members = team.team_members ?? []
+  const members = team.team_members
   const myRole = members.find(m => m.user_id === currentUserId)?.role
   const displayMembers = members.slice(0, 5)
   const extraCount = Math.max(0, members.length - 5)
@@ -172,13 +202,12 @@ function TeamCard({
                   ? <Lock className="h-3 w-3 text-gray-400" />
                   : <Globe className="h-3 w-3 text-gray-400" />}
               </div>
-              {deptName && (
-                <p className="text-xs text-gray-400 mt-0.5">{deptName}</p>
-              )}
+              {deptName && <p className="text-xs text-gray-400 mt-0.5">{deptName}</p>}
             </div>
           </div>
           <TeamsClient
             departments={departments}
+            orgUsers={orgUsers}
             orgId={orgId}
             currentUserId={currentUserId}
             teamId={team.id}

@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Edit2, Trash2, MoreHorizontal, UserPlus, UserMinus, LogIn } from 'lucide-react'
+import { Plus, Edit2, Trash2, MoreHorizontal, UserPlus, UserMinus, LogIn, Search, X } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { UserAvatar } from '@/components/ui/avatar'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
@@ -28,8 +29,11 @@ interface TeamRow {
   is_private: boolean; created_by: string | null
 }
 
+type OrgUser = { id: string; full_name: string; avatar_url: string | null; email: string }
+
 interface Props {
   departments: Array<{ id: string; name: string }>
+  orgUsers: OrgUser[]
   orgId: string
   currentUserId: string
   teamId?: string
@@ -38,10 +42,11 @@ interface Props {
   mode?: 'create' | 'actions'
 }
 
-export function TeamsClient({ departments, orgId, currentUserId, teamId, team, isMember, mode = 'create' }: Props) {
+export function TeamsClient({ departments, orgUsers, orgId, currentUserId, teamId, team, isMember, mode = 'create' }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [memberOpen, setMemberOpen] = useState(false)
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([])
+  const [memberSearch, setMemberSearch] = useState('')
 
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch, setValue } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -53,21 +58,55 @@ export function TeamsClient({ departments, orgId, currentUserId, teamId, team, i
     } : { name: '', color: '#8b5cf6', is_private: false },
   })
 
+  const isPrivate = watch('is_private')
+  const colorValue = watch('color')
+  const nameValue = watch('name')
+
+  // Users available to add as members (exclude current user — they're added as leader)
+  const availableUsers = orgUsers.filter(u =>
+    u.id !== currentUserId &&
+    !selectedMemberIds.includes(u.id) &&
+    u.full_name.toLowerCase().includes(memberSearch.toLowerCase())
+  )
+  const selectedUsers = orgUsers.filter(u => selectedMemberIds.includes(u.id))
+
+  function toggleMember(userId: string) {
+    setSelectedMemberIds(prev =>
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    )
+  }
+
   async function onSubmit(data: FormData) {
     const supabase = createClient()
     try {
       if (teamId) {
+        // Edit existing team
         const { error } = await supabase.from('teams').update(data).eq('id', teamId)
         if (error) throw error
         toast.success('Team updated')
       } else {
-        const { error } = await supabase.from('teams').insert({
-          ...data,
-          org_id: orgId,
-          created_by: currentUserId,
-        })
-        if (error) throw error
-        toast.success('Team created! A #general channel was added automatically.')
+        // Create new team
+        const { data: newTeam, error: teamErr } = await supabase
+          .from('teams')
+          .insert({ ...data, org_id: orgId, created_by: currentUserId })
+          .select('id')
+          .single()
+        if (teamErr) throw teamErr
+
+        // Add creator as team_leader, then selected members
+        const memberInserts = [
+          { team_id: newTeam.id, user_id: currentUserId, role: 'team_leader' },
+          ...selectedMemberIds.map(uid => ({ team_id: newTeam.id, user_id: uid, role: 'member' })),
+        ]
+        const { error: memberErr } = await supabase.from('team_members').insert(memberInserts)
+        if (memberErr) {
+          // Team was created but members failed — still show success with warning
+          toast.warning('Team created, but some members could not be added.')
+        } else {
+          toast.success(`Team created with ${memberInserts.length} member${memberInserts.length !== 1 ? 's' : ''}.`)
+        }
+        setSelectedMemberIds([])
+        setMemberSearch('')
       }
       setOpen(false)
       reset()
@@ -104,19 +143,18 @@ export function TeamsClient({ departments, orgId, currentUserId, teamId, team, i
     router.refresh()
   }
 
-  const isPrivate = watch('is_private')
-  const colorValue = watch('color')
-  const nameValue = watch('name')
+  const isEditMode = !!teamId
 
   const formDialogContent = (
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
-      <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-lg bg-white rounded-xl shadow-xl p-6">
+      <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-xl p-6">
         <Dialog.Title className="text-lg font-semibold mb-4">
-          {teamId ? 'Edit Team' : 'Create Team'}
+          {isEditMode ? 'Edit Team' : 'Create New Team'}
         </Dialog.Title>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Team name + colour preview */}
           <div className="flex gap-3 items-start">
             <div
               className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0"
@@ -146,7 +184,7 @@ export function TeamsClient({ departments, orgId, currentUserId, teamId, team, i
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Team Color</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Team Colour</label>
               <input type="color" className="h-9 w-full rounded-md border border-gray-300 p-1 cursor-pointer" {...register('color')} />
             </div>
           </div>
@@ -165,12 +203,76 @@ export function TeamsClient({ departments, orgId, currentUserId, teamId, team, i
             </label>
           </div>
 
+          {/* Member selector — only shown when creating */}
+          {!isEditMode && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Add Members
+                <span className="text-gray-400 font-normal ml-1">(you&apos;ll be added as Team Leader automatically)</span>
+              </label>
+
+              {/* Selected member chips */}
+              {selectedUsers.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {selectedUsers.map(u => (
+                    <span key={u.id} className="inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 bg-indigo-50 border border-indigo-200 rounded-full text-xs text-indigo-700">
+                      <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-4 h-4" />
+                      {u.full_name.split(' ')[0]}
+                      <button type="button" onClick={() => toggleMember(u.id)} className="ml-0.5 hover:text-red-500">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Search input */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search people to add…"
+                  value={memberSearch}
+                  onChange={e => setMemberSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* User list */}
+              {memberSearch && (
+                <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden max-h-36 overflow-y-auto">
+                  {availableUsers.length === 0 ? (
+                    <p className="text-xs text-gray-400 text-center py-3">No users found</p>
+                  ) : (
+                    availableUsers.slice(0, 8).map(u => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => { toggleMember(u.id); setMemberSearch('') }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-indigo-50 transition-colors text-left"
+                      >
+                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{u.full_name}</p>
+                          <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                        </div>
+                        <Plus className="h-4 w-4 text-indigo-500 shrink-0 ml-auto" />
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-2">
             <Dialog.Close asChild>
-              <Button type="button" variant="outline">Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => { setSelectedMemberIds([]); setMemberSearch('') }}>
+                Cancel
+              </Button>
             </Dialog.Close>
             <Button type="submit" loading={isSubmitting}>
-              {teamId ? 'Save Changes' : 'Create Team'}
+              {isEditMode ? 'Save Changes' : 'Create Team'}
             </Button>
           </div>
         </form>
@@ -180,7 +282,7 @@ export function TeamsClient({ departments, orgId, currentUserId, teamId, team, i
 
   if (mode === 'create') {
     return (
-      <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Root open={open} onOpenChange={v => { setOpen(v); if (!v) { setSelectedMemberIds([]); setMemberSearch('') } }}>
         <Dialog.Trigger asChild>
           <Button size="sm"><Plus className="h-4 w-4" /> New Team</Button>
         </Dialog.Trigger>
