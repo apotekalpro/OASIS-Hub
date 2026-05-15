@@ -13,7 +13,8 @@ export default async function InspectionsPage() {
   const profileRes = await supabase.from('profiles').select('org_id, role').eq('id', user.id).single()
   const { org_id: orgId, role } = (profileRes.data ?? {}) as { org_id: string; role: string }
 
-  const isAdmin = ['super_admin', 'org_admin', 'dept_head'].includes(role)
+  // Only org-level admins see all outlets; dept_head and below see only assigned ones
+  const isAdmin = ['super_admin', 'org_admin'].includes(role)
 
   // Staff see only their assigned outlets; admins see all
   let outletsQuery = supabase
