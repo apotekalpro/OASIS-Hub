@@ -4,11 +4,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { UserAvatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { Smile, Trash2, Reply, AtSign } from 'lucide-react'
+import { Smile, Trash2, Reply, AtSign, Paperclip, Send, X, Image as ImageIcon, FileText } from 'lucide-react'
 import { formatRelativeTime, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
 type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+
+type Attachment = { name: string; url: string; mime_type: string; size_bytes: number }
 
 interface Message {
   id: string
@@ -18,6 +20,7 @@ interface Message {
   parent_id: string | null
   mentions: string[]
   reactions: Record<string, string[]>
+  attachments: Attachment[]
   user: { id: string; full_name: string; avatar_url: string | null }
 }
 
@@ -42,8 +45,11 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [mentionSearch, setMentionSearch] = useState<string | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const mentionUsers = mentionSearch !== null
     ? orgUsers.filter(u => u.full_name.toLowerCase().includes(mentionSearch.toLowerCase())).slice(0, 6)
@@ -53,7 +59,7 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
     const { data, error } = await supabase
       .from('messages')
       .select(`
-        id, content, created_at, edited_at, parent_id, mentions, reactions,
+        id, content, created_at, edited_at, parent_id, mentions, reactions, attachments,
         profiles(id, full_name, avatar_url)
       `)
       .eq('channel_id', channelId)
@@ -66,6 +72,7 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
     type RawMsg = {
       id: string; content: string; created_at: string; edited_at: string | null
       parent_id: string | null; mentions: string[]; reactions: Record<string, string[]>
+      attachments: Attachment[] | null
       profiles?: { id: string; full_name: string; avatar_url: string | null } | null
     }
 
@@ -77,6 +84,7 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
       parent_id: m.parent_id,
       mentions: m.mentions ?? [],
       reactions: m.reactions ?? {},
+      attachments: m.attachments ?? [],
       user: m.profiles
         ? { id: m.profiles.id, full_name: m.profiles.full_name, avatar_url: m.profiles.avatar_url }
         : { id: '', full_name: 'Unknown', avatar_url: null },
@@ -98,7 +106,7 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
         table: 'messages',
         filter: `channel_id=eq.${channelId}`,
       }, (payload) => {
-        const row = payload.new as { id: string; content: string; created_at: string; edited_at: string | null; parent_id: string | null; mentions: string[]; reactions: Record<string, string[]>; user_id: string }
+        const row = payload.new as { id: string; content: string; created_at: string; edited_at: string | null; parent_id: string | null; mentions: string[]; reactions: Record<string, string[]>; attachments: Attachment[] | null; user_id: string }
         if (row.parent_id) return
 
         // Look up profile from already-loaded org users — no extra DB call needed
@@ -113,6 +121,7 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
           parent_id: row.parent_id,
           mentions: row.mentions ?? [],
           reactions: row.reactions ?? {},
+          attachments: row.attachments ?? [],
           user: knownUser
             ? { id: knownUser.id, full_name: knownUser.full_name, avatar_url: knownUser.avatar_url }
             : { id: row.user_id, full_name: 'Unknown', avatar_url: null },
@@ -164,8 +173,37 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
     textareaRef.current?.focus()
   }
 
+  async function uploadFiles(files: File[]): Promise<Attachment[]> {
+    const results: Attachment[] = []
+    for (const file of files) {
+      const ext = file.name.split('.').pop() ?? 'bin'
+      const path = `${channelId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('chat-attachments').upload(path, file)
+      if (error) { toast.error(`Upload failed: ${file.name}`); continue }
+      const { data: urlData } = supabase.storage.from('chat-attachments').getPublicUrl(path)
+      results.push({ name: file.name, url: urlData.publicUrl, mime_type: file.type, size_bytes: file.size })
+    }
+    return results
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = Array.from(e.clipboardData.items)
+    const imageItems = items.filter(item => item.type.startsWith('image/'))
+    if (imageItems.length === 0) return
+    e.preventDefault()
+    const files = imageItems.map(item => item.getAsFile()).filter(Boolean) as File[]
+    const named = files.map((f, i) => new File([f], `pasted-${Date.now()}-${i}.png`, { type: f.type }))
+    setPendingFiles(prev => [...prev, ...named])
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length) setPendingFiles(prev => [...prev, ...files])
+    e.target.value = ''
+  }
+
   async function sendMessage() {
-    if (!text.trim()) return
+    if (!text.trim() && pendingFiles.length === 0) return
     setSending(true)
     const content = text.trim()
 
@@ -179,12 +217,15 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
       if (found) mentionedIds.push(found.id)
     }
 
+    const attachments = pendingFiles.length > 0 ? await uploadFiles(pendingFiles) : []
+
     const { data: inserted, error } = await supabase.from('messages').insert({
       channel_id: channelId,
       user_id: currentUserId,
       content,
       parent_id: replyTo?.id ?? null,
       mentions: mentionedIds,
+      attachments: attachments.length > 0 ? attachments : null,
     }).select('id, created_at').single()
 
     if (error) {
@@ -202,6 +243,7 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
       parent_id: replyTo?.id ?? null,
       mentions: mentionedIds,
       reactions: {},
+      attachments,
       user: { id: currentUserId, full_name: currentUserName, avatar_url: currentUserAvatar },
     }
     setMessages(prev => prev.find(m => m.id === optimistic.id) ? prev : [...prev, optimistic])
@@ -209,6 +251,7 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
 
     setText('')
     setReplyTo(null)
+    setPendingFiles([])
     setSending(false)
 
     // Email mentioned users (fire-and-forget)
@@ -311,9 +354,31 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
                       </div>
                     )}
 
-                    <p className={cn('text-sm text-gray-800 whitespace-pre-wrap break-words', !compact && 'mt-0.5')}>
-                      {renderContent(msg.content, orgUsers)}
-                    </p>
+                    {msg.content && (
+                      <p className={cn('text-sm text-gray-800 whitespace-pre-wrap break-words', !compact && 'mt-0.5')}>
+                        {renderContent(msg.content, orgUsers)}
+                      </p>
+                    )}
+
+                    {/* Attachments */}
+                    {msg.attachments.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {msg.attachments.map((att, i) => (
+                          att.mime_type.startsWith('image/') ? (
+                            <a key={i} href={att.url} target="_blank" rel="noopener noreferrer">
+                              <img src={att.url} alt={att.name} className="max-h-48 max-w-xs rounded-lg border border-gray-200 object-cover hover:opacity-90 transition-opacity" />
+                            </a>
+                          ) : (
+                            <a key={i} href={att.url} target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors max-w-xs"
+                            >
+                              <FileText className="h-4 w-4 text-indigo-500 shrink-0" />
+                              <span className="truncate">{att.name}</span>
+                            </a>
+                          )
+                        ))}
+                      </div>
+                    )}
 
                     {/* Reactions */}
                     {Object.keys(msg.reactions).length > 0 && (
@@ -397,7 +462,41 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
           </div>
         )}
 
+        {/* Pending file previews */}
+        {pendingFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {pendingFiles.map((file, i) => (
+              <div key={i} className="flex items-center gap-1.5 bg-gray-100 rounded-lg px-2 py-1 text-xs text-gray-700">
+                {file.type.startsWith('image/') ? <ImageIcon className="h-3.5 w-3.5 shrink-0" /> : <FileText className="h-3.5 w-3.5 shrink-0" />}
+                <span className="max-w-[120px] truncate">{file.name}</span>
+                <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Emoji picker */}
+        {showEmojiPicker && (
+          <div className="mb-2 flex flex-wrap gap-1 p-2 bg-white border border-gray-200 rounded-xl shadow-lg">
+            {['😀','😂','😍','🥰','😊','🤔','😮','😢','😡','👍','👎','❤️','🔥','🎉','👏','🙏','💯','✅','❌','⚡','🚀','💪','🤝','😅','🥲','😎','🤩','😴','🤯','💡'].map(emoji => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => { setText(prev => prev + emoji); setShowEmojiPicker(false); textareaRef.current?.focus() }}
+                className="text-xl hover:scale-125 transition-transform p-0.5"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex gap-2 items-end">
+          {/* Hidden file input */}
+          <input ref={fileInputRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" onChange={handleFileSelect} />
+
           <div className="flex-1 relative">
             <textarea
               ref={textareaRef}
@@ -414,8 +513,9 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
                 }
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
               }}
-              placeholder="Message... (@ to mention, Enter to send)"
-              className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 max-h-32 overflow-y-auto"
+              onPaste={handlePaste}
+              placeholder="Message... (@ to mention, Ctrl+V to paste image)"
+              className="w-full rounded-xl border border-gray-300 px-4 py-2.5 pr-20 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 max-h-32 overflow-y-auto"
               style={{ minHeight: '42px' }}
               onInput={e => {
                 const el = e.currentTarget
@@ -423,9 +523,28 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
                 el.style.height = Math.min(el.scrollHeight, 128) + 'px'
               }}
             />
+            {/* In-textarea action buttons */}
+            <div className="absolute right-2 bottom-2 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => { setShowEmojiPicker(v => !v) }}
+                className="p-1 text-gray-400 hover:text-yellow-500 transition-colors rounded"
+                title="Emoji"
+              >
+                <Smile className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="p-1 text-gray-400 hover:text-indigo-500 transition-colors rounded"
+                title="Attach file"
+              >
+                <Paperclip className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-          <Button size="sm" onClick={sendMessage} loading={sending} disabled={!text.trim()} className="shrink-0">
-            Send
+          <Button size="sm" onClick={sendMessage} loading={sending} disabled={!text.trim() && pendingFiles.length === 0} className="shrink-0">
+            <Send className="h-4 w-4" />
           </Button>
         </div>
       </div>
