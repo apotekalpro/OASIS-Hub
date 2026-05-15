@@ -16,12 +16,12 @@ import { parseCSV } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { UserRole, Profile, Department } from '@/types/database'
 
-const ASSIGNABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'lead', 'team_leader', 'member', 'auditor', 'viewer']
+const ASSIGNABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'chief', 'lead', 'team_leader', 'member', 'auditor', 'viewer']
 
 const userSchema = z.object({
   email: z.string().email(),
   full_name: z.string().min(2),
-  role: z.enum(['org_admin', 'dept_head', 'lead', 'team_leader', 'member', 'auditor', 'viewer']),
+  role: z.enum(['org_admin', 'dept_head', 'chief', 'lead', 'team_leader', 'member', 'auditor', 'viewer']),
   dept_id: z.string().optional(),
   employee_id: z.string().optional(),
   job_title: z.string().optional(),
@@ -220,7 +220,7 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
             <Dialog.Title className="text-lg font-semibold mb-2">Import Users from CSV</Dialog.Title>
             <Dialog.Description className="text-sm text-gray-500 mb-4">
               Columns: <code className="bg-gray-100 px-1 rounded text-xs">email, full_name, role, department, employee_id, job_title</code><br />
-              <span className="text-xs">Use the department <strong>name</strong> — see reference below. Roles: <code className="bg-gray-100 px-1 rounded">member, team_leader, dept_head, org_admin, auditor, viewer</code></span>
+              <span className="text-xs">Use the department <strong>name</strong> — see reference below. Roles: <code className="bg-gray-100 px-1 rounded">member, team_leader, lead, chief, dept_head, org_admin, auditor, viewer</code></span>
             </Dialog.Description>
 
             {/* Department reference */}
