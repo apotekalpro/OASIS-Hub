@@ -5,13 +5,12 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Edit2, Trash2, MoreHorizontal, UserPlus, UserMinus, LogIn, Search, X } from 'lucide-react'
+import { Plus, Edit2, Trash2, MoreHorizontal, UserMinus, LogIn, Search, X } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/avatar'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
 const schema = z.object({
@@ -77,34 +76,24 @@ export function TeamsClient({ departments, orgUsers, orgId, currentUserId, teamI
   }
 
   async function onSubmit(data: FormData) {
-    const supabase = createClient()
     try {
       if (teamId) {
-        // Edit existing team
-        const { error } = await supabase.from('teams').update(data).eq('id', teamId)
-        if (error) throw error
+        const res = await fetch(`/api/teams/${teamId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+        if (!res.ok) throw new Error((await res.json()).error)
         toast.success('Team updated')
       } else {
-        // Create new team
-        const { data: newTeam, error: teamErr } = await supabase
-          .from('teams')
-          .insert({ ...data, org_id: orgId, created_by: currentUserId })
-          .select('id')
-          .single()
-        if (teamErr) throw teamErr
-
-        // Add creator as team_leader, then selected members
-        const memberInserts = [
-          { team_id: newTeam.id, user_id: currentUserId, role: 'team_leader' },
-          ...selectedMemberIds.map(uid => ({ team_id: newTeam.id, user_id: uid, role: 'member' })),
-        ]
-        const { error: memberErr } = await supabase.from('team_members').insert(memberInserts)
-        if (memberErr) {
-          // Team was created but members failed — still show success with warning
-          toast.warning('Team created, but some members could not be added.')
-        } else {
-          toast.success(`Team created with ${memberInserts.length} member${memberInserts.length !== 1 ? 's' : ''}.`)
-        }
+        const totalMembers = 1 + selectedMemberIds.length
+        const res = await fetch('/api/teams', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data, memberIds: selectedMemberIds }),
+        })
+        if (!res.ok) throw new Error((await res.json()).error)
+        toast.success(`Team created with ${totalMembers} member${totalMembers !== 1 ? 's' : ''}.`)
         setSelectedMemberIds([])
         setMemberSearch('')
       }
@@ -118,27 +107,24 @@ export function TeamsClient({ departments, orgUsers, orgId, currentUserId, teamI
 
   async function handleDelete() {
     if (!teamId) return
-    const supabase = createClient()
-    const { error } = await supabase.from('teams').delete().eq('id', teamId)
-    if (error) { toast.error(error.message); return }
+    const res = await fetch(`/api/teams/${teamId}`, { method: 'DELETE' })
+    if (!res.ok) { toast.error((await res.json()).error); return }
     toast.success('Team deleted')
     router.refresh()
   }
 
   async function handleJoin() {
     if (!teamId) return
-    const supabase = createClient()
-    const { error } = await supabase.from('team_members').insert({ team_id: teamId, user_id: currentUserId, role: 'member' })
-    if (error) { toast.error(error.message); return }
+    const res = await fetch(`/api/teams/${teamId}/members`, { method: 'POST' })
+    if (!res.ok) { toast.error((await res.json()).error); return }
     toast.success('Joined team!')
     router.refresh()
   }
 
   async function handleLeave() {
     if (!teamId) return
-    const supabase = createClient()
-    const { error } = await supabase.from('team_members').delete().eq('team_id', teamId).eq('user_id', currentUserId)
-    if (error) { toast.error(error.message); return }
+    const res = await fetch(`/api/teams/${teamId}/members`, { method: 'DELETE' })
+    if (!res.ok) { toast.error((await res.json()).error); return }
     toast.success('Left team')
     router.refresh()
   }
