@@ -16,7 +16,7 @@ export default async function UsersPage() {
   const profileRes = await adminSupabase.from('profiles').select('org_id').eq('id', user.id).single()
   const orgId = profileRes.data?.org_id ?? null
 
-  let profilesQuery = adminSupabase.from('profiles').select(`*, departments(name)`).order('created_at', { ascending: false })
+  let profilesQuery = adminSupabase.from('profiles').select(`*, departments!dept_id(name)`).order('created_at', { ascending: false })
   let deptsQuery = adminSupabase.from('departments').select('id, name, org_id').order('name')
   if (orgId) {
     profilesQuery = profilesQuery.eq('org_id', orgId)

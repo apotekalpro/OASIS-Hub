@@ -7,7 +7,7 @@ import { UserAvatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Users, X, Search, Plus, Trash2, ChevronDown } from 'lucide-react'
+import { Users, X, Search, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -56,7 +56,6 @@ export function ChannelMembersDialog({ channelId, channelName, orgUsers, departm
     if (addMode === 'all') return nonMembers
     if (addMode === 'department') return nonMembers.filter(u => u.dept_id === selectedDept)
     if (addMode === 'role') return nonMembers.filter(u => u.role === selectedRole)
-    // individual — filter by search
     return nonMembers.filter(u =>
       u.full_name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase())
@@ -165,7 +164,7 @@ export function ChannelMembersDialog({ channelId, channelName, orgUsers, departm
                       key={m}
                       onClick={() => { setAddMode(m); setSearch(''); setSelectedDept(''); setSelectedRole('') }}
                       className={cn(
-                        'px-3 py-1 rounded-full text-xs font-medium border transition-colors capitalize',
+                        'px-3 py-1 rounded-full text-xs font-medium border transition-colors',
                         addMode === m ? 'bg-indigo-600 text-white border-indigo-600' : 'text-gray-600 border-gray-200 hover:border-indigo-300'
                       )}
                     >

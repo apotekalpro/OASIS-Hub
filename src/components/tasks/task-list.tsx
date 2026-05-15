@@ -191,7 +191,7 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
                       ) : (
                         <button
                           onClick={() => setConfirmId(task.id)}
-                          className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 font-medium transition-colors"
+                          className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 font-medium transition-opacity"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />Complete
                         </button>
