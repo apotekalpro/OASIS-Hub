@@ -88,7 +88,9 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
   }, [channelId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    fetchMessages()
+    // Ensure session is ready before fetching — on first mount the browser client
+    // may not have hydrated the session yet, causing an empty result.
+    supabase.auth.getSession().then(() => fetchMessages())
 
     const channel = supabase
       .channel(`messages-${channelId}`)

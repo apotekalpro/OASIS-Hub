@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ChannelSidebar } from './channel-sidebar'
 import { MessageFeed } from './message-feed'
+import { ChannelMembersDialog } from './channel-members-dialog'
 import { UserAvatar } from '@/components/ui/avatar'
-import { Hash, Lock, MessageCircle } from 'lucide-react'
+import { Hash, Lock, MessageCircle, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
 export type Channel = {
@@ -17,18 +18,19 @@ export type Channel = {
   otherUser?: OrgUser
 }
 
-export type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+export type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null; dept_id: string | null; role: string }
 
 interface Props {
   channels: Channel[]
   orgUsers: OrgUser[]
+  departments: Array<{ id: string; name: string }>
   orgId: string
   currentUserId: string
   currentUserName: string
   currentUserAvatar: string | null
 }
 
-export function MessagesLayout({ channels: initialChannels, orgUsers, orgId, currentUserId, currentUserName, currentUserAvatar }: Props) {
+export function MessagesLayout({ channels: initialChannels, orgUsers, departments, orgId, currentUserId, currentUserName, currentUserAvatar }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [channels, setChannels] = useState<Channel[]>(initialChannels)
@@ -78,27 +80,38 @@ export function MessagesLayout({ channels: initialChannels, orgUsers, orgId, cur
   }
 
   const channelHeader = activeChannel ? (
-    <div className="flex items-center gap-2">
-      {activeChannel.is_direct ? (
-        <>
-          <UserAvatar
-            name={activeChannel.otherUser?.full_name ?? activeChannel.name}
-            avatarUrl={activeChannel.otherUser?.avatar_url ?? null}
-            size="sm"
-            className="w-7 h-7"
-          />
-          <span className="font-semibold text-gray-900">
-            {activeChannel.otherUser?.full_name ?? activeChannel.name}
-          </span>
-        </>
-      ) : (
-        <>
-          {activeChannel.is_private ? <Lock className="h-4 w-4 text-gray-400" /> : <Hash className="h-4 w-4 text-gray-400" />}
-          <span className="font-semibold text-gray-900">{activeChannel.name}</span>
-          {activeChannel.description && (
-            <span className="text-sm text-gray-400 font-normal border-l border-gray-200 pl-3">{activeChannel.description}</span>
-          )}
-        </>
+    <div className="flex items-center gap-2 w-full">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        {activeChannel.is_direct ? (
+          <>
+            <UserAvatar
+              name={activeChannel.otherUser?.full_name ?? activeChannel.name}
+              avatarUrl={activeChannel.otherUser?.avatar_url ?? null}
+              size="sm"
+              className="w-7 h-7"
+            />
+            <span className="font-semibold text-gray-900">
+              {activeChannel.otherUser?.full_name ?? activeChannel.name}
+            </span>
+          </>
+        ) : (
+          <>
+            {activeChannel.is_private ? <Lock className="h-4 w-4 text-gray-400" /> : <Hash className="h-4 w-4 text-gray-400" />}
+            <span className="font-semibold text-gray-900">{activeChannel.name}</span>
+            {activeChannel.description && (
+              <span className="text-sm text-gray-400 font-normal border-l border-gray-200 pl-3 truncate">{activeChannel.description}</span>
+            )}
+          </>
+        )}
+      </div>
+      {!activeChannel.is_direct && (
+        <ChannelMembersDialog
+          channelId={activeChannel.id}
+          channelName={activeChannel.name}
+          orgUsers={orgUsers}
+          departments={departments}
+          currentUserId={currentUserId}
+        />
       )}
     </div>
   ) : null

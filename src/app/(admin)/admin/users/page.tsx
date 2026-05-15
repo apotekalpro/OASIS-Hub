@@ -14,12 +14,16 @@ export default async function UsersPage() {
   if (!user) return null
 
   const profileRes = await adminSupabase.from('profiles').select('org_id').eq('id', user.id).single()
-  const orgId = profileRes.data?.org_id ?? ''
+  const orgId = profileRes.data?.org_id ?? null
 
-  const [usersResult, deptsResult] = await Promise.all([
-    adminSupabase.from('profiles').select(`*, departments(name)`).eq('org_id', orgId).order('created_at', { ascending: false }),
-    adminSupabase.from('departments').select('id, name, org_id').eq('org_id', orgId).order('name'),
-  ])
+  let profilesQuery = adminSupabase.from('profiles').select(`*, departments(name)`).order('created_at', { ascending: false })
+  let deptsQuery = adminSupabase.from('departments').select('id, name, org_id').order('name')
+  if (orgId) {
+    profilesQuery = profilesQuery.eq('org_id', orgId)
+    deptsQuery = deptsQuery.eq('org_id', orgId)
+  }
+
+  const [usersResult, deptsResult] = await Promise.all([profilesQuery, deptsQuery])
   const users = usersResult.data as Array<{
     id: string; full_name: string; email: string; role: UserRole; is_active: boolean;
     must_change_password: boolean; employee_id: string | null; avatar_url: string | null;
@@ -40,7 +44,7 @@ export default async function UsersPage() {
         </div>
         <UserManagementClient
           departments={departments ?? []}
-          orgId={orgId}
+          orgId={orgId ?? ''}
         />
       </div>
 

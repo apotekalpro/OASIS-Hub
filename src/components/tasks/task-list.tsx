@@ -191,7 +191,7 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
                       ) : (
                         <button
                           onClick={() => setConfirmId(task.id)}
-                          className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 font-medium transition-colors"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />Complete
                         </button>
@@ -209,7 +209,7 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
                         start_date: null, estimated_hours: null, team_id: null, dept_id: null, tags: task.tags,
                       }}
                       trigger={
-                        <button className="text-xs text-gray-400 hover:text-indigo-600 transition-colors opacity-0 group-hover:opacity-100">
+                        <button className="text-xs text-gray-500 hover:text-indigo-600 transition-colors">
                           Edit
                         </button>
                       }
