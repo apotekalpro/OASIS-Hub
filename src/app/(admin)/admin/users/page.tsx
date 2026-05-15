@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { UserAvatar } from '@/components/ui/avatar'
@@ -9,15 +9,16 @@ import type { UserRole } from '@/types/database'
 
 export default async function UsersPage() {
   const supabase = await createClient()
+  const adminSupabase = await createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const profileRes = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
+  const profileRes = await adminSupabase.from('profiles').select('org_id').eq('id', user.id).single()
   const orgId = profileRes.data?.org_id ?? ''
 
   const [usersResult, deptsResult] = await Promise.all([
-    supabase.from('profiles').select(`*, departments(name)`).order('created_at', { ascending: false }),
-    supabase.from('departments').select('id, name, org_id').eq('org_id', orgId).order('name'),
+    adminSupabase.from('profiles').select(`*, departments(name)`).eq('org_id', orgId).order('created_at', { ascending: false }),
+    adminSupabase.from('departments').select('id, name, org_id').eq('org_id', orgId).order('name'),
   ])
   const users = usersResult.data as Array<{
     id: string; full_name: string; email: string; role: UserRole; is_active: boolean;
