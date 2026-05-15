@@ -38,7 +38,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <NotificationProvider>
         <div className="flex h-screen bg-gradient-to-br from-slate-100 via-indigo-50/40 to-blue-50/50 overflow-hidden">
           <Sidebar />
-          <main className="flex-1 overflow-y-auto">
+          <main className="flex-1 overflow-y-auto pt-14 pb-16 md:pt-0 md:pb-0">
             {children}
           </main>
         </div>

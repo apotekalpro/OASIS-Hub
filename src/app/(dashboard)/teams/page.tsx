@@ -47,9 +47,15 @@ export default async function TeamsPage() {
   const teams = teamsRes.data as TeamRow[] | null
   const departments = deptsRes.data as Array<{ id: string; name: string }> | null
 
+  const isAdmin = ['super_admin', 'org_admin', 'dept_head', 'chief'].includes(profile?.role ?? '')
+  const canCreateTeam = ['super_admin', 'org_admin', 'dept_head', 'chief', 'team_leader'].includes(profile?.role ?? '')
+
   // Separate my teams from other teams
+  // Admins can see ALL teams (including private ones they're not in)
   const myTeams = teams?.filter(t => t.team_members?.some(m => m.user_id === user.id)) ?? []
-  const otherTeams = teams?.filter(t => !t.team_members?.some(m => m.user_id === user.id) && !t.is_private) ?? []
+  const otherTeams = teams?.filter(t =>
+    !t.team_members?.some(m => m.user_id === user.id) && (isAdmin || !t.is_private)
+  ) ?? []
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -57,15 +63,17 @@ export default async function TeamsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Teams</h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            Collaborate in focused groups. {teams?.length ?? 0} teams in your organization.
+            Collaborate in focused groups.{(teams?.length ?? 0) > 0 ? ` ${teams!.length} team${teams!.length !== 1 ? 's' : ''} in your organization.` : ''}
           </p>
         </div>
-        <TeamsClient
-          departments={departments ?? []}
-          orgId={profile?.org_id ?? ''}
-          currentUserId={user.id}
-          mode="create"
-        />
+        {canCreateTeam && (
+          <TeamsClient
+            departments={departments ?? []}
+            orgId={profile?.org_id ?? ''}
+            currentUserId={user.id}
+            mode="create"
+          />
+        )}
       </div>
 
       {/* My Teams */}
