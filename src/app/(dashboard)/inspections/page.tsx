@@ -62,6 +62,13 @@ export default async function InspectionsPage() {
     .eq('org_id', orgId)
     .in('status', ['open', 'in_progress', 'escalated'])
 
+  // Get active schedules
+  const { data: activeSchedules } = await supabase
+    .from('inspection_schedules')
+    .select('outlet_id, outlet_scope, starts_at, frequency, is_active')
+    .eq('org_id', orgId)
+    .eq('is_active', true)
+
   type OutletRow = { id: string; name: string; code: string | null; city: string | null; state: string | null; status: string }
   const outletList = (outlets ?? []) as OutletRow[]
 
@@ -70,6 +77,15 @@ export default async function InspectionsPage() {
     const issues = (openIssues ?? []).filter(i => i.outlet_id === outletId).length
     const done = sessions.filter(s => s.status === 'submitted' || s.status === 'approved').length
     return { sessionsDue: sessions.length, done, issues }
+  }
+
+  function hasActiveSchedule(outletId: string): boolean {
+    return (activeSchedules ?? []).some(s =>
+      s.is_active && (
+        s.outlet_scope === 'all' ||
+        s.outlet_id === outletId
+      )
+    )
   }
 
   return (
@@ -108,7 +124,8 @@ export default async function InspectionsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {outletList.map(outlet => {
             const stats = getOutletStats(outlet.id)
-            const hasDue = stats.sessionsDue > stats.done
+            const hasSessionsDue = stats.sessionsDue > stats.done
+            const hasDue = hasSessionsDue || hasActiveSchedule(outlet.id)
             return (
               <Link key={outlet.id} href={`/inspections/${outlet.id}`}>
                 <Card className={cn(
@@ -133,7 +150,7 @@ export default async function InspectionsPage() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1.5">
-                        {hasDue && (
+                        {hasSessionsDue && (
                           <Badge variant="default" className="text-xs">
                             <Clock className="h-3 w-3 mr-1" />
                             {stats.done}/{stats.sessionsDue} done
@@ -145,7 +162,10 @@ export default async function InspectionsPage() {
                             {stats.issues} issue{stats.issues !== 1 ? 's' : ''}
                           </Badge>
                         )}
-                        {!hasDue && stats.issues === 0 && (
+                        {!hasSessionsDue && stats.issues === 0 && hasActiveSchedule(outlet.id) && (
+                          <Badge variant="secondary" className="text-xs">Scheduled</Badge>
+                        )}
+                        {!hasSessionsDue && stats.issues === 0 && !hasActiveSchedule(outlet.id) && (
                           <Badge variant="success" className="text-xs">All clear</Badge>
                         )}
                       </div>

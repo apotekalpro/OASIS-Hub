@@ -120,6 +120,11 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
                           ))}
                         </div>
                       )}
+                      {(task._subtaskCount ?? 0) > 0 && (
+                        <span className="text-xs text-gray-400 mt-0.5">
+                          Subtasks {task._subtaskDone ?? 0}/{task._subtaskCount}
+                        </span>
+                      )}
                     </div>
                   </Link>
                 </td>

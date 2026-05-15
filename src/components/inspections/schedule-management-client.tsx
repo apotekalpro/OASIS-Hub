@@ -100,6 +100,8 @@ export function ScheduleManagementClient({ orgId, templates, outlets, users, dep
   const outletScope = watch('outlet_scope')
   const assignType = watch('assign_type')
   const isActive = watch('is_active')
+  const frequency = watch('frequency')
+  const isDaysBased = ['weekly', 'fortnightly', 'monthly'].includes(frequency)
 
   async function onSubmit(data: FormData) {
     const supabase = createClient()
@@ -247,15 +249,19 @@ export function ScheduleManagementClient({ orgId, templates, outlets, users, dep
               <input type="date" className={inputCls} {...register('starts_at')} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Due Within (hours)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Due Within ({isDaysBased ? 'days' : 'hours'})
+              </label>
               <input
                 type="number"
                 min={1}
-                placeholder="e.g. 24"
+                placeholder={isDaysBased ? 'e.g. 3' : 'e.g. 24'}
                 className={inputCls}
                 {...register('due_hours')}
               />
-              <p className="text-xs text-gray-400 mt-0.5">Hours to complete after scheduled time</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {isDaysBased ? 'Days to complete after scheduled date' : 'Hours to complete after scheduled time'}
+              </p>
             </div>
           </div>
 

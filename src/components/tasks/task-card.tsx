@@ -48,6 +48,7 @@ export type TaskCardData = {
   _commentCount?: number
   _timeLogged?: number
   _subtaskCount?: number
+  _subtaskDone?: number
   _attachmentCount?: number
 }
 

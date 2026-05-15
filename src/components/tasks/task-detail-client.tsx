@@ -61,7 +61,7 @@ interface Props {
   departments: Array<{ id: string; name: string }>
 }
 
-const TABS = ['Comments', 'Time Log', 'Subtasks'] as const
+const TABS = ['Subtasks', 'Comments'] as const
 type Tab = typeof TABS[number]
 
 const QUICK_EMOJIS = ['👍', '👎', '❤️', '😄', '😮', '😢', '🎉', '🔥']
@@ -330,7 +330,7 @@ export function TaskDetailClient({
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
-  const [tab, setTab] = useState<Tab>('Comments')
+  const [tab, setTab] = useState<Tab>('Subtasks')
   const [comments, setComments] = useState<Comment[]>(initialComments)
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>(initialLogs)
   const [subtasks, setSubtasks] = useState<Subtask[]>(initialSubtasks)
@@ -341,6 +341,7 @@ export function TaskDetailClient({
   const [confirmComplete, setConfirmComplete] = useState(false)
   const [completing, setCompleting] = useState(false)
   const [taskStatus, setTaskStatus] = useState(task.status)
+  const [taskDescription, setTaskDescription] = useState(task.description)
   const [logHours, setLogHours] = useState('')
   const [logDesc, setLogDesc] = useState('')
   const [submittingLog, setSubmittingLog] = useState(false)
@@ -624,8 +625,29 @@ export function TaskDetailClient({
     else setSubtasks(prev => prev.filter(s => s.id !== id))
   }
 
+  async function saveDescription(newHtml: string) {
+    setTaskDescription(newHtml)
+    await supabase.from('tasks').update({ description: newHtml }).eq('id', task.id)
+  }
+
   async function deleteTask() {
     if (!confirm('Delete this task? This cannot be undone.')) return
+    const notifyIds = [...assignees, ...watchers]
+      .map(a => a.id)
+      .filter(id => id !== currentUserId)
+    if (notifyIds.length > 0) {
+      fetch('/api/notifications/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'task_deleted',
+          taskId: task.id,
+          taskTitle: task.title,
+          userIds: notifyIds,
+          actorName: currentUserName,
+        }),
+      }).catch(() => {})
+    }
     const { error } = await supabase.from('tasks').delete().eq('id', task.id)
     if (error) { toast.error(error.message); return }
     toast.success('Task deleted')
@@ -693,8 +715,8 @@ export function TaskDetailClient({
                 <span className={cn('mt-2 h-2.5 w-2.5 rounded-full shrink-0', PRIORITY_DOT[task.priority as keyof typeof PRIORITY_DOT])} />
                 <div className="flex-1">
                   <h1 className="text-xl font-bold text-gray-900">{task.title}</h1>
-                  {task.description && (
-                    <RichTextContent html={task.description} className="mt-2" />
+                  {taskDescription && (
+                    <RichTextContent html={taskDescription} className="mt-2" onSave={saveDescription} />
                   )}
                 </div>
               </div>
@@ -740,9 +762,6 @@ export function TaskDetailClient({
                     {t}
                     {t === 'Comments' && comments.length > 0 && (
                       <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{comments.length}</span>
-                    )}
-                    {t === 'Time Log' && totalLogged > 0 && (
-                      <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{totalLogged}h</span>
                     )}
                     {t === 'Subtasks' && subtasks.length > 0 && (
                       <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{doneSubs}/{subtasks.length}</span>
@@ -849,61 +868,6 @@ export function TaskDetailClient({
                       className="hidden"
                       onChange={handleFileSelect}
                     />
-                  </div>
-                )}
-
-                {/* Time Log Tab */}
-                {tab === 'Time Log' && (
-                  <div className="space-y-4">
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        step="0.5"
-                        min="0.5"
-                        placeholder="Hours"
-                        value={logHours}
-                        onChange={e => setLogHours(e.target.value)}
-                        className="w-24"
-                      />
-                      <Input
-                        placeholder="Description (optional)"
-                        value={logDesc}
-                        onChange={e => setLogDesc(e.target.value)}
-                        className="flex-1"
-                      />
-                      <Button size="sm" onClick={logTime} loading={submittingLog}>Log Time</Button>
-                    </div>
-
-                    {task.estimated_hours && (
-                      <div className="text-xs text-gray-500">
-                        {totalLogged}h logged of {task.estimated_hours}h estimated
-                        <div className="mt-1 w-full bg-gray-200 rounded-full h-1.5">
-                          <div
-                            className={cn('h-1.5 rounded-full transition-all', totalLogged > task.estimated_hours ? 'bg-red-500' : 'bg-indigo-500')}
-                            style={{ width: `${Math.min((totalLogged / task.estimated_hours) * 100, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {timeLogs.length === 0 && (
-                        <p className="text-sm text-gray-400 text-center py-4">No time logged yet</p>
-                      )}
-                      {timeLogs.map(l => (
-                        <div key={l.id} className="flex items-center gap-3 text-sm group py-2 border-b border-gray-50 last:border-0">
-                          <UserAvatar name={l.user.full_name} avatarUrl={l.user.avatar_url} size="sm" className="w-6 h-6" />
-                          <span className="font-medium text-gray-900">{l.hours}h</span>
-                          {l.description && <span className="text-gray-500 flex-1 truncate">{l.description}</span>}
-                          <span className="text-xs text-gray-400 ml-auto">{formatDate(l.logged_at)}</span>
-                          {l.user.id === currentUserId && (
-                            <button onClick={() => deleteTimeLog(l.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 )}
 

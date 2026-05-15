@@ -1,6 +1,7 @@
 'use client'
 
 import { useEditor, EditorContent } from '@tiptap/react'
+import { useEffect, useRef } from 'react'
 import StarterKit from '@tiptap/starter-kit'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
@@ -103,10 +104,36 @@ function ToolbarButton({ onClick, active, title, children }: {
   )
 }
 
-export function RichTextContent({ html, className }: { html: string; className?: string }) {
+export function RichTextContent({ html, className, onSave }: { html: string; className?: string; onSave?: (html: string) => void }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !onSave) return
+
+    const checkboxes = container.querySelectorAll<HTMLInputElement>(
+      'ul[data-type="taskList"] li > label input[type="checkbox"]'
+    )
+
+    function handleCheckboxClick(e: Event) {
+      const checkbox = e.target as HTMLInputElement
+      const li = checkbox.closest('li')
+      if (li) {
+        li.setAttribute('data-checked', String(checkbox.checked))
+      }
+      onSave!(container!.innerHTML)
+    }
+
+    checkboxes.forEach(cb => cb.addEventListener('change', handleCheckboxClick))
+    return () => {
+      checkboxes.forEach(cb => cb.removeEventListener('change', handleCheckboxClick))
+    }
+  }, [html, onSave])
+
   if (!html || html === '<p></p>') return null
   return (
     <div
+      ref={containerRef}
       className={cn('tiptap-content text-sm text-gray-700', className)}
       dangerouslySetInnerHTML={{ __html: html }}
     />

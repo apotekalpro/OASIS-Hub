@@ -14,6 +14,7 @@ const QUESTION_TYPES = [
   { value: 'yes_no', label: 'Yes / No' },
   { value: 'multiple_choice', label: 'Multiple Choice' },
   { value: 'multi_select', label: 'Multi-Select' },
+  { value: 'checklist', label: 'Checklist' },
   { value: 'text', label: 'Text (Free-form)' },
   { value: 'numeric', label: 'Numeric' },
   { value: 'photo', label: 'Photo Evidence' },
@@ -295,7 +296,7 @@ function QuestionRow({
     onUpdate({ options: opts.length > 0 ? opts : null })
   }
 
-  const needsOptions = ['multiple_choice', 'multi_select'].includes(question.question_type)
+  const needsOptions = ['multiple_choice', 'multi_select', 'checklist'].includes(question.question_type)
   const needsNumeric = question.question_type === 'numeric'
 
   return (
@@ -377,13 +378,17 @@ function QuestionRow({
           {/* Options (for MCQ / multi-select) */}
           {needsOptions && (
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Options (one per line)</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                {question.question_type === 'checklist' ? 'Checklist Items (one per line)' : 'Options (one per line)'}
+              </label>
               <textarea
                 className="flex w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[80px]"
                 value={optionsText}
                 onChange={e => setOptionsText(e.target.value)}
                 onBlur={saveOptions}
-                placeholder="Yes, all stock is rotated correctly&#10;Partially rotated&#10;No rotation observed"
+                placeholder={question.question_type === 'checklist'
+                  ? 'Check fire extinguisher is mounted&#10;Verify expiry date&#10;Confirm pin is intact'
+                  : 'Yes, all stock is rotated correctly&#10;Partially rotated&#10;No rotation observed'}
               />
             </div>
           )}

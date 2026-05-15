@@ -13,7 +13,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
   const currentUser = profileRes.data as { org_id: string; full_name: string; avatar_url: string | null; role: string } | null
 
   const admin = await createAdminClient()
-  const [taskRes, commentsRes, timeLogsRes, subtasksRes, assigneesRes, watchersRes, usersRes, teamsRes, deptsRes] = await Promise.all([
+  const [taskRes, commentsRes, timeLogsRes, subtasksRes, assigneeIdsRes, watcherIdsRes, usersRes, teamsRes, deptsRes] = await Promise.all([
     supabase.from('tasks').select(`
       id, title, description, status, priority, due_date, start_date, estimated_hours,
       tags, created_at, created_by, team_id, dept_id, org_id
@@ -27,17 +27,23 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
       profiles(id, full_name, avatar_url)
     `).eq('task_id', taskId).order('logged_at', { ascending: false }),
     supabase.from('tasks').select('id, title, status, priority').eq('parent_id', taskId).order('created_at'),
-    admin.from('task_assignees').select(`
-      user_id,
-      profiles(id, full_name, avatar_url, email)
-    `).eq('task_id', taskId),
-    admin.from('task_watchers').select(`
-      user_id,
-      profiles(id, full_name, avatar_url, email)
-    `).eq('task_id', taskId),
+    admin.from('task_assignees').select('user_id').eq('task_id', taskId),
+    admin.from('task_watchers').select('user_id').eq('task_id', taskId),
     admin.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
     admin.from('teams').select('id, name').eq('org_id', orgId).order('name'),
     admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
+  ])
+
+  // Two-step fetch for assignee/watcher profiles to avoid FK join issues
+  const assigneeIds = ((assigneeIdsRes.data ?? []) as Array<{ user_id: string }>).map(a => a.user_id)
+  const watcherIds = ((watcherIdsRes.data ?? []) as Array<{ user_id: string }>).map(w => w.user_id)
+  const [assigneeProfilesRes, watcherProfilesRes] = await Promise.all([
+    assigneeIds.length > 0
+      ? admin.from('profiles').select('id, full_name, avatar_url, email').in('id', assigneeIds)
+      : Promise.resolve({ data: [] }),
+    watcherIds.length > 0
+      ? admin.from('profiles').select('id, full_name, avatar_url, email').in('id', watcherIds)
+      : Promise.resolve({ data: [] }),
   ])
 
   if (!taskRes.data) return notFound()
@@ -51,15 +57,15 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
   type RawComment = { id: string; content: string; created_at: string; parent_comment_id: string | null; attachments: Array<{ name: string; url: string; type: 'image' | 'file' }> | null; profiles?: { id: string; full_name: string; avatar_url: string | null } | null }
   type RawTimeLog = { id: string; hours: number; description: string | null; logged_at: string; profiles?: { id: string; full_name: string; avatar_url: string | null } | null }
   type RawSubtask = { id: string; title: string; status: string; priority: string }
-  type RawAssignee = { user_id: string; profiles?: { id: string; full_name: string; avatar_url: string | null; email: string } | null }
+  type ProfileRow = { id: string; full_name: string; avatar_url: string | null; email: string }
   type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
 
   const task = taskRes.data as unknown as RawTask
   const comments = (commentsRes.data as unknown as RawComment[]) ?? []
   const timeLogs = (timeLogsRes.data as unknown as RawTimeLog[]) ?? []
   const subtasks = (subtasksRes.data as unknown as RawSubtask[]) ?? []
-  const assignees = (assigneesRes.data as unknown as RawAssignee[]) ?? []
-  const watchers = (watchersRes.data as unknown as RawAssignee[]) ?? []
+  const assignees = (assigneeProfilesRes.data as ProfileRow[]) ?? []
+  const watchers = (watcherProfilesRes.data as ProfileRow[]) ?? []
   const users = (usersRes.data as OrgUser[]) ?? []
 
   return (
@@ -82,8 +88,8 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
         user: l.profiles ? { id: l.profiles.id, full_name: l.profiles.full_name, avatar_url: l.profiles.avatar_url } : { id: '', full_name: 'Unknown', avatar_url: null },
       }))}
       subtasks={subtasks}
-      assignees={assignees.map(a => a.profiles ? { id: a.profiles.id, full_name: a.profiles.full_name, avatar_url: a.profiles.avatar_url, email: a.profiles.email } : null).filter(Boolean) as Array<{ id: string; full_name: string; avatar_url: string | null; email: string }>}
-      watchers={watchers.map(w => w.profiles ? { id: w.profiles.id, full_name: w.profiles.full_name, avatar_url: w.profiles.avatar_url, email: w.profiles.email } : null).filter(Boolean) as Array<{ id: string; full_name: string; avatar_url: string | null; email: string }>}
+      assignees={assignees}
+      watchers={watchers}
       orgId={orgId}
       currentUserId={user.id}
       currentUserName={currentUser?.full_name ?? 'You'}

@@ -73,6 +73,21 @@ export default async function TasksPage() {
     ((usersRes.data as OrgUser[]) ?? []).map(u => [u.id, u])
   )
 
+  // Fetch subtask counts
+  const taskIds = rawTasks.map(t => t.id)
+  let subtaskCounts: Record<string, { total: number; done: number }> = {}
+  if (taskIds.length > 0) {
+    const { data: subtaskData } = await supabase
+      .from('tasks')
+      .select('parent_id, status')
+      .in('parent_id', taskIds)
+    for (const s of (subtaskData ?? []) as Array<{ parent_id: string; status: string }>) {
+      if (!subtaskCounts[s.parent_id]) subtaskCounts[s.parent_id] = { total: 0, done: 0 }
+      subtaskCounts[s.parent_id].total++
+      if (s.status === 'done') subtaskCounts[s.parent_id].done++
+    }
+  }
+
   // Deduplicate and map
   const seenIds = new Set<string>()
   const tasks = rawTasks
@@ -91,6 +106,8 @@ export default async function TasksPage() {
         .map(a => userMap.get(a.user_id) ?? null)
         .filter((u): u is OrgUser => u !== null)
         .map(u => ({ id: u.id, full_name: u.full_name, avatar_url: u.avatar_url })),
+      _subtaskCount: subtaskCounts[t.id]?.total ?? 0,
+      _subtaskDone: subtaskCounts[t.id]?.done ?? 0,
     }))
 
   return (

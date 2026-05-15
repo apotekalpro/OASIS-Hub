@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import * as AvatarPrimitive from '@radix-ui/react-avatar'
+import * as Tooltip from '@radix-ui/react-tooltip'
 import { cn, getInitials } from '@/lib/utils'
 
 const Avatar = React.forwardRef<
@@ -47,16 +48,34 @@ interface UserAvatarProps {
 const SIZE_MAP = { sm: 'h-7 w-7 text-xs', md: 'h-9 w-9 text-sm', lg: 'h-12 w-12 text-base' }
 
 function UserAvatar({ name, avatarUrl, className, size = 'md', showTooltip = true }: UserAvatarProps) {
+  if (!showTooltip) {
+    return (
+      <Avatar className={cn(SIZE_MAP[size], className)}>
+        {avatarUrl && <AvatarImage src={avatarUrl} alt={name} />}
+        <AvatarFallback>{getInitials(name)}</AvatarFallback>
+      </Avatar>
+    )
+  }
   return (
-    <Avatar className={cn(SIZE_MAP[size], 'group relative', className)} title={showTooltip ? name : undefined}>
-      {avatarUrl && <AvatarImage src={avatarUrl} alt={name} />}
-      <AvatarFallback>{getInitials(name)}</AvatarFallback>
-      {showTooltip && (
-        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
-          {name}
-        </span>
-      )}
-    </Avatar>
+    <Tooltip.Provider delayDuration={300}>
+      <Tooltip.Root>
+        <Tooltip.Trigger asChild>
+          <Avatar className={cn(SIZE_MAP[size], className)}>
+            {avatarUrl && <AvatarImage src={avatarUrl} alt={name} />}
+            <AvatarFallback>{getInitials(name)}</AvatarFallback>
+          </Avatar>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content
+            className="z-[9999] whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white shadow-lg animate-in fade-in-0 zoom-in-95"
+            sideOffset={5}
+          >
+            {name}
+            <Tooltip.Arrow className="fill-gray-900" />
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    </Tooltip.Provider>
   )
 }
 
