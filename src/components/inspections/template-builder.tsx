@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { Plus, Trash2, ChevronDown, ChevronRight, GripVertical, AlertCircle } from 'lucide-react'
@@ -269,6 +269,79 @@ function SectionRow({
   )
 }
 
+function ChecklistItemsEditor({ items: initialItems, onSave }: { items: string[]; onSave: (items: string[]) => void }) {
+  const [items, setItems] = useState<string[]>(initialItems.length > 0 ? initialItems : [''])
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  function update(index: number, value: string) {
+    const next = [...items]
+    next[index] = value
+    setItems(next)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>, index: number) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const next = [...items]
+      next.splice(index + 1, 0, '')
+      setItems(next)
+      setTimeout(() => inputRefs.current[index + 1]?.focus(), 0)
+    } else if (e.key === 'Backspace' && items[index] === '' && items.length > 1) {
+      e.preventDefault()
+      const next = items.filter((_, i) => i !== index)
+      setItems(next)
+      setTimeout(() => inputRefs.current[Math.max(0, index - 1)]?.focus(), 0)
+      onSave(next.filter(Boolean))
+    }
+  }
+
+  function removeItem(index: number) {
+    const next = items.filter((_, i) => i !== index)
+    const cleaned = next.length > 0 ? next : ['']
+    setItems(cleaned)
+    onSave(cleaned.filter(Boolean))
+  }
+
+  function addItem() {
+    const next = [...items, '']
+    setItems(next)
+    setTimeout(() => inputRefs.current[next.length - 1]?.focus(), 0)
+  }
+
+  return (
+    <div className="col-span-2 space-y-1.5">
+      <label className="block text-xs font-medium text-gray-500">Checklist Items</label>
+      {items.map((item, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <span className="text-gray-400 text-xs w-4 text-right shrink-0">{i + 1}.</span>
+          <input
+            ref={el => { inputRefs.current[i] = el }}
+            type="text"
+            value={item}
+            onChange={e => update(i, e.target.value)}
+            onKeyDown={e => handleKeyDown(e, i)}
+            onBlur={() => onSave(items.filter(Boolean))}
+            placeholder={i === 0 ? 'e.g. Check fire extinguisher is mounted' : 'Add item...'}
+            className="flex-1 h-8 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          {items.length > 1 && (
+            <button type="button" onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 transition-colors shrink-0">
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={addItem}
+        className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 mt-1 pl-5"
+      >
+        <Plus className="h-3.5 w-3.5" /> Add item
+      </button>
+    </div>
+  )
+}
+
 function QuestionRow({
   question, allQuestions, isExpanded, onToggle, onUpdate, onDelete,
 }: {
@@ -375,20 +448,24 @@ function QuestionRow({
             />
           </div>
 
-          {/* Options (for MCQ / multi-select) */}
-          {needsOptions && (
+          {/* Checklist items — interactive row-per-item builder */}
+          {needsOptions && question.question_type === 'checklist' && (
+            <ChecklistItemsEditor
+              items={(question.options ?? []).length > 0 ? question.options! : ['']}
+              onSave={items => onUpdate({ options: items.filter(Boolean) })}
+            />
+          )}
+
+          {/* Options (for MCQ / multi-select) — textarea */}
+          {needsOptions && question.question_type !== 'checklist' && (
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-500 mb-1">
-                {question.question_type === 'checklist' ? 'Checklist Items (one per line)' : 'Options (one per line)'}
-              </label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Options (one per line)</label>
               <textarea
                 className="flex w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[80px]"
                 value={optionsText}
                 onChange={e => setOptionsText(e.target.value)}
                 onBlur={saveOptions}
-                placeholder={question.question_type === 'checklist'
-                  ? 'Check fire extinguisher is mounted&#10;Verify expiry date&#10;Confirm pin is intact'
-                  : 'Yes, all stock is rotated correctly&#10;Partially rotated&#10;No rotation observed'}
+                placeholder={'Yes, all stock is rotated correctly\nPartially rotated\nNo rotation observed'}
               />
             </div>
           )}

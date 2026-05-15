@@ -13,8 +13,8 @@ export default async function InspectionsPage() {
   const profileRes = await supabase.from('profiles').select('org_id, role').eq('id', user.id).single()
   const { org_id: orgId, role } = (profileRes.data ?? {}) as { org_id: string; role: string }
 
-  // Only org-level admins see all outlets; dept_head and below see only assigned ones
-  const isAdmin = ['super_admin', 'org_admin'].includes(role)
+  // super_admin, org_admin, chief see all outlets; everyone else sees only assigned ones
+  const isAdmin = ['super_admin', 'org_admin', 'chief'].includes(role)
 
   // Staff see only their assigned outlets; admins see all
   let outletsQuery = supabase
@@ -25,11 +25,15 @@ export default async function InspectionsPage() {
     .order('name')
 
   if (!isAdmin) {
-    const { data: assigned } = await supabase
-      .from('outlet_staff')
-      .select('outlet_id')
-      .eq('user_id', user.id)
-    const assignedIds = (assigned ?? []).map(a => a.outlet_id)
+    // Collect outlet IDs from outlet_staff assignments AND from inspection schedules assigned to this user
+    const [staffRes, scheduleRes] = await Promise.all([
+      supabase.from('outlet_staff').select('outlet_id').eq('user_id', user.id),
+      supabase.from('inspection_schedules').select('outlet_id').eq('assigned_to', user.id).eq('is_active', true),
+    ])
+    const staffIds = (staffRes.data ?? []).map(a => a.outlet_id).filter(Boolean) as string[]
+    const scheduleIds = (scheduleRes.data ?? []).map(s => s.outlet_id).filter(Boolean) as string[]
+    const assignedIds = [...new Set([...staffIds, ...scheduleIds])]
+
     if (assignedIds.length === 0) {
       return (
         <div className="p-6 max-w-4xl mx-auto">
