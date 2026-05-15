@@ -14,19 +14,21 @@ export default async function DashboardPage() {
   if (!user) return null
 
   const [assignedRes, createdRes, notifRes, profileRes, teamsRes, orgMembersRes] = await Promise.all([
-    // Tasks assigned to me
+    // Tasks assigned to me (exclude subtasks)
     supabase
       .from('tasks')
       .select('id, title, status, priority, due_date, created_by, task_assignees!inner(user_id)')
       .eq('task_assignees.user_id', user.id)
+      .is('parent_id', null)
       .not('status', 'in', '("done","cancelled")')
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(20),
-    // Tasks created by me (not necessarily assigned to me)
+    // Tasks created by me, not necessarily assigned to me (exclude subtasks)
     supabase
       .from('tasks')
       .select('id, title, status, priority, due_date, created_by, task_assignees(user_id)')
       .eq('created_by', user.id)
+      .is('parent_id', null)
       .not('status', 'in', '("done","cancelled")')
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(20),
