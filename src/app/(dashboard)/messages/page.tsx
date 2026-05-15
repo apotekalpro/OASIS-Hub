@@ -11,12 +11,13 @@ export default async function MessagesPage() {
   const profile = profileRes.data as { org_id: string; full_name: string; avatar_url: string | null } | null
   const orgId = profile?.org_id ?? ''
 
-  const [channelsRes, usersRes] = await Promise.all([
+  const [channelsRes, usersRes, deptsRes] = await Promise.all([
     supabase.from('channels').select(`
       id, name, description, is_private, is_direct, team_id, dept_id, created_at,
       channel_members!inner(user_id, last_read_at)
     `).eq('org_id', orgId).order('name'),
-    supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).neq('id', user.id).order('full_name'),
+    supabase.from('profiles').select('id, full_name, email, avatar_url, dept_id, role').eq('org_id', orgId).eq('is_active', true).neq('id', user.id).order('full_name'),
+    supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
   ])
 
   type RawChannel = {
@@ -24,10 +25,11 @@ export default async function MessagesPage() {
     team_id: string | null; dept_id: string | null; created_at: string
     channel_members?: Array<{ user_id: string; last_read_at: string }>
   }
-  type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+  type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null; dept_id: string | null; role: string }
 
   const rawChannels = channelsRes.data as unknown as RawChannel[]
   const orgUsers = usersRes.data as OrgUser[] | null
+  const departments = deptsRes.data as Array<{ id: string; name: string }> | null
 
   // Filter to channels where current user is a member
   const channels = (rawChannels ?? []).filter(c =>
@@ -38,6 +40,7 @@ export default async function MessagesPage() {
     <MessagesLayout
       channels={channels}
       orgUsers={orgUsers ?? []}
+      departments={departments ?? []}
       orgId={orgId}
       currentUserId={user.id}
       currentUserName={profile?.full_name ?? ''}
