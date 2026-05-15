@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { UserAvatar } from '@/components/ui/avatar'
@@ -20,13 +20,14 @@ export default async function TeamsPage() {
   const profile = profileData as Pick<Profile, 'org_id' | 'role' | 'dept_id'> | null
   const orgId = profile?.org_id ?? ''
 
+  const admin = await createAdminClient()
   const [teamsRes, deptsRes] = await Promise.all([
-    supabase.from('teams').select(`
+    admin.from('teams').select(`
       id, name, description, color, is_private, created_by, created_at,
-      departments(name),
+      departments!dept_id(name),
       team_members(user_id, role, profiles(id, full_name, avatar_url))
     `).eq('org_id', orgId).order('name'),
-    supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
+    admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
   ])
 
   type TeamRow = {

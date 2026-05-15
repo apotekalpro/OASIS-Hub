@@ -59,17 +59,21 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
   const [userSearch, setUserSearch] = useState('')
   const [ccSearch, setCcSearch] = useState('')
 
-  // Load existing watchers when editing
+  // Load existing assignees + watchers when editing
   useEffect(() => {
     if (open && task?.id) {
       const supabase = createClient()
-      supabase
-        .from('task_watchers')
-        .select('user_id')
-        .eq('task_id', task.id)
-        .then(({ data }) => {
-          const watcherIds = data?.map(w => w.user_id) ?? []
+      // Fetch via API endpoint to bypass RLS on task_assignees
+      fetch(`/api/tasks/${task.id}/members`)
+        .then(r => r.ok ? r.json() : { assigneeIds: [], watcherIds: [] })
+        .then(({ assigneeIds = [], watcherIds = [] }: { assigneeIds: string[]; watcherIds: string[] }) => {
+          setSelectedAssignees(users.filter(u => assigneeIds.includes(u.id)))
           setSelectedCC(users.filter(u => watcherIds.includes(u.id)))
+        })
+        .catch(() => {
+          // fallback: try direct query
+          supabase.from('task_watchers').select('user_id').eq('task_id', task.id)
+            .then(({ data }) => setSelectedCC(users.filter(u => (data?.map(w => w.user_id) ?? []).includes(u.id))))
         })
     }
     if (!open) {
@@ -118,6 +122,14 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
       if (task?.id) {
         const { error } = await supabase.from('tasks').update(payload).eq('id', task.id)
         if (error) throw error
+
+        // Sync assignees
+        await supabase.from('task_assignees').delete().eq('task_id', task.id)
+        if (selectedAssignees.length > 0) {
+          await supabase.from('task_assignees').insert(
+            selectedAssignees.map(u => ({ task_id: task.id, user_id: u.id, assigned_by: currentUserId }))
+          )
+        }
 
         // Sync CC watchers
         await supabase.from('task_watchers').delete().eq('task_id', task.id)
@@ -324,47 +336,45 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
                 </div>
               </div>
 
-              {/* Assignees — create only */}
-              {!task && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Assignees (PIC)</label>
-                  {selectedAssignees.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {selectedAssignees.map(u => (
-                        <div key={u.id} className="flex items-center gap-1.5 bg-indigo-50 rounded-full pl-1 pr-2 py-0.5">
-                          <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
-                          <span className="text-xs font-medium text-indigo-700">{u.full_name.split(' ')[0]}</span>
-                          <button type="button" onClick={() => setSelectedAssignees(selectedAssignees.filter(a => a.id !== u.id))} className="text-indigo-300 hover:text-red-500 text-xs">×</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <Input
-                    placeholder="Search team members..."
-                    value={userSearch}
-                    onChange={e => setUserSearch(e.target.value)}
-                  />
-                  {userSearch && (
-                    <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                      {filteredUsers.slice(0, 8).map(u => (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => { setSelectedAssignees([...selectedAssignees, u]); setUserSearch('') }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
-                        >
-                          <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 text-xs" />
-                          <span>{u.full_name}</span>
-                          <span className="text-gray-400 text-xs ml-auto">{u.email}</span>
-                        </button>
-                      ))}
-                      {filteredUsers.length === 0 && (
-                        <p className="px-3 py-2 text-sm text-gray-400">No users found</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Assignees (PIC) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assignees (PIC)</label>
+                {selectedAssignees.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {selectedAssignees.map(u => (
+                      <div key={u.id} className="flex items-center gap-1.5 bg-indigo-50 rounded-full pl-1 pr-2 py-0.5">
+                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
+                        <span className="text-xs font-medium text-indigo-700">{u.full_name.split(' ')[0]}</span>
+                        <button type="button" onClick={() => setSelectedAssignees(selectedAssignees.filter(a => a.id !== u.id))} className="text-indigo-300 hover:text-red-500 text-xs">×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Input
+                  placeholder="Search and add assignees..."
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                />
+                {userSearch && (
+                  <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                    {filteredUsers.slice(0, 8).map(u => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => { setSelectedAssignees([...selectedAssignees, u]); setUserSearch('') }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
+                      >
+                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 text-xs" />
+                        <span>{u.full_name}</span>
+                        <span className="text-gray-400 text-xs ml-auto">{u.email}</span>
+                      </button>
+                    ))}
+                    {filteredUsers.length === 0 && (
+                      <p className="px-3 py-2 text-sm text-gray-400">No users found</p>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* CC — always editable */}
               <div>

@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -14,17 +14,22 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ tea
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const [profileRes, teamRes, allUsersRes] = await Promise.all([
-    supabase.from('profiles').select('role, org_id').eq('id', user.id).single(),
-    supabase.from('teams').select(`
+  const admin = await createAdminClient()
+  const profileRes = await supabase.from('profiles').select('role, org_id').eq('id', user.id).single()
+  const orgId = profileRes.data?.org_id ?? ''
+
+  const [teamRes, allUsersRes] = await Promise.all([
+    admin.from('teams').select(`
       id, name, description, color, is_private, created_at,
-      departments(name),
+      departments!dept_id(name),
       team_members(
         user_id, role, joined_at,
         profiles(id, full_name, email, avatar_url, job_title, role)
       )
     `).eq('id', teamId).single(),
-    supabase.from('profiles').select('id, full_name, email, avatar_url, job_title, role').eq('is_active', true).order('full_name'),
+    admin.from('profiles').select('id, full_name, email, avatar_url, job_title, role')
+      .eq('org_id', orgId)
+      .eq('is_active', true).order('full_name'),
   ])
 
   if (!teamRes.data) notFound()

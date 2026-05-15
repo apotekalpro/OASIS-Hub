@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { TaskDetailClient } from '@/components/tasks/task-detail-client'
 
@@ -8,10 +8,11 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const profileRes = await supabase.from('profiles').select('org_id, full_name, avatar_url').eq('id', user.id).single()
+  const profileRes = await supabase.from('profiles').select('org_id, full_name, avatar_url, role').eq('id', user.id).single()
   const orgId = (profileRes.data as { org_id: string } | null)?.org_id ?? ''
-  const currentUser = profileRes.data as { org_id: string; full_name: string; avatar_url: string | null } | null
+  const currentUser = profileRes.data as { org_id: string; full_name: string; avatar_url: string | null; role: string } | null
 
+  const admin = await createAdminClient()
   const [taskRes, commentsRes, timeLogsRes, subtasksRes, assigneesRes, watchersRes, usersRes, teamsRes, deptsRes] = await Promise.all([
     supabase.from('tasks').select(`
       id, title, description, status, priority, due_date, start_date, estimated_hours,
@@ -26,17 +27,17 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
       profiles(id, full_name, avatar_url)
     `).eq('task_id', taskId).order('logged_at', { ascending: false }),
     supabase.from('tasks').select('id, title, status, priority').eq('parent_id', taskId).order('created_at'),
-    supabase.from('task_assignees').select(`
+    admin.from('task_assignees').select(`
       user_id,
       profiles(id, full_name, avatar_url, email)
     `).eq('task_id', taskId),
-    supabase.from('task_watchers').select(`
+    admin.from('task_watchers').select(`
       user_id,
       profiles(id, full_name, avatar_url, email)
     `).eq('task_id', taskId),
-    supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
-    supabase.from('teams').select('id, name').eq('org_id', orgId).order('name'),
-    supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
+    admin.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
+    admin.from('teams').select('id, name').eq('org_id', orgId).order('name'),
+    admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
   ])
 
   if (!taskRes.data) return notFound()
@@ -87,6 +88,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
       currentUserId={user.id}
       currentUserName={currentUser?.full_name ?? 'You'}
       currentUserAvatar={currentUser?.avatar_url ?? null}
+      currentUserRole={currentUser?.role ?? 'member'}
       users={users}
       teams={(teamsRes.data as Array<{ id: string; name: string }>) ?? []}
       departments={(deptsRes.data as Array<{ id: string; name: string }>) ?? []}

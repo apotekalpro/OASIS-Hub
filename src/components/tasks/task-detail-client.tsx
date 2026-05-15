@@ -55,6 +55,7 @@ interface Props {
   currentUserId: string
   currentUserName: string
   currentUserAvatar: string | null
+  currentUserRole: string
   users: OrgUser[]
   teams: Array<{ id: string; name: string }>
   departments: Array<{ id: string; name: string }>
@@ -325,7 +326,7 @@ function CommentItem({
 // ─── Main component ───────────────────────────────────────────────────────────
 export function TaskDetailClient({
   task, comments: initialComments, timeLogs: initialLogs, subtasks: initialSubtasks,
-  assignees, watchers, orgId, currentUserId, currentUserName, currentUserAvatar, users, teams, departments
+  assignees, watchers, orgId, currentUserId, currentUserName, currentUserAvatar, currentUserRole, users, teams, departments
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -623,6 +624,18 @@ export function TaskDetailClient({
     else setSubtasks(prev => prev.filter(s => s.id !== id))
   }
 
+  async function deleteTask() {
+    if (!confirm('Delete this task? This cannot be undone.')) return
+    const { error } = await supabase.from('tasks').delete().eq('id', task.id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Task deleted')
+    router.push('/tasks')
+  }
+
+  const isOwner = task.created_by === currentUserId
+  const isDeptHeadPlus = ['super_admin', 'org_admin', 'dept_head', 'chief'].includes(currentUserRole)
+  const canDelete = isOwner || isDeptHeadPlus
+
   const doneSubs = subtasks.filter(s => s.status === 'done').length
 
   return (
@@ -634,33 +647,41 @@ export function TaskDetailClient({
             <ArrowLeft className="h-4 w-4" />
             Back to Tasks
           </Link>
-          <TaskForm
-            orgId={orgId}
-            currentUserId={currentUserId}
-            users={users}
-            teams={teams}
-            departments={departments}
-            task={{
-              id: task.id,
-              title: task.title,
-              description: task.description,
-              priority: task.priority,
-              status: task.status,
-              due_date: task.due_date,
-              start_date: task.start_date,
-              estimated_hours: task.estimated_hours,
-              team_id: task.team_id,
-              dept_id: task.dept_id,
-              tags: task.tags,
-            }}
-            trigger={
-              <Button variant="outline" size="sm">
-                <Edit2 className="h-4 w-4" />
-                Edit Task
+          <div className="flex items-center gap-2">
+            {canDelete && (
+              <Button variant="outline" size="sm" onClick={deleteTask} className="text-red-600 hover:bg-red-50 hover:border-red-300">
+                <Trash2 className="h-4 w-4" />
+                Delete
               </Button>
-            }
-            onCreated={() => router.refresh()}
-          />
+            )}
+            <TaskForm
+              orgId={orgId}
+              currentUserId={currentUserId}
+              users={users}
+              teams={teams}
+              departments={departments}
+              task={{
+                id: task.id,
+                title: task.title,
+                description: task.description,
+                priority: task.priority,
+                status: task.status,
+                due_date: task.due_date,
+                start_date: task.start_date,
+                estimated_hours: task.estimated_hours,
+                team_id: task.team_id,
+                dept_id: task.dept_id,
+                tags: task.tags,
+              }}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Edit2 className="h-4 w-4" />
+                  Edit Task
+                </Button>
+              }
+              onCreated={() => router.refresh()}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
