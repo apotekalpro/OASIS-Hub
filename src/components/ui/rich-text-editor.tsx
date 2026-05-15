@@ -120,6 +120,12 @@ export function RichTextContent({ html, className, onSave }: { html: string; cla
       const li = checkbox.closest('li')
       if (li) {
         li.setAttribute('data-checked', String(checkbox.checked))
+        // Persist the checked state in the HTML attribute so innerHTML captures it
+        if (checkbox.checked) {
+          checkbox.setAttribute('checked', '')
+        } else {
+          checkbox.removeAttribute('checked')
+        }
       }
       onSave!(container!.innerHTML)
     }

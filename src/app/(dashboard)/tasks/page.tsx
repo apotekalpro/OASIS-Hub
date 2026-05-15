@@ -32,11 +32,12 @@ export default async function TasksPage() {
   const taskSelect = `id, title, description, status, priority, due_date, tags, created_at, created_by, task_assignees(user_id)`
 
   let rawTasks: RawTask[] = []
+  let watcherTaskIds: string[] = []
   let usersRes, teamsRes, deptsRes
 
   if (isSuperAdmin || (isAdmin && orgId)) {
-    // Admins: fetch tasks + supporting data all in parallel
-    const tasksQuery = supabase.from('tasks').select(taskSelect).order('created_at', { ascending: false })
+    // Admins: fetch tasks + supporting data all in parallel (exclude subtasks)
+    const tasksQuery = supabase.from('tasks').select(taskSelect).is('parent_id', null).order('created_at', { ascending: false })
     if (!isSuperAdmin && orgId) tasksQuery.eq('org_id', orgId)
 
     const [tasksResult, ...rest] = await Promise.all([
@@ -48,9 +49,10 @@ export default async function TasksPage() {
     rawTasks = (tasksResult.data as unknown as RawTask[]) ?? [];
     [usersRes, teamsRes, deptsRes] = rest
   } else {
-    // Members: fetch assignees + supporting data in parallel, then tasks
-    const [assignedRes, ...rest] = await Promise.all([
+    // Members: fetch assignees + watchers + supporting data in parallel, then tasks
+    const [assignedRes, watcherRes, ...rest] = await Promise.all([
       supabase.from('task_assignees').select('task_id').eq('user_id', user.id),
+      supabase.from('task_watchers').select('task_id').eq('user_id', user.id),
       supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
       supabase.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url))').eq('org_id', orgId).order('name'),
       supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
@@ -58,11 +60,15 @@ export default async function TasksPage() {
     ;[usersRes, teamsRes, deptsRes] = rest
 
     const assignedIds = ((assignedRes.data ?? []) as Array<{ task_id: string }>).map(r => r.task_id)
+    watcherTaskIds = ((watcherRes.data ?? []) as Array<{ task_id: string }>).map(r => r.task_id)
+
     const orParts: string[] = [`created_by.eq.${user.id}`]
     if (assignedIds.length > 0) orParts.push(`id.in.(${assignedIds.join(',')})`)
+    if (watcherTaskIds.length > 0) orParts.push(`id.in.(${watcherTaskIds.join(',')})`)
 
     const res = await supabase.from('tasks')
       .select(taskSelect)
+      .is('parent_id', null)
       .or(orParts.join(','))
       .order('created_at', { ascending: false })
     rawTasks = (res.data as unknown as RawTask[]) ?? []
@@ -108,6 +114,7 @@ export default async function TasksPage() {
         .map(u => ({ id: u.id, full_name: u.full_name, avatar_url: u.avatar_url })),
       _subtaskCount: subtaskCounts[t.id]?.total ?? 0,
       _subtaskDone: subtaskCounts[t.id]?.done ?? 0,
+      isWatcher: watcherTaskIds.includes(t.id) && t.created_by !== user.id && !(t.task_assignees ?? []).some(a => a.user_id === user.id),
     }))
 
   return (

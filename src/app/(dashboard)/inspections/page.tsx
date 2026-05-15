@@ -81,11 +81,17 @@ export default async function InspectionsPage() {
 
   function hasActiveSchedule(outletId: string): boolean {
     return (activeSchedules ?? []).some(s =>
-      s.is_active && (
-        s.outlet_scope === 'all' ||
-        s.outlet_id === outletId
-      )
+      s.is_active && (s.outlet_scope === 'all' || s.outlet_id === outletId)
     )
+  }
+
+  function getOutletBadgeStatus(outletId: string) {
+    const stats = getOutletStats(outletId)
+    const hasSchedule = hasActiveSchedule(outletId)
+    if (stats.sessionsDue > 0 && stats.done === stats.sessionsDue) return 'completed'
+    if (stats.sessionsDue > stats.done) return 'in_progress'
+    if (hasSchedule) return 'scheduled_pending'
+    return 'all_clear'
   }
 
   return (
@@ -124,22 +130,22 @@ export default async function InspectionsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {outletList.map(outlet => {
             const stats = getOutletStats(outlet.id)
-            const hasSessionsDue = stats.sessionsDue > stats.done
-            const hasDue = hasSessionsDue || hasActiveSchedule(outlet.id)
+            const badgeStatus = getOutletBadgeStatus(outlet.id)
+            const isActive = badgeStatus === 'in_progress' || badgeStatus === 'scheduled_pending'
             return (
               <Link key={outlet.id} href={`/inspections/${outlet.id}`}>
                 <Card className={cn(
                   'hover:shadow-md transition-all cursor-pointer border-2',
-                  hasDue ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200'
+                  isActive ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200'
                 )}>
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <div className={cn(
                           'h-11 w-11 rounded-xl flex items-center justify-center shrink-0',
-                          hasDue ? 'bg-indigo-600' : 'bg-gray-100'
+                          isActive ? 'bg-indigo-600' : badgeStatus === 'completed' ? 'bg-green-500' : 'bg-gray-100'
                         )}>
-                          <Building2 className={cn('h-5 w-5', hasDue ? 'text-white' : 'text-gray-400')} />
+                          <Building2 className={cn('h-5 w-5', isActive || badgeStatus === 'completed' ? 'text-white' : 'text-gray-400')} />
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900">{outlet.name}</p>
@@ -150,23 +156,31 @@ export default async function InspectionsPage() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1.5">
-                        {hasSessionsDue && (
+                        {badgeStatus === 'in_progress' && (
                           <Badge variant="default" className="text-xs">
                             <Clock className="h-3 w-3 mr-1" />
                             {stats.done}/{stats.sessionsDue} done
                           </Badge>
+                        )}
+                        {badgeStatus === 'completed' && (
+                          <Badge variant="success" className="text-xs">
+                            ✓ Completed
+                          </Badge>
+                        )}
+                        {badgeStatus === 'scheduled_pending' && (
+                          <Badge variant="secondary" className="text-xs">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Scheduled
+                          </Badge>
+                        )}
+                        {badgeStatus === 'all_clear' && (
+                          <Badge variant="success" className="text-xs">All clear</Badge>
                         )}
                         {stats.issues > 0 && (
                           <Badge variant="warning" className="text-xs">
                             <AlertCircle className="h-3 w-3 mr-1" />
                             {stats.issues} issue{stats.issues !== 1 ? 's' : ''}
                           </Badge>
-                        )}
-                        {!hasSessionsDue && stats.issues === 0 && hasActiveSchedule(outlet.id) && (
-                          <Badge variant="secondary" className="text-xs">Scheduled</Badge>
-                        )}
-                        {!hasSessionsDue && stats.issues === 0 && !hasActiveSchedule(outlet.id) && (
-                          <Badge variant="success" className="text-xs">All clear</Badge>
                         )}
                       </div>
                     </div>

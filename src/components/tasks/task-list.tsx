@@ -130,9 +130,16 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
                 </td>
                 <td className="px-4 py-3 capitalize text-gray-600">{task.priority}</td>
                 <td className="px-4 py-3">
-                  <Badge variant={STATUS_VARIANT[task.status as keyof typeof STATUS_VARIANT] ?? 'secondary'}>
-                    {STATUS_LABEL[task.status as keyof typeof STATUS_LABEL] ?? task.status}
-                  </Badge>
+                  <div className="flex flex-col gap-1">
+                    <Badge variant={STATUS_VARIANT[task.status as keyof typeof STATUS_VARIANT] ?? 'secondary'}>
+                      {STATUS_LABEL[task.status as keyof typeof STATUS_LABEL] ?? task.status}
+                    </Badge>
+                    {task.isWatcher && (
+                      <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 bg-amber-50 w-fit">
+                        Spectating
+                      </Badge>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 min-w-[130px]">
                   {due && !isDone ? (
