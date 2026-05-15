@@ -16,7 +16,7 @@ export default async function UsersPage() {
   const profileRes = await adminSupabase.from('profiles').select('org_id').eq('id', user.id).single()
   const orgId = profileRes.data?.org_id ?? null
 
-  let profilesQuery = adminSupabase.from('profiles').select(`*, departments!dept_id(name)`).order('created_at', { ascending: false })
+  let profilesQuery = adminSupabase.from('profiles').select(`*, departments!dept_id(name), chief_departments(dept_id)`).order('created_at', { ascending: false })
   let deptsQuery = adminSupabase.from('departments').select('id, name, org_id').order('name')
   if (orgId) {
     profilesQuery = profilesQuery.eq('org_id', orgId)
@@ -30,6 +30,7 @@ export default async function UsersPage() {
     dept_id: string | null; created_at: string; job_title: string | null; phone: string | null;
     last_login_at: string | null;
     departments?: { name: string } | null
+    chief_departments?: Array<{ dept_id: string }> | null
   }> | null
   const departments = deptsResult.data as Array<{ id: string; name: string; org_id: string }> | null
 
@@ -131,6 +132,7 @@ export default async function UsersPage() {
                         user={user}
                         departments={departments ?? []}
                         orgId={orgId}
+                        initialChiefDeptIds={user.chief_departments?.map(cd => cd.dept_id) ?? []}
                         mode="actions"
                       />
                     </td>

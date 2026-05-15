@@ -15,6 +15,7 @@ export async function createUser(data: {
   role: UserRole
   org_id: string
   dept_id?: string
+  chief_dept_ids?: string[]
   employee_id?: string
   job_title?: string
   phone?: string
@@ -64,6 +65,16 @@ export async function createUser(data: {
     })
 
   if (profileError) throw new Error(profileError.message)
+
+  // Handle multi-department assignments for chiefs
+  if (data.role === 'chief') {
+    await adminClient.from('chief_departments').delete().eq('user_id', userId)
+    if (data.chief_dept_ids?.length) {
+      await adminClient.from('chief_departments').insert(
+        data.chief_dept_ids.map(deptId => ({ user_id: userId, dept_id: deptId }))
+      )
+    }
+  }
 
   revalidatePath('/admin/users')
   return { success: true, userId }
@@ -159,6 +170,7 @@ export async function updateUserProfile(
     full_name: string
     role: UserRole
     dept_id: string
+    chief_dept_ids: string[]
     employee_id: string
     job_title: string
     phone: string
@@ -166,12 +178,26 @@ export async function updateUserProfile(
 ) {
   const adminClient = await createAdminClient()
 
+  const { chief_dept_ids, ...profileData } = data
   const { error } = await adminClient
     .from('profiles')
-    .update(data)
+    .update(profileData)
     .eq('id', userId)
 
   if (error) throw new Error(error.message)
+
+  // Sync chief_departments when role is chief or being cleared
+  if (data.role === 'chief') {
+    await adminClient.from('chief_departments').delete().eq('user_id', userId)
+    if (chief_dept_ids?.length) {
+      await adminClient.from('chief_departments').insert(
+        chief_dept_ids.map(deptId => ({ user_id: userId, dept_id: deptId }))
+      )
+    }
+  } else if (data.role) {
+    // Role changed away from chief — clear their department assignments
+    await adminClient.from('chief_departments').delete().eq('user_id', userId)
+  }
 
   revalidatePath('/admin/users')
   return { success: true }

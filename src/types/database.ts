@@ -341,6 +341,12 @@ export type Database = {
         Update: Partial<CalendarEvent>
         Relationships: []
       }
+      chief_departments: {
+        Row: { user_id: string; dept_id: string; created_at: string }
+        Insert: Partial<{ user_id: string; dept_id: string; created_at: string }>
+        Update: Partial<{ user_id: string; dept_id: string; created_at: string }>
+        Relationships: []
+      }
       audit_logs: {
         Row: { id: string; org_id: string | null; user_id: string | null; action: string; resource_type: string | null; resource_id: string | null; details: Json; ip_address: string | null; created_at: string }
         Insert: Partial<{ id: string; org_id: string | null; user_id: string | null; action: string; resource_type: string | null; resource_id: string | null; details: Json; ip_address: string | null; created_at: string }>

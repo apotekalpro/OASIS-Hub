@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -32,21 +32,23 @@ type UserFormData = z.infer<typeof userSchema>
 
 interface Props {
   departments: Pick<Department, 'id' | 'name'>[]
-  orgId: string
+  orgId: string | null
   userId?: string
   user?: Partial<Profile>
+  initialChiefDeptIds?: string[]
   mode?: 'create' | 'actions'
 }
 
-export function UserManagementClient({ departments, orgId, userId, user, mode = 'create' }: Props) {
+export function UserManagementClient({ departments, orgId, userId, user, initialChiefDeptIds = [], mode = 'create' }: Props) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importResults, setImportResults] = useState<{ email: string; success: boolean; error?: string }[]>([])
   const [importing, setImporting] = useState(false)
+  const [chiefDeptIds, setChiefDeptIds] = useState<string[]>(initialChiefDeptIds)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<UserFormData>({
+  const { register, handleSubmit, watch, formState: { errors, isSubmitting }, reset } = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
     defaultValues: user ? {
       email: user.email,
@@ -58,13 +60,27 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
     } : undefined,
   })
 
+  const watchedRole = watch('role')
+
+  // Reset chief dept selection when dialog opens/closes
+  useEffect(() => {
+    if (createOpen) setChiefDeptIds(initialChiefDeptIds)
+  }, [createOpen]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function onCreateUser(data: UserFormData) {
     try {
       if (userId) {
-        await updateUserProfile(userId, data)
+        await updateUserProfile(userId, {
+          ...data,
+          chief_dept_ids: watchedRole === 'chief' ? chiefDeptIds : [],
+        })
         toast.success('User updated successfully')
       } else {
-        await createUser({ ...data, org_id: orgId })
+        await createUser({
+          ...data,
+          org_id: orgId ?? '',
+          chief_dept_ids: watchedRole === 'chief' ? chiefDeptIds : [],
+        })
         toast.success(`User created. Default password: Alpro@123`)
       }
       setCreateOpen(false)
@@ -100,7 +116,7 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
           job_title: r.job_title || r['Job Title'] || undefined,
         }
       })
-      const results = await importUsers(users, orgId)
+      const results = await importUsers(users, orgId ?? '')
       setImportResults(results)
       router.refresh()
     } catch (err) {
@@ -171,6 +187,9 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
                 isSubmitting={isSubmitting}
                 open={createOpen}
                 onOpenChange={setCreateOpen}
+                watchedRole={watchedRole}
+                chiefDeptIds={chiefDeptIds}
+                onChiefDeptChange={setChiefDeptIds}
               />
             </Dialog.Root>
 
@@ -311,6 +330,9 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
           isSubmitting={isSubmitting}
           open={createOpen}
           onOpenChange={setCreateOpen}
+          watchedRole={watchedRole}
+          chiefDeptIds={chiefDeptIds}
+          onChiefDeptChange={setChiefDeptIds}
         />
       </Dialog.Root>
     </div>
@@ -319,7 +341,8 @@ export function UserManagementClient({ departments, orgId, userId, user, mode = 
 
 // Shared form dialog component
 function UserFormDialog({
-  title, departments, register, handleSubmit, onSubmit, errors, isSubmitting, open, onOpenChange
+  title, departments, register, handleSubmit, onSubmit, errors, isSubmitting, open, onOpenChange,
+  watchedRole, chiefDeptIds, onChiefDeptChange,
 }: {
   title: string
   departments: Pick<Department, 'id' | 'name'>[]
@@ -334,7 +357,20 @@ function UserFormDialog({
   isSubmitting: boolean
   open: boolean
   onOpenChange: (v: boolean) => void
+  watchedRole?: string
+  chiefDeptIds: string[]
+  onChiefDeptChange: (ids: string[]) => void
 }) {
+  const isChief = watchedRole === 'chief'
+
+  function toggleDept(deptId: string) {
+    onChiefDeptChange(
+      chiefDeptIds.includes(deptId)
+        ? chiefDeptIds.filter(id => id !== deptId)
+        : [...chiefDeptIds, deptId]
+    )
+  }
+
   return (
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
@@ -366,13 +402,37 @@ function UserFormDialog({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-              <select className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" {...register('dept_id')}>
-                <option value="">— None —</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {isChief ? 'Departments' : 'Department'}
+                {isChief && chiefDeptIds.length > 0 && (
+                  <span className="ml-1.5 text-xs font-normal text-indigo-600">({chiefDeptIds.length} selected)</span>
+                )}
+              </label>
+              {isChief ? (
+                <div className="border border-gray-300 rounded-md max-h-36 overflow-y-auto divide-y divide-gray-100">
+                  {departments.length === 0 && (
+                    <p className="px-3 py-2 text-xs text-gray-400">No departments available</p>
+                  )}
+                  {departments.map(d => (
+                    <label key={d.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={chiefDeptIds.includes(d.id)}
+                        onChange={() => toggleDept(d.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      {d.name}
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <select className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" {...register('dept_id')}>
+                  <option value="">— None —</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
