@@ -16,7 +16,7 @@ export default async function UsersPage() {
   const profileRes = await adminSupabase.from('profiles').select('org_id').eq('id', user.id).single()
   const orgId = profileRes.data?.org_id ?? null
 
-  let profilesQuery = adminSupabase.from('profiles').select(`*, departments(name)`).order('created_at', { ascending: false })
+  let profilesQuery = adminSupabase.from('profiles').select(`*, departments!dept_id(name)`).order('created_at', { ascending: false })
   let deptsQuery = adminSupabase.from('departments').select('id, name, org_id').order('name')
   if (orgId) {
     profilesQuery = profilesQuery.eq('org_id', orgId)
@@ -24,7 +24,6 @@ export default async function UsersPage() {
   }
 
   const [usersResult, deptsResult] = await Promise.all([profilesQuery, deptsQuery])
-  const _debug = { orgId, profileError: profileRes.error?.message, usersError: usersResult.error?.message, count: usersResult.data?.length ?? 'null' }
   const users = usersResult.data as Array<{
     id: string; full_name: string; email: string; role: UserRole; is_active: boolean;
     must_change_password: boolean; employee_id: string | null; avatar_url: string | null;
@@ -36,9 +35,6 @@ export default async function UsersPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* DEBUG — remove after diagnosis */}
-      <pre className="bg-gray-100 text-xs p-3 rounded overflow-auto">{JSON.stringify(_debug, null, 2)}</pre>
-
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
