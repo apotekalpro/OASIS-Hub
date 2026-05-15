@@ -10,7 +10,7 @@ export default async function AdminTeamsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const [profileRes, teamsRes, deptsRes] = await Promise.all([
+  const [profileRes, teamsRes, deptsRes, usersRes] = await Promise.all([
     supabase.from('profiles').select('org_id, role').eq('id', user.id).single(),
     supabase.from('teams').select(`
       id, name, description, color, is_private, created_at, dept_id,
@@ -18,9 +18,12 @@ export default async function AdminTeamsPage() {
       team_members(user_id, role, profiles(full_name))
     `).order('name'),
     supabase.from('departments').select('id, name').order('name'),
+    supabase.from('profiles').select('id, full_name, avatar_url, email').eq('is_active', true).order('full_name'),
   ])
 
   const profile = profileRes.data as Pick<Profile, 'org_id' | 'role'> | null
+  type OrgUser = { id: string; full_name: string; avatar_url: string | null; email: string }
+  const orgUsers = (usersRes.data ?? []) as OrgUser[]
 
   type TeamRow = {
     id: string; name: string; description: string | null; color: string;
@@ -43,6 +46,7 @@ export default async function AdminTeamsPage() {
         </div>
         <TeamsClient
           departments={departments ?? []}
+          orgUsers={orgUsers}
           orgId={profile?.org_id ?? ''}
           currentUserId={user.id}
           mode="create"
@@ -122,6 +126,7 @@ export default async function AdminTeamsPage() {
                   <td className="px-6 py-4 text-right">
                     <TeamsClient
                       departments={departments ?? []}
+                      orgUsers={orgUsers}
                       orgId={profile?.org_id ?? ''}
                       currentUserId={user.id}
                       teamId={team.id}
