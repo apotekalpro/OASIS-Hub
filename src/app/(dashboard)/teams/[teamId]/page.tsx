@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { UserAvatar } from '@/components/ui/avatar'
-import { ROLE_LABELS, ROLE_COLORS } from '@/lib/auth/permissions'
+import { ROLE_LABELS, ROLE_COLORS, hasRole } from '@/lib/auth/permissions'
 import { TeamMembersClient } from '@/components/teams/team-members-client'
 import { Globe, Lock, Users } from 'lucide-react'
 import type { UserRole } from '@/types/database'
@@ -14,7 +14,8 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ tea
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const [teamRes, allUsersRes] = await Promise.all([
+  const [profileRes, teamRes, allUsersRes] = await Promise.all([
+    supabase.from('profiles').select('role, org_id').eq('id', user.id).single(),
     supabase.from('teams').select(`
       id, name, description, color, is_private, created_at,
       departments(name),
@@ -41,10 +42,13 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ tea
   type UserRow = { id: string; full_name: string; email: string; avatar_url: string | null; job_title: string | null; role: string }
   const allUsers = allUsersRes.data as UserRow[] | null
 
+  const currentUserRole = (profileRes.data?.role ?? 'member') as UserRole
+  const isOrgAdmin = hasRole(currentUserRole, 'org_admin')
   const members = team.team_members ?? []
   const memberIds = new Set(members.map(m => m.user_id))
   const myMembership = members.find(m => m.user_id === user.id)
   const isLeader = myMembership?.role === 'team_leader'
+  const canManage = isLeader || isOrgAdmin
   const nonMembers = allUsers?.filter(u => !memberIds.has(u.id)) ?? []
 
   return (
@@ -71,8 +75,8 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ tea
             <p className="text-gray-600 mt-1">{team.description}</p>
           )}
         </div>
-        {isLeader && (
-          <TeamMembersClient teamId={teamId} nonMembers={nonMembers} mode="add" />
+        {canManage && (
+          <TeamMembersClient teamId={teamId} nonMembers={nonMembers} mode="add" currentUserId={user.id} memberUserIds={[...memberIds]} />
         )}
       </div>
 
@@ -108,7 +112,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ tea
                     <Badge variant={m.role === 'team_leader' ? 'default' : 'secondary'}>
                       {m.role === 'team_leader' ? 'Leader' : 'Member'}
                     </Badge>
-                    {isLeader && m.user_id !== user.id && (
+                    {canManage && m.user_id !== user.id && (
                       <TeamMembersClient
                         teamId={teamId}
                         memberId={m.user_id}

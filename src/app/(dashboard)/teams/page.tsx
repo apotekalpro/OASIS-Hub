@@ -11,17 +11,23 @@ export default async function TeamsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const [profileRes, teamsRes, deptsRes] = await Promise.all([
-    supabase.from('profiles').select('org_id, role, dept_id').eq('id', user.id).single(),
+  // Fetch profile first to get org_id — needed for explicit filter below
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('org_id, role, dept_id')
+    .eq('id', user.id)
+    .single()
+  const profile = profileData as Pick<Profile, 'org_id' | 'role' | 'dept_id'> | null
+  const orgId = profile?.org_id ?? ''
+
+  const [teamsRes, deptsRes] = await Promise.all([
     supabase.from('teams').select(`
       id, name, description, color, is_private, created_by, created_at,
       departments(name),
       team_members(user_id, role, profiles(id, full_name, avatar_url))
-    `).order('name'),
-    supabase.from('departments').select('id, name').order('name'),
+    `).eq('org_id', orgId).order('name'),
+    supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
   ])
-
-  const profile = profileRes.data as Pick<Profile, 'org_id' | 'role' | 'dept_id'> | null
 
   type TeamRow = {
     id: string; name: string; description: string | null; color: string;

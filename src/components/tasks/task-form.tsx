@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, X, Tag, Eye } from 'lucide-react'
+import { Plus, X, Tag, Eye, Users } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,7 +28,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
-type Team = { id: string; name: string }
+type Team = { id: string; name: string; team_members?: Array<{ user_id: string; profiles?: OrgUser | null }> }
 type Department = { id: string; name: string }
 type ExistingTask = {
   id: string; title: string; description: string | null; priority: string; status: string;
@@ -79,7 +79,7 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
     }
   }, [open, task?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: task ? {
       title: task.title,
@@ -195,6 +195,17 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
        u.email.toLowerCase().includes(ccSearch.toLowerCase()))
   )
 
+  const watchedTeamId = watch('team_id')
+  const selectedTeam = teams.find(t => t.id === watchedTeamId)
+  const teamMemberUsers: OrgUser[] = (selectedTeam?.team_members ?? [])
+    .map(m => m.profiles)
+    .filter((p): p is OrgUser => !!p)
+
+  function addAllTeamMembers() {
+    const toAdd = teamMemberUsers.filter(u => !selectedAssignees.find(a => a.id === u.id))
+    if (toAdd.length > 0) setSelectedAssignees(prev => [...prev, ...toAdd])
+  }
+
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
@@ -258,6 +269,16 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
                     <option value="">— None —</option>
                     {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
+                  {!task && watchedTeamId && teamMemberUsers.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={addAllTeamMembers}
+                      className="mt-1.5 flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                    >
+                      <Users className="h-3 w-3" />
+                      Add all {teamMemberUsers.length} team member{teamMemberUsers.length !== 1 ? 's' : ''} as assignees
+                    </button>
+                  )}
                 </div>
               </div>
 

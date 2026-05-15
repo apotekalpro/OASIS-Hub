@@ -14,7 +14,8 @@ import { createClient } from '@/lib/supabase/client'
 
 type View = 'list' | 'kanban'
 type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
-type Team = { id: string; name: string }
+type TeamMemberProfile = { id: string; full_name: string; email: string; avatar_url: string | null }
+type Team = { id: string; name: string; team_members?: Array<{ user_id: string; profiles?: TeamMemberProfile | null }> }
 type Department = { id: string; name: string }
 
 const STATUSES = ['todo', 'in_progress', 'in_review', 'done', 'cancelled']

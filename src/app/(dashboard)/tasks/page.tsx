@@ -42,7 +42,7 @@ export default async function TasksPage() {
     const [tasksResult, ...rest] = await Promise.all([
       tasksQuery,
       supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
-      supabase.from('teams').select('id, name').eq('org_id', orgId).order('name'),
+      supabase.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url))').eq('org_id', orgId).order('name'),
       supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     ])
     rawTasks = (tasksResult.data as unknown as RawTask[]) ?? [];
@@ -52,7 +52,7 @@ export default async function TasksPage() {
     const [assignedRes, ...rest] = await Promise.all([
       supabase.from('task_assignees').select('task_id').eq('user_id', user.id),
       supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
-      supabase.from('teams').select('id, name').eq('org_id', orgId).order('name'),
+      supabase.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url))').eq('org_id', orgId).order('name'),
       supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     ])
     ;[usersRes, teamsRes, deptsRes] = rest
@@ -99,7 +99,7 @@ export default async function TasksPage() {
       orgId={orgId}
       currentUserId={user.id}
       users={(usersRes.data as OrgUser[]) ?? []}
-      teams={(teamsRes.data as Array<{ id: string; name: string }>) ?? []}
+      teams={(teamsRes.data as unknown as Array<{ id: string; name: string; team_members?: Array<{ user_id: string; profiles?: { id: string; full_name: string; email: string; avatar_url: string | null } | null }> }>) ?? []}
       departments={(deptsRes.data as Array<{ id: string; name: string }>) ?? []}
     />
   )

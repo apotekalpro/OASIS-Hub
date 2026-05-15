@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { UserPlus, MoreHorizontal, UserMinus, Crown } from 'lucide-react'
+import { UserPlus, MoreHorizontal, UserMinus, Crown, MessageSquarePlus } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Button } from '@/components/ui/button'
@@ -18,14 +18,17 @@ interface Props {
   memberId?: string
   memberName?: string
   memberRole?: string
+  currentUserId?: string
+  memberUserIds?: string[]
   mode: 'add' | 'member-actions'
 }
 
-export function TeamMembersClient({ teamId, nonMembers, memberId, memberName, memberRole, mode }: Props) {
+export function TeamMembersClient({ teamId, nonMembers, memberId, memberName, memberRole, currentUserId, memberUserIds, mode }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState<string | null>(null)
+  const [creatingChannel, setCreatingChannel] = useState(false)
 
   async function addMember(userId: string) {
     setAdding(userId)
@@ -64,6 +67,42 @@ export function TeamMembersClient({ teamId, nonMembers, memberId, memberName, me
     router.refresh()
   }
 
+  async function createTeamChannel() {
+    if (!currentUserId || !memberUserIds) return
+    setCreatingChannel(true)
+    const supabase = createClient()
+    // Fetch team name
+    const { data: team } = await supabase.from('teams').select('name, org_id').eq('id', teamId).single()
+    if (!team) { toast.error('Could not load team'); setCreatingChannel(false); return }
+
+    const channelName = team.name.toLowerCase().replace(/\s+/g, '-')
+    // Check if channel already exists for this team
+    const { data: existing } = await supabase.from('channels').select('id').eq('team_id', teamId).eq('is_direct', false).limit(1)
+    if (existing && existing.length > 0) {
+      toast.info('A channel for this team already exists in Messages')
+      setCreatingChannel(false)
+      router.push('/messages')
+      return
+    }
+
+    const { data: ch, error } = await supabase.from('channels').insert({
+      org_id: team.org_id,
+      team_id: teamId,
+      name: channelName,
+      is_private: false,
+      is_direct: false,
+      created_by: currentUserId,
+    }).select('id').single()
+    if (error || !ch) { toast.error(error?.message ?? 'Failed to create channel'); setCreatingChannel(false); return }
+
+    // Add all team members
+    const allMemberIds = [...new Set([currentUserId, ...memberUserIds])]
+    await supabase.from('channel_members').insert(allMemberIds.map(uid => ({ channel_id: ch.id, user_id: uid })))
+    toast.success(`#${channelName} channel created with ${allMemberIds.length} members`)
+    setCreatingChannel(false)
+    router.push('/messages')
+  }
+
   const filtered = nonMembers.filter(u =>
     u.full_name.toLowerCase().includes(search.toLowerCase()) ||
     u.email.toLowerCase().includes(search.toLowerCase())
@@ -96,6 +135,15 @@ export function TeamMembersClient({ teamId, nonMembers, memberId, memberName, me
   }
 
   return (
+    <div className="flex items-center gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={createTeamChannel}
+        loading={creatingChannel}
+      >
+        <MessageSquarePlus className="h-4 w-4" /> Team Chat
+      </Button>
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
         <Button size="sm"><UserPlus className="h-4 w-4" /> Add Members</Button>
@@ -149,5 +197,6 @@ export function TeamMembersClient({ teamId, nonMembers, memberId, memberName, me
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+    </div>
   )
 }
