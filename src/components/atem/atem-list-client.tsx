@@ -297,6 +297,8 @@ export function AtemListClient({ initialItems, orgId, currentUserId, users, depa
                     priority: item.priority,
                     status: item.status,
                     deadline: item.deadline,
+                    deadline_text: item.deadline_text ?? null,
+                    action_plan: item.action_plan ?? null,
                     impact: item.impact,
                     dependencies: item.dependencies,
                     strategic_alignment: item.strategic_alignment,
