@@ -72,7 +72,7 @@ export function ChannelSidebar({
   )
 
   return (
-    <div className="w-64 bg-gray-900 text-gray-100 flex flex-col shrink-0 overflow-hidden">
+    <div className="w-full bg-gray-900 text-gray-100 flex flex-col overflow-hidden">
       <div className="px-4 py-4 border-b border-gray-700">
         <h2 className="font-semibold text-sm text-gray-100">Messages</h2>
       </div>

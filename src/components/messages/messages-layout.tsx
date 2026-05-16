@@ -7,7 +7,7 @@ import { ChannelSidebar } from './channel-sidebar'
 import { MessageFeed } from './message-feed'
 import { ChannelMembersDialog } from './channel-members-dialog'
 import { UserAvatar } from '@/components/ui/avatar'
-import { Hash, Lock, MessageCircle, Users } from 'lucide-react'
+import { ArrowLeft, Hash, Lock, MessageCircle, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
 export type Channel = {
@@ -38,6 +38,8 @@ export function MessagesLayout({ channels: initialChannels, orgUsers, department
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
 
   const activeChannel = channels.find(c => c.id === activeChannelId) ?? null
+  // Mobile: track whether the feed is open (true) or sidebar is shown (false)
+  const [mobileFeedOpen, setMobileFeedOpen] = useState(false)
 
   async function startDM(otherUser: OrgUser) {
     const { data, error } = await supabase.rpc('get_or_create_dm', { p_other_user_id: otherUser.id })
@@ -71,6 +73,7 @@ export function MessagesLayout({ channels: initialChannels, orgUsers, department
   function handleChannelSelect(id: string) {
     setActiveChannelId(id)
     markRead(id)
+    setMobileFeedOpen(true)
   }
 
   function onNewMessage(channelId: string) {
@@ -81,6 +84,13 @@ export function MessagesLayout({ channels: initialChannels, orgUsers, department
 
   const channelHeader = activeChannel ? (
     <div className="flex items-center gap-2 w-full">
+      {/* Back button — mobile only */}
+      <button
+        onClick={() => setMobileFeedOpen(false)}
+        className="md:hidden p-1.5 -ml-1 text-gray-400 hover:text-gray-600 shrink-0"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </button>
       <div className="flex items-center gap-2 flex-1 min-w-0">
         {activeChannel.is_direct ? (
           <>
@@ -90,16 +100,16 @@ export function MessagesLayout({ channels: initialChannels, orgUsers, department
               size="sm"
               className="w-7 h-7"
             />
-            <span className="font-semibold text-gray-900">
+            <span className="font-semibold text-gray-900 truncate">
               {activeChannel.otherUser?.full_name ?? activeChannel.name}
             </span>
           </>
         ) : (
           <>
-            {activeChannel.is_private ? <Lock className="h-4 w-4 text-gray-400" /> : <Hash className="h-4 w-4 text-gray-400" />}
-            <span className="font-semibold text-gray-900">{activeChannel.name}</span>
+            {activeChannel.is_private ? <Lock className="h-4 w-4 text-gray-400 shrink-0" /> : <Hash className="h-4 w-4 text-gray-400 shrink-0" />}
+            <span className="font-semibold text-gray-900 truncate">{activeChannel.name}</span>
             {activeChannel.description && (
-              <span className="text-sm text-gray-400 font-normal border-l border-gray-200 pl-3 truncate">{activeChannel.description}</span>
+              <span className="hidden sm:block text-sm text-gray-400 font-normal border-l border-gray-200 pl-3 truncate">{activeChannel.description}</span>
             )}
           </>
         )}
@@ -118,26 +128,31 @@ export function MessagesLayout({ channels: initialChannels, orgUsers, department
 
   return (
     <div className="flex h-[calc(100vh-0px)] overflow-hidden">
-      <ChannelSidebar
-        channels={channels}
-        orgUsers={orgUsers}
-        orgId={orgId}
-        currentUserId={currentUserId}
-        activeChannelId={activeChannelId}
-        unreadCounts={unreadCounts}
-        onSelect={handleChannelSelect}
-        onStartDM={startDM}
-        onChannelCreated={(ch) => {
-          setChannels(prev => [...prev, ch])
-          setActiveChannelId(ch.id)
-        }}
-      />
+      {/* Sidebar: always visible on desktop, hidden on mobile when feed is open */}
+      <div className={`${mobileFeedOpen ? 'hidden' : 'flex'} md:flex w-full md:w-64 shrink-0`}>
+        <ChannelSidebar
+          channels={channels}
+          orgUsers={orgUsers}
+          orgId={orgId}
+          currentUserId={currentUserId}
+          activeChannelId={activeChannelId}
+          unreadCounts={unreadCounts}
+          onSelect={handleChannelSelect}
+          onStartDM={(user) => { startDM(user) }}
+          onChannelCreated={(ch) => {
+            setChannels(prev => [...prev, ch])
+            setActiveChannelId(ch.id)
+            setMobileFeedOpen(true)
+          }}
+        />
+      </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Feed: always visible on desktop, only when mobileFeedOpen on mobile */}
+      <div className={`${mobileFeedOpen ? 'flex' : 'hidden'} md:flex flex-1 flex-col overflow-hidden`}>
         {activeChannel ? (
           <>
             {/* Header */}
-            <div className="flex items-center px-5 py-3 border-b border-gray-200 bg-white shrink-0">
+            <div className="flex items-center px-4 py-3 border-b border-gray-200 bg-white shrink-0">
               {channelHeader}
             </div>
             {/* Feed */}
