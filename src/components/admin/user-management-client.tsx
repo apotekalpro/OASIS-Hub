@@ -18,6 +18,28 @@ import type { UserRole, Profile, Department } from '@/types/database'
 
 const ASSIGNABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'chief', 'lead', 'area_manager', 'team_leader', 'member', 'auditor', 'viewer', 'outlet']
 
+const ROLE_LABEL_TO_VALUE: Record<string, UserRole> = {
+  'org admin': 'org_admin',
+  'org_admin': 'org_admin',
+  'dept head': 'dept_head',
+  'dept_head': 'dept_head',
+  'department head': 'dept_head',
+  'chief': 'chief',
+  'lead': 'lead',
+  'area manager': 'area_manager',
+  'area_manager': 'area_manager',
+  'team leader': 'team_leader',
+  'team_leader': 'team_leader',
+  'member': 'member',
+  'auditor': 'auditor',
+  'viewer': 'viewer',
+  'outlet': 'outlet',
+}
+
+function normalizeRole(raw: string): UserRole {
+  return ROLE_LABEL_TO_VALUE[raw.toLowerCase().trim()] ?? 'member'
+}
+
 const userSchema = z.object({
   email: z.string().email(),
   contact_email: z.string().email().optional().or(z.literal('')),
@@ -123,7 +145,7 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
           email: r.email || r.Email,
           contact_email: r.contact_email || r['Contact Email'] || undefined,
           full_name: r.full_name || r['Full Name'] || r.name,
-          role: (r.role || r.Role || 'member') as UserRole,
+          role: normalizeRole(r.role || r.Role || 'member'),
           dept_id: resolvedDeptId,
           employee_id: r.employee_id || r['Employee ID'] || undefined,
           job_title: r.job_title || r['Job Title'] || undefined,
@@ -259,7 +281,7 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
             <Dialog.Title className="text-lg font-semibold mb-2">Import Users from CSV</Dialog.Title>
             <Dialog.Description className="text-sm text-gray-500 mb-4">
               Columns: <code className="bg-gray-100 px-1 rounded text-xs">email, contact_email, full_name, role, department, employee_id, job_title, phone</code><br />
-              <span className="text-xs"><code className="bg-gray-100 px-1 rounded">contact_email</code> and <code className="bg-gray-100 px-1 rounded">phone</code> are optional. Use department <strong>name</strong> — see reference below.<br />Roles: <code className="bg-gray-100 px-1 rounded">member, team_leader, lead, chief, dept_head, org_admin, auditor, viewer</code></span>
+              <span className="text-xs"><code className="bg-gray-100 px-1 rounded">contact_email</code> and <code className="bg-gray-100 px-1 rounded">phone</code> are optional. Use department <strong>name</strong> — see reference below.<br />Roles: <code className="bg-gray-100 px-1 rounded">member, team_leader, lead, area_manager, chief, dept_head, org_admin, auditor, viewer, outlet</code></span>
             </Dialog.Description>
 
             {/* Department reference */}
@@ -304,6 +326,7 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
                   `ali@example.com,ali.personal@gmail.com,Ali Hassan,member,${exampleDept},EMP001,Pharmacist,+60 12-345 6789`,
                   `siti@example.com,,Siti Rahimah,team_leader,${exampleDept},EMP002,Senior Pharmacist,`,
                   'ahmad@example.com,,Ahmad Fadzil,dept_head,,EMP003,Department Head,',
+                  'jane@example.com,jane.personal@gmail.com,Jane Doe,area_manager,OPERATION SALES (OPS),EMP004,Area Manager,',
                 ].join('\n')
                 const blob = new Blob([csv], { type: 'text/csv' })
                 const url = URL.createObjectURL(blob)
