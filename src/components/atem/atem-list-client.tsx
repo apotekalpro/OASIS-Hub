@@ -12,6 +12,10 @@ import { cn, formatDate } from '@/lib/utils'
 import { Search, Filter, X, Edit2, Trash2, Clock, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 
+function stripHtml(html: string) {
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
 type Department = { id: string; name: string }
 type Team = { id: string; name: string }
@@ -95,7 +99,7 @@ export function AtemListClient({ initialItems, orgId, currentUserId, users, depa
     if (search) {
       const q = search.toLowerCase()
       result = result.filter(item =>
-        item.task.toLowerCase().includes(q) ||
+        stripHtml(item.task).toLowerCase().includes(q) ||
         item.impact?.toLowerCase().includes(q) ||
         item.tags?.some(t => t.includes(q))
       )
@@ -316,7 +320,7 @@ export function AtemListClient({ initialItems, orgId, currentUserId, users, depa
                       <td className="px-4 py-3">
                         <Link href={`/atem/${item.id}`} className="font-medium text-gray-900 hover:text-indigo-600 transition-colors line-clamp-2">
                           <span className={cn('inline-block h-2 w-2 rounded-full mr-2 shrink-0 align-middle', PRIORITY_DOT[item.priority])} />
-                          {item.task}
+                          {stripHtml(item.task)}
                         </Link>
                         {item.tags?.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">

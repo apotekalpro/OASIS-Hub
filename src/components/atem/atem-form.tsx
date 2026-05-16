@@ -14,7 +14,6 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor'
 import { toast } from 'sonner'
 
 const schema = z.object({
-  task: z.string().min(1, 'Task is required'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']),
   status: z.enum(['pending', 'in_progress', 'completed', 'blocked']),
   estimated_time: z.string().optional(),
@@ -67,6 +66,8 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
   const [tagInput, setTagInput] = useState('')
   const [userSearch, setUserSearch] = useState('')
   const [watcherSearch, setWatcherSearch] = useState('')
+  const [taskContent, setTaskContent] = useState(item?.task ?? '')
+  const [taskError, setTaskError] = useState('')
   const [deadlineText, setDeadlineText] = useState(item?.deadline_text ?? '')
   const [impact, setImpact] = useState(item?.impact ?? '')
   const [dependencies, setDependencies] = useState(item?.dependencies ?? '')
@@ -90,6 +91,8 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
       setUserSearch('')
       setWatcherSearch('')
       setTags(item?.tags ?? [])
+      setTaskContent(item?.task ?? '')
+      setTaskError('')
       setDeadlineText(item?.deadline_text ?? '')
       setImpact(item?.impact ?? '')
       setDependencies(item?.dependencies ?? '')
@@ -102,7 +105,6 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: item ? {
-      task: item.task,
       priority: item.priority as FormData['priority'],
       status: item.status as FormData['status'],
       nearest_deadline: item.deadline ? item.deadline.split('T')[0] : '',
@@ -116,9 +118,12 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
   })
 
   async function onSubmit(data: FormData) {
+    const plainTask = taskContent.replace(/<[^>]*>/g, '').trim()
+    if (!plainTask) { setTaskError('Task is required'); return }
+    setTaskError('')
     try {
       const payload = {
-        task: data.task,
+        task: taskContent,
         priority: data.priority,
         status: data.status,
         deadline_text: deadlineText || null,
@@ -161,6 +166,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
       setSelectedAssignees([])
       setSelectedWatchers([])
       setTags([])
+      setTaskContent('')
       setDeadlineText('')
       setImpact('')
       setDependencies('')
@@ -219,14 +225,8 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Task *
                   </span>
                 </label>
-                <textarea
-                  rows={3}
-                  placeholder="Describe the action to be taken..."
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  autoFocus
-                  {...register('task')}
-                />
-                {errors.task?.message && <p className="text-xs text-red-500 mt-1">{errors.task.message}</p>}
+                <RichTextEditor value={taskContent} onChange={setTaskContent} placeholder="Describe the action to be taken..." />
+                {taskError && <p className="text-xs text-red-500 mt-1">{taskError}</p>}
               </div>
 
               {/* Priority / Status */}

@@ -765,7 +765,7 @@ export function AtemDetailClient({
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <div className="flex items-start gap-3 mb-4">
                 <span className={cn('mt-1.5 h-2.5 w-2.5 rounded-full shrink-0', PRIORITY_DOT[item.priority])} />
-                <h1 className="text-xl font-bold text-gray-900 leading-snug">{item.task}</h1>
+                <div className="prose prose-sm max-w-none text-gray-900 font-bold text-xl leading-snug [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1" dangerouslySetInnerHTML={{ __html: item.task }} />
               </div>
 
               {item.tags?.length > 0 && (
