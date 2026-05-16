@@ -18,14 +18,14 @@ export default async function OutletsPage() {
 
   const outletsQuery = supabase
     .from('outlets')
-    .select(`*, profiles!outlets_manager_id_fkey(id, full_name, avatar_url), departments(name)`)
+    .select(`*, profiles!outlets_area_manager_id_fkey(id, full_name, avatar_url), departments(name)`)
     .order('name')
   if (!isSuperAdmin && orgId) outletsQuery.eq('org_id', orgId)
 
   const deptsQuery = supabase.from('departments').select('id, name').order('name')
   if (!isSuperAdmin && orgId) deptsQuery.eq('org_id', orgId)
 
-  const usersQuery = supabase.from('profiles').select('id, full_name, email, avatar_url').eq('is_active', true).order('full_name')
+  const usersQuery = supabase.from('profiles').select('id, full_name, email, avatar_url').eq('is_active', true).eq('role', 'area_manager').order('full_name')
   if (!isSuperAdmin && orgId) usersQuery.eq('org_id', orgId)
 
   const [outletsRes, deptsRes, usersRes] = await Promise.all([outletsQuery, deptsQuery, usersQuery])
@@ -33,7 +33,7 @@ export default async function OutletsPage() {
   type OutletRow = {
     id: string; name: string; code: string | null; address: string | null; city: string | null
     state: string | null; phone: string | null; status: string; created_at: string
-    manager_id: string | null
+    area_manager_id: string | null
     profiles?: { id: string; full_name: string; avatar_url: string | null } | null
     departments?: { name: string } | null
   }
@@ -149,7 +149,7 @@ export default async function OutletsPage() {
                 {outlet.profiles && (
                   <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2">
                     <UserAvatar name={outlet.profiles.full_name} avatarUrl={outlet.profiles.avatar_url} size="sm" />
-                    <span className="text-xs text-gray-500">Manager: <span className="font-medium text-gray-700">{outlet.profiles.full_name}</span></span>
+                    <span className="text-xs text-gray-500">Area Manager: <span className="font-medium text-gray-700">{outlet.profiles.full_name}</span></span>
                   </div>
                 )}
               </CardContent>

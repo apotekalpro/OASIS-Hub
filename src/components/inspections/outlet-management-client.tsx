@@ -21,7 +21,7 @@ const schema = z.object({
   state: z.string().optional(),
   phone: z.string().optional(),
   dept_id: z.string().optional(),
-  manager_id: z.string().optional(),
+  area_manager_id: z.string().optional(),
   status: z.enum(['active', 'inactive', 'suspended']),
 })
 
@@ -30,7 +30,7 @@ type FormData = z.infer<typeof schema>
 interface OutletRow {
   id: string; name: string; code: string | null; address: string | null
   city: string | null; state: string | null; phone: string | null
-  status: string; manager_id: string | null; dept_id?: string | null
+  status: string; area_manager_id: string | null; dept_id?: string | null
 }
 
 interface Props {
@@ -54,10 +54,10 @@ export function OutletManagementClient({ orgId, departments, users, outlet, mode
       city: outlet.city ?? '',
       state: outlet.state ?? '',
       phone: outlet.phone ?? '',
-      dept_id: outlet.dept_id ?? '',
-      manager_id: outlet.manager_id ?? '',
+      dept_id: outlet.dept_id ?? '59ba1694-ff64-4fb6-899e-602b0e3ef10c',
+      area_manager_id: outlet.area_manager_id ?? '',
       status: outlet.status as FormData['status'],
-    } : { name: '', code: '', address: '', city: '', state: '', phone: '', status: 'active' },
+    } : { name: '', code: '', address: '', city: '', state: '', phone: '', dept_id: '59ba1694-ff64-4fb6-899e-602b0e3ef10c', status: 'active' },
   })
 
   async function onSubmit(data: FormData) {
@@ -65,7 +65,7 @@ export function OutletManagementClient({ orgId, departments, users, outlet, mode
     const payload = {
       ...data,
       dept_id: data.dept_id || null,
-      manager_id: data.manager_id || null,
+      area_manager_id: data.area_manager_id || null,
       code: data.code || null,
       address: data.address || null,
       city: data.city || null,
@@ -137,8 +137,8 @@ export function OutletManagementClient({ orgId, departments, users, outlet, mode
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Manager</label>
-              <select className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" {...register('manager_id')}>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Area Manager</label>
+              <select className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" {...register('area_manager_id')}>
                 <option value="">— None —</option>
                 {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
               </select>

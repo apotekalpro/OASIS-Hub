@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
     org_id: string
     code: string
     name: string
+    dept_id: string
     area_manager_name: string | null
     address: string | null
     city: string | null
@@ -104,13 +105,14 @@ export async function POST(req: NextRequest) {
     const cols = parseCsvLine(dataLines[i])
     const code = cols[COL.code]?.trim() ?? ''
     const name = cols[COL.name]?.trim() ?? ''
-    if (!code && !name) { skipped.push(i + 2); continue }
+    if (!code && !name) { skipped.push(i + 2); break } // blank row = end of data section
     if (!name) { skipped.push(i + 2); continue }
 
     rows.push({
       org_id: orgId,
       code: code || name,
       name,
+      dept_id: '59ba1694-ff64-4fb6-899e-602b0e3ef10c',
       area_manager_name: cols[COL.area_manager]?.trim() || null,
       address: cols[COL.address]?.trim() || null,
       city: cols[COL.city]?.trim() || null,
