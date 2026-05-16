@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/avatar'
 import { RichTextEditor } from '@/components/ui/rich-text-editor'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
 const schema = z.object({
@@ -62,19 +61,13 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
   // Load existing assignees + watchers when editing
   useEffect(() => {
     if (open && task?.id) {
-      const supabase = createClient()
-      // Fetch via API endpoint to bypass RLS on task_assignees
       fetch(`/api/tasks/${task.id}/members`)
         .then(r => r.ok ? r.json() : { assigneeIds: [], watcherIds: [] })
         .then(({ assigneeIds = [], watcherIds = [] }: { assigneeIds: string[]; watcherIds: string[] }) => {
           setSelectedAssignees(users.filter(u => assigneeIds.includes(u.id)))
           setSelectedCC(users.filter(u => watcherIds.includes(u.id)))
         })
-        .catch(() => {
-          // fallback: try direct query
-          supabase.from('task_watchers').select('user_id').eq('task_id', task.id)
-            .then(({ data }) => setSelectedCC(users.filter(u => (data?.map(w => w.user_id) ?? []).includes(u.id))))
-        })
+        .catch(() => {})
     }
     if (!open) {
       setSelectedCC([])
@@ -103,13 +96,11 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
   })
 
   async function onSubmit(data: FormData) {
-    const supabase = createClient()
     try {
       const payload = {
         ...data,
         description: description || null,
         org_id: orgId,
-        created_by: currentUserId,
         due_date: data.due_date ? new Date(data.due_date).toISOString() : null,
         start_date: data.start_date ? new Date(data.start_date).toISOString() : null,
         estimated_hours: data.estimated_hours ? parseFloat(data.estimated_hours) : null,
@@ -120,60 +111,36 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
 
       let taskId = task?.id
       if (task?.id) {
-        const { error } = await supabase.from('tasks').update(payload).eq('id', task.id)
-        if (error) throw error
-
-        // Sync assignees
-        await supabase.from('task_assignees').delete().eq('task_id', task.id)
-        if (selectedAssignees.length > 0) {
-          await supabase.from('task_assignees').insert(
-            selectedAssignees.map(u => ({ task_id: task.id, user_id: u.id, assigned_by: currentUserId }))
-          )
-        }
-
-        // Sync CC watchers
-        await supabase.from('task_watchers').delete().eq('task_id', task.id)
-        if (selectedCC.length > 0) {
-          await supabase.from('task_watchers').insert(
-            selectedCC.map(u => ({ task_id: task.id, user_id: u.id, added_by: currentUserId }))
-          )
-        }
-
+        const res = await fetch(`/api/tasks/${task.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...payload,
+            assigneeIds: selectedAssignees.map(u => u.id),
+            watcherIds: selectedCC.map(u => u.id),
+          }),
+        })
+        if (!res.ok) throw new Error((await res.json()).error)
         toast.success('Task updated')
       } else {
-        const { data: created, error } = await supabase.from('tasks').insert(payload).select('id').single()
-        if (error) throw error
-        taskId = (created as { id: string }).id
+        const assigneeIds = selectedAssignees.map(u => u.id)
+        const notifyUserIds = assigneeIds.filter(id => id !== currentUserId)
+        const creatorProfile = users.find(u => u.id === currentUserId)
 
-        // Assign members
-        const assigneeRows = selectedAssignees.length > 0
-          ? selectedAssignees.map(u => ({ task_id: taskId, user_id: u.id, assigned_by: currentUserId }))
-          : [{ task_id: taskId, user_id: currentUserId, assigned_by: currentUserId }]
-        const { error: assignError } = await supabase.from('task_assignees').insert(assigneeRows)
-        if (assignError) throw assignError
-
-        // Add CC watchers
-        if (selectedCC.length > 0) {
-          await supabase.from('task_watchers').insert(
-            selectedCC.map(u => ({ task_id: taskId, user_id: u.id, added_by: currentUserId }))
-          )
-        }
-
-        // Send email to assigned users (fire-and-forget)
-        const assignedUserIds = assigneeRows.map(r => r.user_id).filter(id => id !== currentUserId)
-        if (assignedUserIds.length > 0) {
-          const creatorProfile = users.find(u => u.id === currentUserId)
-          fetch('/api/notifications/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'task_assigned',
-              taskId,
-              userIds: assignedUserIds,
-              actorName: creatorProfile?.full_name ?? 'Someone',
-            }),
-          }).catch(() => {})
-        }
+        const res = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...payload,
+            assigneeIds,
+            watcherIds: selectedCC.map(u => u.id),
+            notifyUserIds,
+            actorName: creatorProfile?.full_name ?? 'Someone',
+          }),
+        })
+        const resData = await res.json()
+        if (!res.ok) throw new Error(resData.error)
+        taskId = resData.id
 
         toast.success('Task created')
         onCreated?.(taskId!)

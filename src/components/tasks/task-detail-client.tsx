@@ -665,13 +665,16 @@ export function TaskDetailClient({
       return
     }
     setAddingAssignee(true)
-    const { error } = await supabase.from('task_assignees').insert({ task_id: task.id, user_id: selectedUser.id })
-    if (error) {
-      toast.error(error.message)
+    const res = await fetch(`/api/tasks/${task.id}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: selectedUser.id }),
+    })
+    if (!res.ok) {
+      toast.error((await res.json()).error)
     } else {
       setAssigneesList(prev => [...prev, { id: selectedUser.id, full_name: selectedUser.full_name, avatar_url: selectedUser.avatar_url, email: selectedUser.email }])
       toast.success(`${selectedUser.full_name} added as assignee`)
-      // Notify newly added assignee
       fetch('/api/notifications/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -684,8 +687,12 @@ export function TaskDetailClient({
   }
 
   async function removeAssignee(assigneeId: string) {
-    const { error } = await supabase.from('task_assignees').delete().eq('task_id', task.id).eq('user_id', assigneeId)
-    if (error) toast.error(error.message)
+    const res = await fetch(`/api/tasks/${task.id}/members`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: assigneeId }),
+    })
+    if (!res.ok) toast.error((await res.json()).error)
     else setAssigneesList(prev => prev.filter(a => a.id !== assigneeId))
   }
 

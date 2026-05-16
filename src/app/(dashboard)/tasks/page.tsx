@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { TasksClient } from '@/components/tasks/tasks-client'
 import { hasRole } from '@/lib/auth/permissions'
 import type { UserRole } from '@/types/database'
@@ -7,10 +7,11 @@ export const dynamic = 'force-dynamic'
 
 export default async function TasksPage() {
   const supabase = await createClient()
+  const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const profileRes = await supabase
+  const profileRes = await admin
     .from('profiles')
     .select('org_id, full_name, role')
     .eq('id', user.id)
@@ -43,7 +44,7 @@ export default async function TasksPage() {
     const [tasksResult, ...rest] = await Promise.all([
       tasksQuery,
       supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
-      supabase.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url))').eq('org_id', orgId).order('name'),
+      admin.from('teams').select('id, name').eq('org_id', orgId).order('name'),
       supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     ])
     rawTasks = (tasksResult.data as unknown as RawTask[]) ?? [];
@@ -54,7 +55,7 @@ export default async function TasksPage() {
       supabase.from('task_assignees').select('task_id').eq('user_id', user.id),
       supabase.from('task_watchers').select('task_id').eq('user_id', user.id),
       supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
-      supabase.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url))').eq('org_id', orgId).order('name'),
+      admin.from('teams').select('id, name').eq('org_id', orgId).order('name'),
       supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     ])
     ;[usersRes, teamsRes, deptsRes] = rest

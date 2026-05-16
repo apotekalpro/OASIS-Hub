@@ -306,7 +306,7 @@ export function TeamsClient({ departments, orgUsers, orgId, currentUserId, teamI
             {/* Trigger dialog via state — NOT nested Dialog.Trigger inside DropdownMenu */}
             <DropdownMenu.Item
               className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 cursor-pointer outline-none"
-              onSelect={e => { e.preventDefault(); setOpen(true) }}
+              onSelect={() => setOpen(true)}
             >
               <Edit2 className="h-4 w-4" /> Edit Team
             </DropdownMenu.Item>

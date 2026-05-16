@@ -18,3 +18,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tas
     watcherIds: watchersRes.data?.map(w => w.user_id) ?? [],
   })
 }
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ taskId: string }> }) {
+  const { taskId } = await params
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const admin = createAdminClient()
+  const { userId } = await req.json()
+  const { error } = await admin.from('task_assignees').insert({ task_id: taskId, user_id: userId, assigned_by: user.id })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ taskId: string }> }) {
+  const { taskId } = await params
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const admin = createAdminClient()
+  const { userId } = await req.json()
+  const { error } = await admin.from('task_assignees').delete().eq('task_id', taskId).eq('user_id', userId)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}

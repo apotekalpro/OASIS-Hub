@@ -109,7 +109,9 @@ export default async function UsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 text-gray-500">
-                      {departments?.find(d => d.id === user.dept_id)?.name ?? '—'}
+                      {user.role === 'chief' && user.chief_departments?.length
+                        ? user.chief_departments.map(cd => departments?.find(d => d.id === cd.dept_id)?.name).filter(Boolean).join(', ')
+                        : departments?.find(d => d.id === user.dept_id)?.name ?? '—'}
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1">
