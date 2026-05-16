@@ -19,7 +19,7 @@ import type { FeatureName } from '@/lib/auth/permissions'
 import type { UserRole } from '@/types/database'
 import { signOut } from '@/lib/auth/actions'
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -87,15 +87,37 @@ export function Sidebar() {
   const unreadCount = useNotificationStore(s => s.unreadCount)
   const [signingOut, setSigningOut] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [installable, setInstallable] = useState(false)
+  const [isStandalone, setIsStandalone] = useState(false)
+  const [nativeReady, setNativeReady] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
+  const isIOS = useRef(false)
 
   useEffect(() => {
-    // Check if already installable
-    if (window.__pwaInstallPrompt) setInstallable(true)
-    const handler = () => setInstallable(true)
+    const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+      ('standalone' in navigator && (navigator as { standalone?: boolean }).standalone === true)
+    setIsStandalone(standalone)
+    isIOS.current = /iphone|ipad|ipod/i.test(navigator.userAgent)
+
+    if (window.__pwaInstallReady || window.__pwaInstallPrompt) setNativeReady(true)
+    const handler = () => setNativeReady(true)
     window.addEventListener('pwa-installable', handler)
     return () => window.removeEventListener('pwa-installable', handler)
   }, [])
+
+  async function handleInstall() {
+    if (nativeReady && window.__pwaInstallPrompt) {
+      const prompt = window.__pwaInstallPrompt
+      await prompt.prompt()
+      const { outcome } = await prompt.userChoice
+      if (outcome === 'accepted') {
+        setNativeReady(false)
+        setIsStandalone(true)
+        window.__pwaInstallPrompt = undefined
+      }
+    } else {
+      setShowGuide(true)
+    }
+  }
 
   function canSeeAdminItem(item: typeof ADMIN_NAV_ITEMS[0]): boolean {
     if (!profile) return false
@@ -152,18 +174,9 @@ export function Sidebar() {
 
       {profile && (
         <div className="border-t border-white/10 p-3 space-y-1">
-          {installable && (
+          {!isStandalone && (
             <button
-              onClick={async () => {
-                const prompt = window.__pwaInstallPrompt
-                if (!prompt) return
-                await prompt.prompt()
-                const { outcome } = await prompt.userChoice
-                if (outcome === 'accepted') {
-                  setInstallable(false)
-                  window.__pwaInstallPrompt = undefined
-                }
-              }}
+              onClick={handleInstall}
               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
             >
               <span>↓</span> Install OASIS Hub App
@@ -215,18 +228,9 @@ export function Sidebar() {
           <Image src="/oasis-hub-logo.png" alt="OASIS Hub" width={44} height={44} className="h-11 w-11 object-contain" priority />
         </div>
         <div className="flex items-center gap-1">
-          {installable && (
+          {!isStandalone && (
             <button
-              onClick={async () => {
-                const prompt = window.__pwaInstallPrompt
-                if (!prompt) return
-                await prompt.prompt()
-                const { outcome } = await prompt.userChoice
-                if (outcome === 'accepted') {
-                  setInstallable(false)
-                  window.__pwaInstallPrompt = undefined
-                }
-              }}
+              onClick={handleInstall}
               className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-600 text-white text-xs font-medium mr-1"
               title="Install OASIS Hub app"
             >
@@ -273,6 +277,46 @@ export function Sidebar() {
           <span className="text-[10px] font-medium">More</span>
         </button>
       </div>
+
+      {/* ── Install guide modal ──────────────────────────────── */}
+      {showGuide && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4 bg-black/60" onClick={() => setShowGuide(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900 text-base">Install OASIS Hub</h3>
+              <button onClick={() => setShowGuide(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {isIOS.current ? (
+              <div className="space-y-2 text-sm text-gray-700">
+                <p className="font-medium text-gray-900">On iPhone / iPad (Safari):</p>
+                <ol className="space-y-1.5 list-none">
+                  <li className="flex gap-2"><span className="bg-indigo-100 text-indigo-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0">1</span>Tap the <strong>Share</strong> button <span className="font-mono bg-gray-100 px-1 rounded">⎙</span> at the bottom of Safari</li>
+                  <li className="flex gap-2"><span className="bg-indigo-100 text-indigo-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0">2</span>Scroll down and tap <strong>Add to Home Screen</strong></li>
+                  <li className="flex gap-2"><span className="bg-indigo-100 text-indigo-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0">3</span>Tap <strong>Add</strong> in the top-right corner</li>
+                </ol>
+              </div>
+            ) : (
+              <div className="space-y-2 text-sm text-gray-700">
+                <p className="font-medium text-gray-900">On Android Chrome:</p>
+                <ol className="space-y-1.5 list-none">
+                  <li className="flex gap-2"><span className="bg-indigo-100 text-indigo-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0">1</span>Tap the <strong>⋮ menu</strong> (3 dots) at the top-right of Chrome</li>
+                  <li className="flex gap-2"><span className="bg-indigo-100 text-indigo-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0">2</span>Tap <strong>Add to Home Screen</strong></li>
+                  <li className="flex gap-2"><span className="bg-indigo-100 text-indigo-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0">3</span>Tap <strong>Install</strong> (not "Add shortcut")</li>
+                </ol>
+                <p className="text-xs text-gray-500 pt-1">If you only see "Add shortcut", the site needs to finish loading first — try refreshing and wait a moment.</p>
+              </div>
+            )}
+            <button
+              onClick={() => setShowGuide(false)}
+              className="mt-4 w-full py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Mobile slide-in drawer ────────────────────────────── */}
       {drawerOpen && (
