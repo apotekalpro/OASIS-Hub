@@ -181,10 +181,13 @@ export async function updateUserProfile(
 ) {
   const adminClient = createAdminClient()
 
-  const { chief_dept_ids, ...profileData } = data
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { chief_dept_ids, ...profileData } = data as typeof data & { email?: string }
+  // email lives in auth.users, not profiles — strip it to avoid update errors
+  const { email: _email, ...safeProfileData } = profileData as typeof profileData & { email?: string }
   const { error } = await adminClient
     .from('profiles')
-    .update(profileData)
+    .update(safeProfileData)
     .eq('id', userId)
 
   if (error) throw new Error(error.message)

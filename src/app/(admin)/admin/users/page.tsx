@@ -16,7 +16,7 @@ export default async function UsersPage() {
   const profileRes = await adminSupabase.from('profiles').select('org_id').eq('id', user.id).single()
   const orgId = profileRes.data?.org_id ?? null
 
-  let profilesQuery = adminSupabase.from('profiles').select(`*, departments!dept_id(name), chief_departments(dept_id)`).order('created_at', { ascending: false })
+  let profilesQuery = adminSupabase.from('profiles').select(`*, chief_departments(dept_id)`).order('created_at', { ascending: false })
   let deptsQuery = adminSupabase.from('departments').select('id, name, org_id').order('name')
   if (orgId) {
     profilesQuery = profilesQuery.eq('org_id', orgId)
@@ -109,7 +109,7 @@ export default async function UsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 text-gray-500">
-                      {(user as { departments?: { name: string } | null }).departments?.name ?? '—'}
+                      {departments?.find(d => d.id === user.dept_id)?.name ?? '—'}
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1">
