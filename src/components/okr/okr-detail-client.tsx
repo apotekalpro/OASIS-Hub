@@ -6,6 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Edit2, Trash2, Plus, Send, Smile, CornerDownRight,
   X, Users, Eye, Target, Calendar, Building2, Search, CheckCircle2,
+  ChevronDown, ChevronRight, Loader2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,15 @@ type Comment = {
   reactions: Reaction[]
   _rawReactions?: Array<{ id: string; emoji: string; user_id: string }>
   replies?: Comment[]
+}
+
+type SubTask = {
+  id: string
+  title: string
+  status: string
+  priority: string
+  due_date: string | null
+  task_assignees: { user_id: string }[]
 }
 
 type Objective = {
@@ -340,6 +350,14 @@ export function OkrDetailClient({
   const [assigneeSearch, setAssigneeSearch] = useState('')
   const [addingAssignee, setAddingAssignee] = useState(false)
 
+  // KR subtasks
+  const [krSubtasks, setKrSubtasks] = useState<Record<string, SubTask[]>>({})
+  const [krSubtaskExpanded, setKrSubtaskExpanded] = useState<Record<string, boolean>>({})
+  const [krSubtaskAdding, setKrSubtaskAdding] = useState<Record<string, boolean>>({})
+  const [krSubtaskLoading, setKrSubtaskLoading] = useState<Record<string, boolean>>({})
+  const [krSubtaskForms, setKrSubtaskForms] = useState<Record<string, { title: string; priority: string; due_date: string }>>({})
+  const [krSubtaskShowForm, setKrSubtaskShowForm] = useState<Record<string, boolean>>({})
+
   function buildReactions(raw: Array<{ id: string; emoji: string; user_id: string }>, uid: string): Reaction[] {
     const map: Record<string, { count: number; reacted: boolean }> = {}
     for (const r of raw) {
@@ -581,6 +599,61 @@ export function OkrDetailClient({
     })
     if (!res.ok) { toast.error((await res.json()).error); return }
     setAssignees(prev => prev.filter(a => a.id !== userId))
+  }
+
+  // ── KR Subtasks ──────────────────────────────────────────────────────────────
+  async function fetchKrSubtasks(krId: string) {
+    setKrSubtaskLoading(prev => ({ ...prev, [krId]: true }))
+    try {
+      const res = await fetch(`/api/tasks?kr_id=${krId}`)
+      const json = await res.json()
+      if (res.ok) {
+        setKrSubtasks(prev => ({ ...prev, [krId]: json.tasks ?? [] }))
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setKrSubtaskLoading(prev => ({ ...prev, [krId]: false }))
+    }
+  }
+
+  function toggleKrSubtaskSection(krId: string) {
+    const willExpand = !krSubtaskExpanded[krId]
+    setKrSubtaskExpanded(prev => ({ ...prev, [krId]: willExpand }))
+    if (willExpand && !(krId in krSubtasks)) {
+      fetchKrSubtasks(krId)
+    }
+  }
+
+  async function addKrSubtask(krId: string) {
+    const form = krSubtaskForms[krId]
+    if (!form?.title?.trim()) { toast.error('Title required'); return }
+    setKrSubtaskAdding(prev => ({ ...prev, [krId]: true }))
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: form.title.trim(),
+          priority: form.priority || 'medium',
+          due_date: form.due_date || null,
+          kr_id: krId,
+          org_id: objective.id ? orgId : orgId,
+          status: 'todo',
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      // Refresh subtask list
+      await fetchKrSubtasks(krId)
+      setKrSubtaskForms(prev => ({ ...prev, [krId]: { title: '', priority: 'medium', due_date: '' } }))
+      setKrSubtaskShowForm(prev => ({ ...prev, [krId]: false }))
+      toast.success('Subtask added')
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setKrSubtaskAdding(prev => ({ ...prev, [krId]: false }))
+    }
   }
 
   // ── Delete objective ─────────────────────────────────────────────────────────

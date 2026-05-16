@@ -23,6 +23,7 @@ type KeyResultDraft = {
   target_value: string
   unit: string
   due_date: string
+  description: string
 }
 
 type ExistingObjective = {
@@ -65,6 +66,7 @@ function newKrDraft(): KeyResultDraft {
     target_value: '100',
     unit: '',
     due_date: '',
+    description: '',
   }
 }
 
@@ -106,7 +108,7 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
         .then(({ assignees: a = [], watchers: w = [], keyResults: krs = [] }: {
           assignees: Array<{ user_id: string; role: string }>
           watchers: Array<{ user_id: string }>
-          keyResults: Array<{ id: string; title: string; metric_type: string; start_value: number; target_value: number; unit: string | null; due_date: string | null }>
+          keyResults: Array<{ id: string; title: string; description: string | null; metric_type: string; start_value: number; target_value: number; unit: string | null; due_date: string | null }>
         }) => {
           setAssignees(users.filter(u => a.some((x: { user_id: string }) => x.user_id === u.id)))
           setWatchers(users.filter(u => w.some((x: { user_id: string }) => x.user_id === u.id)))
@@ -119,6 +121,7 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
               target_value: String(kr.target_value),
               unit: kr.unit ?? '',
               due_date: kr.due_date ?? '',
+              description: kr.description ?? '',
             })))
           }
         })
@@ -204,6 +207,7 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
           target_value: parseFloat(kr.target_value) || 100,
           unit: kr.unit.trim() || null,
           due_date: kr.due_date || null,
+          description: kr.description || null,
         })),
       }
 
@@ -451,6 +455,14 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
                                 value={kr.due_date}
                                 onChange={e => updateKr(kr._id, 'due_date', e.target.value)}
                                 className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-xs text-gray-500 mb-1">Description</label>
+                              <RichTextEditor
+                                value={kr.description}
+                                onChange={val => updateKr(kr._id, 'description', val)}
+                                placeholder="Describe what achieving this key result means..."
                               />
                             </div>
                           </div>
