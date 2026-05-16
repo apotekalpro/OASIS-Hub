@@ -13,9 +13,9 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#1e1b4b',
     categories: ['productivity', 'business'],
     icons: [
-      // The actual file is 2048x2048 — declare its real size so Chrome validates correctly
-      { src: '/oasis-hub-logo.png', sizes: '2048x2048', type: 'image/png', purpose: 'any' },
-      { src: '/oasis-hub-logo.png', sizes: '2048x2048', type: 'image/png', purpose: 'maskable' },
+      { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
   }
 }
