@@ -47,9 +47,9 @@ interface Props {
   teams: Team[]
 }
 
-const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'success' | 'destructive' | 'warning' | 'info'> = {
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'success' | 'destructive' | 'warning' | 'outline'> = {
   pending: 'secondary',
-  in_progress: 'info',
+  in_progress: 'default',
   completed: 'success',
   blocked: 'destructive',
 }
