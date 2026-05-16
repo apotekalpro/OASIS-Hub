@@ -164,66 +164,71 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
   // ── Action menu for existing users ───────────────────────────────────────────
   if (mode === 'actions') {
     return (
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild>
-          <Button variant="ghost" size="icon-sm">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
-          <DropdownMenu.Content
-            className="z-50 min-w-[160px] bg-white rounded-lg border border-gray-200 shadow-lg py-1 text-sm"
-            align="end"
-          >
-            <Dialog.Root open={createOpen} onOpenChange={setCreateOpen}>
-              <Dialog.Trigger asChild>
-                <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 cursor-pointer outline-none">
-                  <Edit2 className="h-4 w-4" /> Edit User
-                </DropdownMenu.Item>
-              </Dialog.Trigger>
-              <UserFormDialog
-                title="Edit User"
-                departments={departments}
-                register={register}
-                handleSubmit={handleSubmit}
-                onSubmit={onCreateUser}
-                errors={errors}
-                isSubmitting={isSubmitting}
-                open={createOpen}
-                onOpenChange={setCreateOpen}
-                watchedRole={watchedRole}
-                chiefDeptIds={chiefDeptIds}
-                onChiefDeptChange={setChiefDeptIds}
-              />
-            </Dialog.Root>
-
-            <DropdownMenu.Item
-              className="flex items-center gap-2 px-3 py-2 text-indigo-600 hover:bg-indigo-50 cursor-pointer outline-none"
-              onClick={handleSendInvite}
+      <>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <Button variant="ghost" size="icon-sm">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className="z-50 min-w-[160px] bg-white rounded-lg border border-gray-200 shadow-lg py-1 text-sm"
+              align="end"
             >
-              <Mail className="h-4 w-4" /> Send Invite
-            </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 cursor-pointer outline-none"
+                onSelect={() => setCreateOpen(true)}
+              >
+                <Edit2 className="h-4 w-4" /> Edit User
+              </DropdownMenu.Item>
 
-            <DropdownMenu.Item
-              className="flex items-center gap-2 px-3 py-2 text-amber-600 hover:bg-amber-50 cursor-pointer outline-none"
-              onClick={handleReset}
-            >
-              <RotateCcw className="h-4 w-4" /> Reset Password
-            </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="flex items-center gap-2 px-3 py-2 text-indigo-600 hover:bg-indigo-50 cursor-pointer outline-none"
+                onClick={handleSendInvite}
+              >
+                <Mail className="h-4 w-4" /> Send Invite
+              </DropdownMenu.Item>
 
-            <DropdownMenu.Item
-              className="flex items-center gap-2 px-3 py-2 cursor-pointer outline-none"
-              onClick={handleToggleActive}
-            >
-              {user?.is_active ? (
-                <><UserX className="h-4 w-4 text-red-600" /><span className="text-red-600">Deactivate</span></>
-              ) : (
-                <><UserCheck className="h-4 w-4 text-green-600" /><span className="text-green-600">Activate</span></>
-              )}
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Portal>
-      </DropdownMenu.Root>
+              <DropdownMenu.Item
+                className="flex items-center gap-2 px-3 py-2 text-amber-600 hover:bg-amber-50 cursor-pointer outline-none"
+                onClick={handleReset}
+              >
+                <RotateCcw className="h-4 w-4" /> Reset Password
+              </DropdownMenu.Item>
+
+              <DropdownMenu.Item
+                className="flex items-center gap-2 px-3 py-2 cursor-pointer outline-none"
+                onClick={handleToggleActive}
+              >
+                {user?.is_active ? (
+                  <><UserX className="h-4 w-4 text-red-600" /><span className="text-red-600">Deactivate</span></>
+                ) : (
+                  <><UserCheck className="h-4 w-4 text-green-600" /><span className="text-green-600">Activate</span></>
+                )}
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+
+        {/* Dialog lives outside DropdownMenu to avoid focus conflict */}
+        <Dialog.Root open={createOpen} onOpenChange={setCreateOpen}>
+          <UserFormDialog
+            title="Edit User"
+            departments={departments}
+            register={register}
+            handleSubmit={handleSubmit}
+            onSubmit={onCreateUser}
+            errors={errors}
+            isSubmitting={isSubmitting}
+            open={createOpen}
+            onOpenChange={setCreateOpen}
+            watchedRole={watchedRole}
+            chiefDeptIds={chiefDeptIds}
+            onChiefDeptChange={setChiefDeptIds}
+          />
+        </Dialog.Root>
+      </>
     )
   }
 

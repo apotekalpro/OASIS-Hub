@@ -185,6 +185,12 @@ export async function updateUserProfile(
   const { chief_dept_ids, ...profileData } = data as typeof data & { email?: string }
   // email lives in auth.users, not profiles — strip it to avoid update errors
   const { email: _email, ...safeProfileData } = profileData as typeof profileData & { email?: string }
+
+  // For chiefs, set dept_id to the first selected dept so the profile column is populated
+  if (data.role === 'chief' && chief_dept_ids?.length) {
+    (safeProfileData as typeof safeProfileData & { dept_id?: string }).dept_id = chief_dept_ids[0]
+  }
+
   const { error } = await adminClient
     .from('profiles')
     .update(safeProfileData)

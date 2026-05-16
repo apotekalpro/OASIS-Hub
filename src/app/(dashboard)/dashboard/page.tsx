@@ -7,6 +7,7 @@ import { formatRelativeTime, getDueStatus } from '@/lib/utils'
 import { ROLE_COLORS, ROLE_LABELS } from '@/lib/auth/permissions'
 import Link from 'next/link'
 import type { AppNotification, Profile, UserRole } from '@/types/database'
+import { PwaInstallBanner } from '@/components/pwa-install-banner'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -119,6 +120,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* PWA Install Banner */}
+      <PwaInstallBanner />
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">

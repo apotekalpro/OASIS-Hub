@@ -16,7 +16,7 @@ export default async function UsersPage() {
   const profileRes = await adminSupabase.from('profiles').select('org_id').eq('id', user.id).single()
   const orgId = profileRes.data?.org_id ?? null
 
-  let profilesQuery = adminSupabase.from('profiles').select(`*, chief_departments(dept_id)`).order('created_at', { ascending: false })
+  let profilesQuery = adminSupabase.from('profiles').select('*').order('created_at', { ascending: false })
   let deptsQuery = adminSupabase.from('departments').select('id, name, org_id').order('name')
   if (orgId) {
     profilesQuery = profilesQuery.eq('org_id', orgId)
@@ -24,15 +24,29 @@ export default async function UsersPage() {
   }
 
   const [usersResult, deptsResult] = await Promise.all([profilesQuery, deptsQuery])
-  const users = usersResult.data as Array<{
+  const rawUsers = usersResult.data as Array<{
     id: string; full_name: string; email: string; contact_email: string | null; role: UserRole; is_active: boolean;
     must_change_password: boolean; employee_id: string | null; avatar_url: string | null;
     dept_id: string | null; created_at: string; job_title: string | null; phone: string | null;
     last_login_at: string | null;
-    departments?: { name: string } | null
-    chief_departments?: Array<{ dept_id: string }> | null
   }> | null
   const departments = deptsResult.data as Array<{ id: string; name: string; org_id: string }> | null
+
+  // Fetch chief_departments separately to avoid PostgREST join issues
+  const chiefUserIds = (rawUsers ?? []).filter(u => u.role === 'chief').map(u => u.id)
+  const chiefDeptsMap = new Map<string, string[]>()
+  if (chiefUserIds.length > 0) {
+    const { data: cdRows } = await adminSupabase.from('chief_departments').select('user_id, dept_id').in('user_id', chiefUserIds)
+    for (const row of (cdRows ?? []) as Array<{ user_id: string; dept_id: string }>) {
+      if (!chiefDeptsMap.has(row.user_id)) chiefDeptsMap.set(row.user_id, [])
+      chiefDeptsMap.get(row.user_id)!.push(row.dept_id)
+    }
+  }
+
+  const users = (rawUsers ?? []).map(u => ({
+    ...u,
+    chief_departments: (chiefDeptsMap.get(u.id) ?? []).map(deptId => ({ dept_id: deptId })),
+  }))
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
