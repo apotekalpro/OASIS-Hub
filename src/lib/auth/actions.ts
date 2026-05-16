@@ -86,11 +86,13 @@ export async function createUser(data: {
 export async function importUsers(
   users: Array<{
     email: string
+    contact_email?: string
     full_name: string
     role: UserRole
     dept_id?: string
     employee_id?: string
     job_title?: string
+    phone?: string
   }>,
   org_id: string
 ) {

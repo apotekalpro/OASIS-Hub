@@ -113,11 +113,13 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
         }
         return {
           email: r.email || r.Email,
+          contact_email: r.contact_email || r['Contact Email'] || undefined,
           full_name: r.full_name || r['Full Name'] || r.name,
           role: (r.role || r.Role || 'member') as UserRole,
           dept_id: resolvedDeptId,
           employee_id: r.employee_id || r['Employee ID'] || undefined,
           job_title: r.job_title || r['Job Title'] || undefined,
+          phone: r.phone || r.Phone || undefined,
         }
       })
       const results = await importUsers(users, orgId ?? '')
@@ -247,8 +249,8 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
           <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-xl bg-white rounded-xl shadow-xl p-6 max-h-[90vh] overflow-y-auto">
             <Dialog.Title className="text-lg font-semibold mb-2">Import Users from CSV</Dialog.Title>
             <Dialog.Description className="text-sm text-gray-500 mb-4">
-              Columns: <code className="bg-gray-100 px-1 rounded text-xs">email, full_name, role, department, employee_id, job_title</code><br />
-              <span className="text-xs">Use the department <strong>name</strong> — see reference below. Roles: <code className="bg-gray-100 px-1 rounded">member, team_leader, lead, chief, dept_head, org_admin, auditor, viewer</code></span>
+              Columns: <code className="bg-gray-100 px-1 rounded text-xs">email, contact_email, full_name, role, department, employee_id, job_title, phone</code><br />
+              <span className="text-xs"><code className="bg-gray-100 px-1 rounded">contact_email</code> and <code className="bg-gray-100 px-1 rounded">phone</code> are optional. Use department <strong>name</strong> — see reference below.<br />Roles: <code className="bg-gray-100 px-1 rounded">member, team_leader, lead, chief, dept_head, org_admin, auditor, viewer</code></span>
             </Dialog.Description>
 
             {/* Department reference */}
@@ -289,10 +291,10 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
               onClick={() => {
                 const exampleDept = departments[0]?.name ?? 'PEOPLE MANAGEMENT'
                 const csv = [
-                  'email,full_name,role,department,employee_id,job_title',
-                  `ali@example.com,Ali Hassan,member,${exampleDept},EMP001,Pharmacist`,
-                  `siti@example.com,Siti Rahimah,team_leader,${exampleDept},EMP002,Senior Pharmacist`,
-                  'ahmad@example.com,Ahmad Fadzil,dept_head,,EMP003,Department Head',
+                  'email,contact_email,full_name,role,department,employee_id,job_title,phone',
+                  `ali@example.com,ali.personal@gmail.com,Ali Hassan,member,${exampleDept},EMP001,Pharmacist,+60 12-345 6789`,
+                  `siti@example.com,,Siti Rahimah,team_leader,${exampleDept},EMP002,Senior Pharmacist,`,
+                  'ahmad@example.com,,Ahmad Fadzil,dept_head,,EMP003,Department Head,',
                 ].join('\n')
                 const blob = new Blob([csv], { type: 'text/csv' })
                 const url = URL.createObjectURL(blob)
