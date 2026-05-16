@@ -42,8 +42,8 @@ export default async function AnalyticsPage({
       supabase.from('atem_items').select('id, status, priority, deadline, created_at, dept_id, departments(name)').eq('org_id', orgId).order('created_at', { ascending: false }),
       supabase.from('atem_assignees').select('atem_id, user_id'),
     ])
-    type AtemRow = { id: string; status: string; priority: string; deadline: string | null; created_at: string; dept_id: string | null; departments?: { name: string } | null }
-    const items = (itemsRes.data ?? []) as AtemRow[]
+    type AtemRow = { id: string; status: string; priority: string; deadline: string | null; created_at: string; dept_id: string | null; departments?: { name: string } | { name: string }[] | null }
+    const items = (itemsRes.data ?? []) as unknown as AtemRow[]
     const now = new Date().toISOString()
     const atemStats = {
       total: items.length,
@@ -58,7 +58,8 @@ export default async function AnalyticsPage({
     const deptBreakdown = Object.values(
       items.reduce<Record<string, { name: string; total: number; completed: number }>>((acc, i) => {
         const key = i.dept_id ?? 'none'
-        const name = i.departments?.name ?? 'No Department'
+        const depts = i.departments
+        const name = (Array.isArray(depts) ? depts[0]?.name : depts?.name) ?? 'No Department'
         if (!acc[key]) acc[key] = { name, total: 0, completed: 0 }
         acc[key].total++
         if (i.status === 'completed') acc[key].completed++
@@ -74,9 +75,9 @@ export default async function AnalyticsPage({
       supabase.from('okr_objectives').select('id, status, progress, period_type, dept_id, departments(name), created_at').eq('org_id', orgId).order('created_at', { ascending: false }),
       supabase.from('okr_key_results').select('id, objective_id, status, current_value, target_value, metric_type'),
     ])
-    type OkrRow = { id: string; status: string; progress: number; period_type: string; dept_id: string | null; departments?: { name: string } | null; created_at: string }
+    type OkrRow = { id: string; status: string; progress: number; period_type: string; dept_id: string | null; departments?: { name: string } | { name: string }[] | null; created_at: string }
     type KrRow = { id: string; objective_id: string; status: string; current_value: number; target_value: number; metric_type: string }
-    const objs = (objRes.data ?? []) as OkrRow[]
+    const objs = (objRes.data ?? []) as unknown as OkrRow[]
     const krs = (krRes.data ?? []) as KrRow[]
     const okrStats = {
       total: objs.length,
@@ -92,7 +93,8 @@ export default async function AnalyticsPage({
     const deptBreakdown = Object.values(
       objs.reduce<Record<string, { name: string; total: number; completed: number; avg_progress: number; items: number }>>((acc, o) => {
         const key = o.dept_id ?? 'none'
-        const name = o.departments?.name ?? 'No Department'
+        const depts = o.departments
+        const name = (Array.isArray(depts) ? depts[0]?.name : depts?.name) ?? 'No Department'
         if (!acc[key]) acc[key] = { name, total: 0, completed: 0, avg_progress: 0, items: 0 }
         acc[key].total++
         acc[key].items++
