@@ -150,7 +150,24 @@ export function Sidebar() {
       </nav>
 
       {profile && (
-        <div className="border-t border-white/10 p-3">
+        <div className="border-t border-white/10 p-3 space-y-1">
+          {installable && (
+            <button
+              onClick={async () => {
+                const prompt = window.__pwaInstallPrompt
+                if (!prompt) return
+                await prompt.prompt()
+                const { outcome } = await prompt.userChoice
+                if (outcome === 'accepted') {
+                  setInstallable(false)
+                  window.__pwaInstallPrompt = undefined
+                }
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
+            >
+              <span>↓</span> Install OASIS Hub App
+            </button>
+          )}
           <div className="flex items-center gap-3 rounded-lg px-2 py-2">
             <UserAvatar name={profile.full_name} avatarUrl={profile.avatar_url} size="sm" />
             <div className="flex-1 min-w-0">

@@ -22,6 +22,16 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+      <head>
+        {/* Capture beforeinstallprompt synchronously — before React hydrates */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            window.__pwaInstallPrompt = e;
+            window.__pwaInstallReady = true;
+          });
+        `}} />
+      </head>
       <body className={`${geist.variable} font-sans min-h-full`}>
         <PWARegister />
         {children}
