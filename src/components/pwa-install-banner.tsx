@@ -11,6 +11,7 @@ interface BeforeInstallPromptEvent extends Event {
 declare global {
   interface Window {
     __pwaInstallPrompt?: BeforeInstallPromptEvent
+    __pwaInstallReady?: boolean
   }
 }
 
@@ -34,7 +35,7 @@ export function PwaInstallBanner() {
     if (isInStandaloneMode()) { setInstalled(true); return }
     setIsIos(isIOS())
 
-    if (window.__pwaInstallPrompt) setInstallable(true)
+    if (window.__pwaInstallReady || window.__pwaInstallPrompt) setInstallable(true)
     const handler = () => setInstallable(true)
     window.addEventListener('pwa-installable', handler)
 
