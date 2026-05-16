@@ -19,7 +19,7 @@ import type { FeatureName } from '@/lib/auth/permissions'
 import type { UserRole } from '@/types/database'
 import { signOut } from '@/lib/auth/actions'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -86,6 +86,15 @@ export function Sidebar() {
   const unreadCount = useNotificationStore(s => s.unreadCount)
   const [signingOut, setSigningOut] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [installable, setInstallable] = useState(false)
+
+  useEffect(() => {
+    // Check if already installable
+    if (window.__pwaInstallPrompt) setInstallable(true)
+    const handler = () => setInstallable(true)
+    window.addEventListener('pwa-installable', handler)
+    return () => window.removeEventListener('pwa-installable', handler)
+  }, [])
 
   function canSeeAdminItem(item: typeof ADMIN_NAV_ITEMS[0]): boolean {
     if (!profile) return false
@@ -188,6 +197,24 @@ export function Sidebar() {
           <Image src="/oasis-hub-logo.png" alt="OASIS Hub" width={44} height={44} className="h-11 w-11 object-contain" priority />
         </div>
         <div className="flex items-center gap-1">
+          {installable && (
+            <button
+              onClick={async () => {
+                const prompt = window.__pwaInstallPrompt
+                if (!prompt) return
+                await prompt.prompt()
+                const { outcome } = await prompt.userChoice
+                if (outcome === 'accepted') {
+                  setInstallable(false)
+                  window.__pwaInstallPrompt = undefined
+                }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-600 text-white text-xs font-medium mr-1"
+              title="Install OASIS Hub app"
+            >
+              ↓ Install
+            </button>
+          )}
           <Link href="/notifications" className="relative p-2">
             <Bell className="h-5 w-5 text-indigo-200" />
             {unreadCount > 0 && (

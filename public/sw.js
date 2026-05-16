@@ -1,28 +1,39 @@
-const CACHE_NAME = 'oasis-hub-v1'
-const STATIC_ASSETS = [
-  '/dashboard',
-  '/oasis-hub-logo.png',
-]
+const CACHE_NAME = 'oasis-hub-v2'
 
 self.addEventListener('install', event => {
+  // Take control immediately without waiting
+  self.skipWaiting()
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache =>
+      cache.addAll(['/oasis-hub-logo.png']).catch(() => {})
+    )
   )
 })
 
 self.addEventListener('activate', event => {
+  // Claim all clients immediately
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then(keys =>
+        Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      ),
+    ])
   )
 })
 
 self.addEventListener('fetch', event => {
-  // Network-first for API and auth routes
-  if (event.request.url.includes('/api/') || event.request.url.includes('/auth/')) {
+  const url = new URL(event.request.url)
+  // Skip non-GET, API routes, and auth routes
+  if (
+    event.request.method !== 'GET' ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/auth/') ||
+    url.pathname.includes('supabase')
+  ) {
     return
   }
+  // Network-first strategy
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request))
   )
