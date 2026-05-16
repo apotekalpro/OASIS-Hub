@@ -69,10 +69,31 @@ export function getInitials(name: string) {
 }
 
 export function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.trim().split('\n')
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+  // Proper RFC-4180 parser — handles commas inside quoted fields
+  function parseLine(line: string): string[] {
+    const fields: string[] = []
+    let cur = ''
+    let inQuotes = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') { cur += '"'; i++ }
+        else inQuotes = !inQuotes
+      } else if (ch === ',' && !inQuotes) {
+        fields.push(cur.trim())
+        cur = ''
+      } else {
+        cur += ch
+      }
+    }
+    fields.push(cur.trim())
+    return fields
+  }
+
+  const lines = text.trim().split('\n').filter(l => l.trim())
+  const headers = parseLine(lines[0])
   return lines.slice(1).map(line => {
-    const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
+    const values = parseLine(line)
     return Object.fromEntries(headers.map((h, i) => [h, values[i] ?? '']))
   })
 }
