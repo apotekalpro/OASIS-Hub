@@ -71,7 +71,7 @@ export async function middleware(request: NextRequest) {
 
   if (!profile) return NextResponse.redirect(new URL('/login', request.url))
 
-  const userLevel = profile.role_level ?? 0
+  const userLevel = profile.role_level ?? ROLE_LEVELS[profile.role] ?? 0
 
   if (isSuperAdminRoute) {
     if (userLevel < ROLE_LEVELS.org_admin) return NextResponse.redirect(new URL('/dashboard', request.url))
