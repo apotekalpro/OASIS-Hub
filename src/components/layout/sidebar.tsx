@@ -224,8 +224,9 @@ export function Sidebar() {
 
       {/* ── Mobile top header ────────────────────────────────── */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-indigo-950 flex items-center justify-between px-4 shadow-md">
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
           <Image src="/oasis-hub-logo.png" alt="OASIS Hub" width={44} height={44} className="h-11 w-11 object-contain" priority />
+          <span className="font-bold text-white text-base leading-tight">OASIS Hub</span>
         </div>
         <div className="flex items-center gap-1">
           {!isStandalone && (
