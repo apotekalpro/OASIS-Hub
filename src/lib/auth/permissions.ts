@@ -6,10 +6,12 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
   dept_head: 60,
   chief: 60,
   lead: 50,
+  area_manager: 45,
   team_leader: 40,
   auditor: 35,
   member: 20,
   viewer: 10,
+  outlet: 5,
 }
 
 export function hasRole(userRole: UserRole, requiredRole: UserRole): boolean {
@@ -70,10 +72,12 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   dept_head: 'Department Head',
   chief: 'Chief',
   lead: 'Lead / Supervisor',
+  area_manager: 'Area Manager',
   team_leader: 'Team Leader',
   auditor: 'Auditor',
   member: 'Member',
   viewer: 'Viewer',
+  outlet: 'Outlet',
 }
 
 export const ROLE_COLORS: Record<UserRole, string> = {
@@ -82,10 +86,12 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   dept_head: 'bg-blue-100 text-blue-800',
   chief: 'bg-indigo-100 text-indigo-800',
   lead: 'bg-cyan-100 text-cyan-800',
+  area_manager: 'bg-teal-100 text-teal-800',
   team_leader: 'bg-green-100 text-green-800',
   auditor: 'bg-yellow-100 text-yellow-800',
   member: 'bg-gray-100 text-gray-800',
   viewer: 'bg-slate-100 text-slate-600',
+  outlet: 'bg-orange-100 text-orange-800',
 }
 
 export type FeatureName = 'teams' | 'outlets' | 'checklists' | 'schedules' | 'analytics'

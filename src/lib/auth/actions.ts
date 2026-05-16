@@ -17,6 +17,7 @@ export async function createUser(data: {
   org_id: string
   dept_id?: string
   chief_dept_ids?: string[]
+  outlet_id?: string | null
   employee_id?: string
   job_title?: string
   phone?: string
@@ -63,6 +64,7 @@ export async function createUser(data: {
       role: data.role,
       job_title: data.job_title || null,
       phone: data.phone || null,
+      outlet_id: data.outlet_id || null,
       must_change_password: true,
     })
 
@@ -176,6 +178,7 @@ export async function updateUserProfile(
     dept_id: string
     contact_email: string | null
     chief_dept_ids: string[]
+    outlet_id: string | null
     employee_id: string
     job_title: string
     phone: string

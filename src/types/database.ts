@@ -4,10 +4,12 @@ export type UserRole =
   | 'dept_head'
   | 'chief'
   | 'lead'
+  | 'area_manager'
   | 'team_leader'
   | 'member'
   | 'auditor'
   | 'viewer'
+  | 'outlet'
 
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'

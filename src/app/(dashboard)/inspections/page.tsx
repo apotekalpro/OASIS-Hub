@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Building2, ClipboardCheck, Clock, AlertCircle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -10,25 +10,45 @@ export default async function InspectionsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const profileRes = await supabase.from('profiles').select('org_id, role').eq('id', user.id).single()
-  const { org_id: orgId, role } = (profileRes.data ?? {}) as { org_id: string; role: string }
+  const admin = createAdminClient()
+  const profileRes = await admin.from('profiles').select('org_id, role, outlet_id').eq('id', user.id).single()
+  const { org_id: orgId, role, outlet_id: profileOutletId } = (profileRes.data ?? {}) as { org_id: string; role: string; outlet_id: string | null }
 
-  // super_admin, org_admin, chief see all outlets; everyone else sees only assigned ones
-  const isAdmin = ['super_admin', 'org_admin', 'chief'].includes(role)
+  // Admins see all outlets; area_manager sees their outlets; outlet user sees only their one
+  const isAdmin = ['super_admin', 'org_admin', 'chief', 'dept_head'].includes(role)
+  const isAreaManager = role === 'area_manager'
+  const isOutletUser = role === 'outlet'
 
-  // Staff see only their assigned outlets; admins see all
-  let outletsQuery = supabase
+  let outletsQuery = admin
     .from('outlets')
     .select('id, name, code, city, state, status')
     .eq('org_id', orgId)
     .eq('status', 'active')
     .order('name')
 
-  if (!isAdmin) {
-    // Collect outlet IDs from outlet_staff assignments AND from inspection schedules assigned to this user
+  if (isOutletUser) {
+    // Outlet user sees only their assigned outlet
+    if (!profileOutletId) {
+      return (
+        <div className="p-6 max-w-4xl mx-auto">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Inspections</h1>
+          <Card><CardContent className="p-12 text-center">
+            <Building2 className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+            <p className="font-medium text-gray-500">No outlet assigned to this account</p>
+            <p className="text-sm text-gray-400 mt-1">Contact your administrator.</p>
+          </CardContent></Card>
+        </div>
+      )
+    }
+    outletsQuery = outletsQuery.eq('id', profileOutletId)
+  } else if (isAreaManager) {
+    // Area manager sees outlets where area_manager_id = their profile
+    outletsQuery = outletsQuery.eq('area_manager_id', user.id)
+  } else if (!isAdmin) {
+    // Other staff: collect outlet IDs from outlet_staff assignments AND from inspection schedules
     const [staffRes, scheduleRes] = await Promise.all([
-      supabase.from('outlet_staff').select('outlet_id').eq('user_id', user.id),
-      supabase.from('inspection_schedules').select('outlet_id').eq('assigned_to', user.id).eq('is_active', true),
+      admin.from('outlet_staff').select('outlet_id').eq('user_id', user.id),
+      admin.from('inspection_schedules').select('outlet_id').eq('assigned_to', user.id).eq('is_active', true),
     ])
     const staffIds = (staffRes.data ?? []).map(a => a.outlet_id).filter(Boolean) as string[]
     const scheduleIds = (scheduleRes.data ?? []).map(s => s.outlet_id).filter(Boolean) as string[]

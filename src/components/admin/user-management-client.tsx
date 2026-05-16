@@ -16,17 +16,18 @@ import { parseCSV } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { UserRole, Profile, Department } from '@/types/database'
 
-const ASSIGNABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'chief', 'lead', 'team_leader', 'member', 'auditor', 'viewer']
+const ASSIGNABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'chief', 'lead', 'area_manager', 'team_leader', 'member', 'auditor', 'viewer', 'outlet']
 
 const userSchema = z.object({
   email: z.string().email(),
   contact_email: z.string().email().optional().or(z.literal('')),
   full_name: z.string().min(2),
-  role: z.enum(['org_admin', 'dept_head', 'chief', 'lead', 'team_leader', 'member', 'auditor', 'viewer']),
+  role: z.enum(['org_admin', 'dept_head', 'chief', 'lead', 'area_manager', 'team_leader', 'member', 'auditor', 'viewer', 'outlet']),
   dept_id: z.string().optional(),
   employee_id: z.string().optional(),
   job_title: z.string().optional(),
   phone: z.string().optional(),
+  outlet_id: z.string().optional(),
 })
 
 type UserFormData = z.infer<typeof userSchema>
@@ -35,12 +36,13 @@ interface Props {
   departments: Pick<Department, 'id' | 'name'>[]
   orgId: string | null
   userId?: string
-  user?: Partial<Profile>
+  user?: Partial<Profile & { outlet_id?: string | null }>
   initialChiefDeptIds?: string[]
+  outlets?: Array<{ id: string; name: string; code: string | null }>
   mode?: 'create' | 'actions'
 }
 
-export function UserManagementClient({ departments, orgId, userId, user, initialChiefDeptIds = [], mode = 'create' }: Props) {
+export function UserManagementClient({ departments, orgId, userId, user, initialChiefDeptIds = [], outlets = [], mode = 'create' }: Props) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -59,6 +61,7 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
       dept_id: user.dept_id ?? undefined,
       employee_id: user.employee_id ?? undefined,
       job_title: user.job_title ?? undefined,
+      outlet_id: user.outlet_id ?? undefined,
     } : undefined,
   })
 
@@ -69,13 +72,17 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
     if (createOpen) setChiefDeptIds(initialChiefDeptIds)
   }, [createOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isChiefRole = watchedRole === 'chief'
+  const isOutletRole = watchedRole === 'outlet'
+
   async function onCreateUser(data: UserFormData) {
     try {
       if (userId) {
         await updateUserProfile(userId, {
           ...data,
           contact_email: data.contact_email || null,
-          chief_dept_ids: watchedRole === 'chief' ? chiefDeptIds : [],
+          chief_dept_ids: isChiefRole ? chiefDeptIds : [],
+          outlet_id: isOutletRole ? (data.outlet_id || null) : null,
         })
         toast.success('User updated successfully')
       } else {
@@ -83,7 +90,8 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
           ...data,
           contact_email: data.contact_email || null,
           org_id: orgId ?? '',
-          chief_dept_ids: watchedRole === 'chief' ? chiefDeptIds : [],
+          chief_dept_ids: isChiefRole ? chiefDeptIds : [],
+          outlet_id: isOutletRole ? (data.outlet_id || null) : null,
         })
         toast.success(`User created. Default password: Alpro@123`)
       }
@@ -218,6 +226,7 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
           <UserFormDialog
             title="Edit User"
             departments={departments}
+            outlets={outlets}
             register={register}
             handleSubmit={handleSubmit}
             onSubmit={onCreateUser}
@@ -334,6 +343,7 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
         <UserFormDialog
           title="Create New User"
           departments={departments}
+          outlets={outlets}
           register={register}
           handleSubmit={handleSubmit}
           onSubmit={onCreateUser}
@@ -352,11 +362,12 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
 
 // Shared form dialog component
 function UserFormDialog({
-  title, departments, register, handleSubmit, onSubmit, errors, isSubmitting, open, onOpenChange,
+  title, departments, outlets, register, handleSubmit, onSubmit, errors, isSubmitting, open, onOpenChange,
   watchedRole, chiefDeptIds, onChiefDeptChange,
 }: {
   title: string
   departments: Pick<Department, 'id' | 'name'>[]
+  outlets: Array<{ id: string; name: string; code: string | null }>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   register: any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -373,6 +384,7 @@ function UserFormDialog({
   onChiefDeptChange: (ids: string[]) => void
 }) {
   const isChief = watchedRole === 'chief'
+  const isOutlet = watchedRole === 'outlet'
 
   function toggleDept(deptId: string) {
     onChiefDeptChange(
@@ -457,6 +469,21 @@ function UserFormDialog({
               )}
             </div>
           </div>
+
+          {isOutlet && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Assigned Outlet <span className="text-red-500">*</span>
+                <span className="ml-1 text-xs font-normal text-gray-400">(this account represents this outlet)</span>
+              </label>
+              <select className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" {...register('outlet_id')}>
+                <option value="">— Select Outlet —</option>
+                {outlets.map(o => (
+                  <option key={o.id} value={o.id}>{o.name}{o.code ? ` (${o.code})` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>

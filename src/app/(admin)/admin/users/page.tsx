@@ -18,19 +18,22 @@ export default async function UsersPage() {
 
   let profilesQuery = adminSupabase.from('profiles').select('*').order('created_at', { ascending: false })
   let deptsQuery = adminSupabase.from('departments').select('id, name, org_id').order('name')
+  let outletsQuery = adminSupabase.from('outlets').select('id, name, code').eq('status', 'active').order('name')
   if (orgId) {
     profilesQuery = profilesQuery.eq('org_id', orgId)
     deptsQuery = deptsQuery.eq('org_id', orgId)
+    outletsQuery = outletsQuery.eq('org_id', orgId)
   }
 
-  const [usersResult, deptsResult] = await Promise.all([profilesQuery, deptsQuery])
+  const [usersResult, deptsResult, outletsResult] = await Promise.all([profilesQuery, deptsQuery, outletsQuery])
   const rawUsers = usersResult.data as Array<{
     id: string; full_name: string; email: string; contact_email: string | null; role: UserRole; is_active: boolean;
     must_change_password: boolean; employee_id: string | null; avatar_url: string | null;
-    dept_id: string | null; created_at: string; job_title: string | null; phone: string | null;
+    dept_id: string | null; outlet_id: string | null; created_at: string; job_title: string | null; phone: string | null;
     last_login_at: string | null;
   }> | null
   const departments = deptsResult.data as Array<{ id: string; name: string; org_id: string }> | null
+  const outlets = outletsResult.data as Array<{ id: string; name: string; code: string | null }> | null
 
   // Fetch chief_departments separately to avoid PostgREST join issues
   const chiefUserIds = (rawUsers ?? []).filter(u => u.role === 'chief').map(u => u.id)
@@ -59,13 +62,14 @@ export default async function UsersPage() {
         </div>
         <UserManagementClient
           departments={departments ?? []}
+          outlets={outlets ?? []}
           orgId={orgId ?? ''}
         />
       </div>
 
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {(['super_admin', 'org_admin', 'dept_head', 'chief', 'lead', 'member'] as UserRole[]).map(role => (
+        {(['super_admin', 'org_admin', 'dept_head', 'chief', 'lead', 'area_manager', 'member', 'outlet'] as UserRole[]).map(role => (
           <Card key={role}>
             <CardContent className="p-4">
               <p className="text-2xl font-bold text-gray-900">
@@ -122,10 +126,12 @@ export default async function UsersPage() {
                         {ROLE_LABELS[user.role as UserRole]}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-gray-500">
+                    <td className="px-4 py-4 text-gray-500 text-sm">
                       {user.role === 'chief' && user.chief_departments?.length
                         ? user.chief_departments.map(cd => departments?.find(d => d.id === cd.dept_id)?.name).filter(Boolean).join(', ')
-                        : departments?.find(d => d.id === user.dept_id)?.name ?? '—'}
+                        : user.role === 'outlet' && user.outlet_id
+                          ? <span className="text-orange-700">{outlets?.find(o => o.id === user.outlet_id)?.name ?? '—'}</span>
+                          : departments?.find(d => d.id === user.dept_id)?.name ?? '—'}
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1">
@@ -150,6 +156,7 @@ export default async function UsersPage() {
                         userId={user.id}
                         user={user}
                         departments={departments ?? []}
+                        outlets={outlets ?? []}
                         orgId={orgId}
                         initialChiefDeptIds={user.chief_departments?.map(cd => cd.dept_id) ?? []}
                         mode="actions"

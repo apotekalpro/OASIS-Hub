@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 const SHEET_ID = '1oKBl-ppv5qjsBq8IXj5Q9KPThlSepSG-ocLIdZeS3g0'
 const SHEET_GID = '0'
@@ -128,18 +128,53 @@ export async function POST(req: NextRequest) {
   }
 
   // Upsert by (org_id, code) — need a unique constraint on (org_id, code)
-  const { data, error } = await supabase
+  const admin = createAdminClient()
+  const { data, error } = await admin
     .from('outlets')
     .upsert(rows, { onConflict: 'org_id,code', ignoreDuplicates: false })
-    .select('id')
+    .select('id, area_manager_name')
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // Auto-match area_manager_name → area_manager_id by looking up AM profiles
+  let amLinked = 0
+  const uniqueAmNames = [...new Set(
+    (data ?? []).map(o => (o as { area_manager_name: string | null }).area_manager_name).filter(Boolean)
+  )] as string[]
+
+  if (uniqueAmNames.length > 0) {
+    const { data: amProfiles } = await admin
+      .from('profiles')
+      .select('id, full_name')
+      .eq('org_id', orgId)
+      .eq('role', 'area_manager')
+
+    const nameToId = new Map<string, string>(
+      (amProfiles ?? []).map(p => [p.full_name.trim().toLowerCase(), p.id])
+    )
+
+    // Update each outlet that has a matching AM
+    const updatePromises = (data ?? [])
+      .filter(o => (o as { area_manager_name: string | null }).area_manager_name)
+      .map(async (o) => {
+        const outlet = o as { id: string; area_manager_name: string | null }
+        const amId = nameToId.get(outlet.area_manager_name!.trim().toLowerCase())
+        if (!amId) return
+        const { error: upErr } = await admin
+          .from('outlets')
+          .update({ area_manager_id: amId })
+          .eq('id', outlet.id)
+        if (!upErr) amLinked++
+      })
+    await Promise.all(updatePromises)
   }
 
   return NextResponse.json({
     synced: data?.length ?? rows.length,
     skipped: skipped.length,
     total: dataLines.length,
+    am_linked: amLinked,
   })
 }
