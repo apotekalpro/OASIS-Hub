@@ -116,6 +116,7 @@ export default async function DashboardPage() {
       : Promise.resolve({ data: [] }),
   ])
 
+  function stripHtml(html: string) { return html.replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim() }
   type AtemItem = { id: string; task: string; status: string; priority: string; deadline: string | null }
   type OkrObj = { id: string; title: string; status: string; progress: number; end_date: string | null }
   const myAtemItems = (atemItemsRes.data ?? []) as AtemItem[]
@@ -301,7 +302,7 @@ export default async function DashboardPage() {
                     <li key={item.id}>
                       <Link href={`/atem/${item.id}`} className="flex items-center gap-3 px-6 py-3 hover:bg-gray-50 transition-colors">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{item.task}</p>
+                          <p className="text-sm font-medium text-gray-900 truncate">{stripHtml(item.task)}</p>
                           {item.deadline && (
                             <p className="text-xs text-gray-400 mt-0.5">{new Date(item.deadline).toLocaleDateString()}</p>
                           )}

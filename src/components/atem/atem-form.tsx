@@ -311,7 +311,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   <span className="inline-flex items-center gap-1.5">
                     <span className="bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 text-xs font-bold">E</span>
-                    Estimated Time (hours)
+                    Estimated Time (days)
                   </span>
                 </label>
                 <Input type="number" step="0.5" min="0" placeholder="0" {...register('estimated_time')} />

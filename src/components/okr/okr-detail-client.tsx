@@ -336,6 +336,7 @@ export function OkrDetailClient({
   // KR inline update
   const [krEditing, setKrEditing] = useState<Record<string, string>>({})
   const [krUpdating, setKrUpdating] = useState<string | null>(null)
+  const [krStatusUpdating, setKrStatusUpdating] = useState<string | null>(null)
 
   // Add KR
   const [showAddKr, setShowAddKr] = useState(false)
@@ -427,6 +428,26 @@ export function OkrDetailClient({
       toast.error((err as Error).message)
     } finally {
       setKrUpdating(null)
+    }
+  }
+
+  async function updateKrStatus(kr: KeyResult, newStatus: string) {
+    if (kr.status === newStatus) return
+    setKrStatusUpdating(kr.id)
+    try {
+      const res = await fetch(`/api/okr/${objective.id}/key-results`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: kr.id, status: newStatus }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setKrs(prev => prev.map(k => k.id === kr.id ? { ...k, status: newStatus } : k))
+      toast.success('KR status updated')
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setKrStatusUpdating(null)
     }
   }
 
@@ -946,6 +967,30 @@ export function OkrDetailClient({
                                 Due {formatDate(kr.due_date)}
                               </span>
                             )}
+                          </div>
+
+                          {/* KR Status selector */}
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <span className="text-xs text-gray-400 shrink-0">KR Status:</span>
+                            {(['not_started', 'in_progress', 'at_risk', 'completed'] as const).map(s => {
+                              const sLabel: Record<string, string> = { not_started: 'Not Started', in_progress: 'In Progress', at_risk: 'At Risk', completed: 'Completed' }
+                              const sColor: Record<string, string> = {
+                                not_started: kr.status === s ? 'bg-gray-200 text-gray-800 border-gray-300' : 'border-gray-200 text-gray-400 hover:border-gray-300',
+                                in_progress: kr.status === s ? 'bg-blue-100 text-blue-800 border-blue-300' : 'border-gray-200 text-gray-400 hover:border-gray-300',
+                                at_risk: kr.status === s ? 'bg-amber-100 text-amber-800 border-amber-300' : 'border-gray-200 text-gray-400 hover:border-gray-300',
+                                completed: kr.status === s ? 'bg-green-100 text-green-800 border-green-300' : 'border-gray-200 text-gray-400 hover:border-gray-300',
+                              }
+                              return (
+                                <button
+                                  key={s}
+                                  disabled={krStatusUpdating === kr.id}
+                                  onClick={() => updateKrStatus(kr, s)}
+                                  className={cn('text-xs px-2 py-0.5 rounded-full border font-medium transition-colors', sColor[s])}
+                                >
+                                  {sLabel[s]}
+                                </button>
+                              )
+                            })}
                           </div>
 
                           {/* Inline current value update */}

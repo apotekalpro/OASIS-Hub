@@ -245,7 +245,7 @@ export function AtemListClient({ initialItems, orgId, currentUserId, users, depa
         </div>
       )}
 
-      {/* Table */}
+      {/* Cards */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <div className="mx-auto w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center mb-3">
@@ -257,171 +257,152 @@ export function AtemListClient({ initialItems, orgId, currentUserId, users, depa
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 min-w-[200px]">
-                    <span className="flex items-center gap-1.5">
-                      <span className="bg-indigo-100 text-indigo-700 rounded px-1 text-xs font-bold">T</span>
-                      Task
-                    </span>
-                  </th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 w-28">Status</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 w-24">Priority</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 w-32">
-                    <span className="flex items-center gap-1">
-                      <span className="bg-orange-100 text-orange-700 rounded px-1 text-xs font-bold">D</span>
-                      Deadline
-                    </span>
-                  </th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 min-w-[140px]">
-                    <span className="flex items-center gap-1">
-                      <span className="bg-green-100 text-green-700 rounded px-1 text-xs font-bold">I</span>
-                      Impact
-                    </span>
-                  </th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 w-24">
-                    <span className="flex items-center gap-1">
-                      <span className="bg-purple-100 text-purple-700 rounded px-1 text-xs font-bold">E</span>
-                      Est. Time
-                    </span>
-                  </th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 w-32">Assignees</th>
-                  <th className="px-4 py-3 w-20"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filtered.map(item => {
-                  const assigneeUsers = getAssigneeUsers(item)
-                  const shown = assigneeUsers.slice(0, 3)
-                  const extra = assigneeUsers.length - shown.length
-                  const itemAsExisting: ExistingAtemItem = {
-                    id: item.id,
-                    task: item.task,
-                    priority: item.priority,
-                    status: item.status,
-                    deadline: item.deadline,
-                    deadline_text: item.deadline_text ?? null,
-                    action_plan: item.action_plan ?? null,
-                    impact: item.impact,
-                    dependencies: item.dependencies,
-                    strategic_alignment: item.strategic_alignment,
-                    consequences_of_delay: item.consequences_of_delay,
-                    estimated_time: item.estimated_time,
-                    dept_id: item.dept_id,
-                    team_id: item.team_id,
-                    tags: item.tags,
-                  }
+        <div className="space-y-3">
+          {filtered.map(item => {
+            const assigneeUsers = getAssigneeUsers(item)
+            const shown = assigneeUsers.slice(0, 4)
+            const extra = assigneeUsers.length - shown.length
+            const itemAsExisting: ExistingAtemItem = {
+              id: item.id,
+              task: item.task,
+              priority: item.priority,
+              status: item.status,
+              deadline: item.deadline,
+              deadline_text: item.deadline_text ?? null,
+              action_plan: item.action_plan ?? null,
+              impact: item.impact,
+              dependencies: item.dependencies,
+              strategic_alignment: item.strategic_alignment,
+              consequences_of_delay: item.consequences_of_delay,
+              estimated_time: item.estimated_time,
+              dept_id: item.dept_id,
+              team_id: item.team_id,
+              tags: item.tags,
+            }
 
-                  return (
-                    <tr key={item.id} className="hover:bg-gray-50 transition-colors group">
-                      <td className="px-4 py-3">
-                        <Link href={`/atem/${item.id}`} className="font-medium text-gray-900 hover:text-indigo-600 transition-colors line-clamp-2">
-                          <span className={cn('inline-block h-2 w-2 rounded-full mr-2 shrink-0 align-middle', PRIORITY_DOT[item.priority])} />
-                          {stripHtml(item.task)}
-                        </Link>
-                        {item.tags?.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {item.tags.slice(0, 3).map(tag => (
-                              <span key={tag} className="text-xs bg-indigo-50 text-indigo-600 rounded-full px-1.5 py-0.5">{tag}</span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant={STATUS_VARIANT[item.status] ?? 'secondary'}>
+            return (
+              <div key={item.id} className="bg-white rounded-xl border border-gray-200 hover:border-indigo-200 hover:shadow-sm transition-all group">
+                {/* Priority stripe */}
+                <div className={cn('h-1 rounded-t-xl', {
+                  'bg-red-500': item.priority === 'urgent',
+                  'bg-orange-400': item.priority === 'high',
+                  'bg-blue-400': item.priority === 'medium',
+                  'bg-gray-200': item.priority === 'low',
+                })} />
+
+                <div className="p-4">
+                  {/* Row 1: Task title + actions */}
+                  <div className="flex items-start gap-3">
+                    <span className={cn('mt-1.5 h-2.5 w-2.5 rounded-full shrink-0', PRIORITY_DOT[item.priority])} />
+                    <div className="flex-1 min-w-0">
+                      <Link
+                        href={`/atem/${item.id}`}
+                        className="text-sm font-semibold text-gray-900 hover:text-indigo-600 transition-colors line-clamp-2 leading-snug"
+                      >
+                        {stripHtml(item.task)}
+                      </Link>
+
+                      {/* Row 2: badges row */}
+                      <div className="flex items-center gap-2 flex-wrap mt-2">
+                        <Badge variant={STATUS_VARIANT[item.status] ?? 'secondary'} className="text-xs">
                           {STATUS_LABEL[item.status] ?? item.status}
                         </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={cn('inline-flex items-center gap-1.5 text-xs font-medium capitalize', {
+                        <span className={cn('text-xs font-medium capitalize', {
                           'text-red-600': item.priority === 'urgent',
                           'text-orange-500': item.priority === 'high',
                           'text-blue-600': item.priority === 'medium',
-                          'text-gray-500': item.priority === 'low',
+                          'text-gray-400': item.priority === 'low',
                         })}>
-                          <span className={cn('h-2 w-2 rounded-full shrink-0', PRIORITY_DOT[item.priority])} />
                           {PRIORITY_LABEL[item.priority]}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {item.deadline ? (
-                          <span className="flex items-center gap-1 text-xs">
+                        {item.departments?.name && (
+                          <span className="text-xs text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">
+                            {item.departments.name}
+                          </span>
+                        )}
+                        {item.teams?.name && (
+                          <span className="text-xs text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">
+                            {item.teams.name}
+                          </span>
+                        )}
+                        {item.tags?.slice(0, 2).map(tag => (
+                          <span key={tag} className="text-xs bg-indigo-50 text-indigo-600 rounded-full px-1.5 py-0.5">{tag}</span>
+                        ))}
+                        {(item.tags?.length ?? 0) > 2 && (
+                          <span className="text-xs text-gray-400">+{item.tags.length - 2}</span>
+                        )}
+                      </div>
+
+                      {/* Row 3: meta info row */}
+                      <div className="flex items-center gap-4 mt-2 flex-wrap">
+                        {item.deadline && (
+                          <span className="flex items-center gap-1 text-xs text-gray-500">
                             <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                            <span className="font-medium">Nearest:</span>
                             {formatDate(item.deadline)}
                           </span>
-                        ) : (
-                          <span className="text-gray-300 text-xs">—</span>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 max-w-[160px]">
-                        {item.impact ? (
-                          <span className="text-xs line-clamp-2">{item.impact}</span>
-                        ) : (
-                          <span className="text-gray-300 text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {item.estimated_time ? (
-                          <span className="flex items-center gap-1 text-xs">
+                        {item.estimated_time && (
+                          <span className="flex items-center gap-1 text-xs text-gray-500">
                             <Clock className="h-3.5 w-3.5 text-gray-400" />
-                            {item.estimated_time}h
+                            {item.estimated_time} day{item.estimated_time !== 1 ? 's' : ''}
                           </span>
-                        ) : (
-                          <span className="text-gray-300 text-xs">—</span>
                         )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center">
-                          {shown.map((u, i) => (
-                            <div key={u.id} style={{ marginLeft: i > 0 ? '-8px' : 0 }} className="relative" title={u.full_name}>
-                              <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-7 h-7 text-xs border-2 border-white" />
-                            </div>
-                          ))}
-                          {extra > 0 && (
-                            <div style={{ marginLeft: '-8px' }} className="relative w-7 h-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center">
-                              <span className="text-xs font-medium text-gray-600">+{extra}</span>
-                            </div>
-                          )}
-                          {assigneeUsers.length === 0 && (
-                            <span className="text-gray-300 text-xs">—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <AtemForm
-                            orgId={orgId}
-                            currentUserId={currentUserId}
-                            users={users}
-                            departments={departments}
-                            teams={teams}
-                            item={itemAsExisting}
-                            trigger={
-                              <button className="p-1.5 text-gray-400 hover:text-indigo-600 rounded transition-colors" title="Edit">
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </button>
-                            }
-                            onCreated={() => router.refresh()}
-                          />
-                          <button
-                            disabled={deletingId === item.id}
-                            onClick={() => handleDelete(item.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-500 rounded transition-colors disabled:opacity-50"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                        {item.impact && (
+                          <span className="text-xs text-gray-400 line-clamp-1 max-w-[240px]">
+                            <span className="font-medium text-green-700">Impact:</span> {stripHtml(item.impact)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: assignees + actions */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Assignees */}
+                      <div className="flex items-center">
+                        {shown.map((u, i) => (
+                          <div key={u.id} style={{ marginLeft: i > 0 ? '-6px' : 0 }} className="relative" title={u.full_name}>
+                            <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-7 h-7 text-xs border-2 border-white" />
+                          </div>
+                        ))}
+                        {extra > 0 && (
+                          <div style={{ marginLeft: '-6px' }} className="relative w-7 h-7 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center">
+                            <span className="text-xs font-medium text-gray-600">+{extra}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Edit/Delete — visible on hover */}
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <AtemForm
+                          orgId={orgId}
+                          currentUserId={currentUserId}
+                          users={users}
+                          departments={departments}
+                          teams={teams}
+                          item={itemAsExisting}
+                          trigger={
+                            <button className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors" title="Edit">
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                          }
+                          onCreated={() => router.refresh()}
+                        />
+                        <button
+                          disabled={deletingId === item.id}
+                          onClick={() => handleDelete(item.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
