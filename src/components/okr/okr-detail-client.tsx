@@ -689,7 +689,7 @@ export function OkrDetailClient({
                   </div>
                   <h1 className="text-xl font-bold text-gray-900">{objective.title}</h1>
                   {objective.description && (
-                    <p className="mt-2 text-sm text-gray-600 leading-relaxed">{objective.description}</p>
+                    <div className="mt-2 prose prose-sm max-w-none text-gray-600" dangerouslySetInnerHTML={{ __html: objective.description }} />
                   )}
 
                   <div className="flex flex-wrap gap-4 mt-3 text-xs text-gray-500">

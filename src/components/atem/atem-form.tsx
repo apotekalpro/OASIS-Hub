@@ -17,11 +17,6 @@ const schema = z.object({
   task: z.string().min(1, 'Task is required'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']),
   status: z.enum(['pending', 'in_progress', 'completed', 'blocked']),
-  deadline_text: z.string().optional(),
-  impact: z.string().optional(),
-  dependencies: z.string().optional(),
-  strategic_alignment: z.string().optional(),
-  consequences_of_delay: z.string().optional(),
   estimated_time: z.string().optional(),
   nearest_deadline: z.string().optional(),
   dept_id: z.string().optional(),
@@ -72,6 +67,11 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
   const [tagInput, setTagInput] = useState('')
   const [userSearch, setUserSearch] = useState('')
   const [watcherSearch, setWatcherSearch] = useState('')
+  const [deadlineText, setDeadlineText] = useState(item?.deadline_text ?? '')
+  const [impact, setImpact] = useState(item?.impact ?? '')
+  const [dependencies, setDependencies] = useState(item?.dependencies ?? '')
+  const [strategicAlignment, setStrategicAlignment] = useState(item?.strategic_alignment ?? '')
+  const [consequencesOfDelay, setConsequencesOfDelay] = useState(item?.consequences_of_delay ?? '')
   const [actionPlan, setActionPlan] = useState(item?.action_plan ?? '')
 
   useEffect(() => {
@@ -90,6 +90,11 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
       setUserSearch('')
       setWatcherSearch('')
       setTags(item?.tags ?? [])
+      setDeadlineText(item?.deadline_text ?? '')
+      setImpact(item?.impact ?? '')
+      setDependencies(item?.dependencies ?? '')
+      setStrategicAlignment(item?.strategic_alignment ?? '')
+      setConsequencesOfDelay(item?.consequences_of_delay ?? '')
       setActionPlan(item?.action_plan ?? '')
     }
   }, [open, item?.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -100,12 +105,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
       task: item.task,
       priority: item.priority as FormData['priority'],
       status: item.status as FormData['status'],
-      deadline_text: item.deadline_text ?? '',
       nearest_deadline: item.deadline ? item.deadline.split('T')[0] : '',
-      impact: item.impact ?? '',
-      dependencies: item.dependencies ?? '',
-      strategic_alignment: item.strategic_alignment ?? '',
-      consequences_of_delay: item.consequences_of_delay ?? '',
       estimated_time: item.estimated_time?.toString() ?? '',
       dept_id: item.dept_id ?? '',
       team_id: item.team_id ?? '',
@@ -121,12 +121,12 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
         task: data.task,
         priority: data.priority,
         status: data.status,
-        deadline_text: data.deadline_text || null,
+        deadline_text: deadlineText || null,
         deadline: data.nearest_deadline ? new Date(data.nearest_deadline).toISOString() : null,
-        impact: data.impact || null,
-        dependencies: data.dependencies || null,
-        strategic_alignment: data.strategic_alignment || null,
-        consequences_of_delay: data.consequences_of_delay || null,
+        impact: impact || null,
+        dependencies: dependencies || null,
+        strategic_alignment: strategicAlignment || null,
+        consequences_of_delay: consequencesOfDelay || null,
         estimated_time: data.estimated_time ? parseFloat(data.estimated_time) : null,
         action_plan: actionPlan || null,
         dept_id: data.dept_id || null,
@@ -161,6 +161,11 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
       setSelectedAssignees([])
       setSelectedWatchers([])
       setTags([])
+      setDeadlineText('')
+      setImpact('')
+      setDependencies('')
+      setStrategicAlignment('')
+      setConsequencesOfDelay('')
       setActionPlan('')
       if (!onCreated) router.refresh()
     } catch (err) {
@@ -214,7 +219,14 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Task *
                   </span>
                 </label>
-                <Input placeholder="Describe the action to be taken..." error={errors.task?.message} {...register('task')} autoFocus />
+                <textarea
+                  rows={3}
+                  placeholder="Describe the action to be taken..."
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  autoFocus
+                  {...register('task')}
+                />
+                {errors.task?.message && <p className="text-xs text-red-500 mt-1">{errors.task.message}</p>}
               </div>
 
               {/* Priority / Status */}
@@ -239,7 +251,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                 </div>
               </div>
 
-              {/* D — Deadline (free text) */}
+              {/* D — Deadline (free text, rich) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   <span className="inline-flex items-center gap-1.5">
@@ -247,12 +259,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Deadline
                   </span>
                 </label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Frontend: 15 Jan, Backend: 1 Feb, Deployment: 15 Feb"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  {...register('deadline_text')}
-                />
+                <RichTextEditor value={deadlineText} onChange={setDeadlineText} placeholder="e.g. Frontend: 15 Jan, Backend: 1 Feb, Deployment: 15 Feb" />
               </div>
 
               {/* I — Impact */}
@@ -263,12 +270,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Impact
                   </span>
                 </label>
-                <textarea
-                  rows={2}
-                  placeholder="What impact will completing this have?"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  {...register('impact')}
-                />
+                <RichTextEditor value={impact} onChange={setImpact} placeholder="What impact will completing this have?" />
               </div>
 
               {/* D2 — Dependencies */}
@@ -279,12 +281,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Dependencies
                   </span>
                 </label>
-                <textarea
-                  rows={2}
-                  placeholder="What does this depend on? What blocks this?"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  {...register('dependencies')}
-                />
+                <RichTextEditor value={dependencies} onChange={setDependencies} placeholder="What does this depend on? What blocks this?" />
               </div>
 
               {/* S — Strategic Alignment */}
@@ -295,12 +292,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Strategic Alignment
                   </span>
                 </label>
-                <textarea
-                  rows={2}
-                  placeholder="How does this align with strategic objectives?"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  {...register('strategic_alignment')}
-                />
+                <RichTextEditor value={strategicAlignment} onChange={setStrategicAlignment} placeholder="How does this align with strategic objectives?" />
               </div>
 
               {/* C — Consequences of Delay */}
@@ -311,12 +303,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Consequences of Delay
                   </span>
                 </label>
-                <textarea
-                  rows={2}
-                  placeholder="What happens if this is delayed or not done?"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  {...register('consequences_of_delay')}
-                />
+                <RichTextEditor value={consequencesOfDelay} onChange={setConsequencesOfDelay} placeholder="What happens if this is delayed or not done?" />
               </div>
 
               {/* E — Estimated Time */}

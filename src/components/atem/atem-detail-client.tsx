@@ -391,21 +391,24 @@ function CommentItem({
 }
 
 // ─── TDIDSCE field row ─────────────────────────────────────────────────────────
-function FieldRow({ label, badge, badgeColor, value, mono = false }: {
+function FieldRow({ label, badge, badgeColor, value }: {
   label: string
   badge: string
   badgeColor: string
   value: string | null | undefined
-  mono?: boolean
 }) {
-  if (!value) return null
+  if (!value || value === '<p></p>') return null
+  const isHtml = value.trimStart().startsWith('<')
   return (
     <div className="space-y-1">
       <dt className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase">
         <span className={cn('rounded px-1.5 py-0.5 text-xs font-bold', badgeColor)}>{badge}</span>
         {label}
       </dt>
-      <dd className={cn('text-sm text-gray-800 whitespace-pre-wrap leading-relaxed', mono && 'font-mono text-xs')}>{value}</dd>
+      {isHtml
+        ? <dd className="prose prose-sm max-w-none text-gray-800" dangerouslySetInnerHTML={{ __html: value }} />
+        : <dd className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{value}</dd>
+      }
     </div>
   )
 }

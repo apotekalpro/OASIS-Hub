@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/avatar'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { RichTextEditor } from '@/components/ui/rich-text-editor'
 
 type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
 type Department = { id: string; name: string }
@@ -274,13 +275,7 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
               {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  placeholder="Why does this objective matter?"
-                  rows={3}
-                  className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 resize-none"
-                />
+                <RichTextEditor value={description} onChange={setDescription} placeholder="Why does this objective matter?" />
               </div>
 
               {/* Period / Status */}
