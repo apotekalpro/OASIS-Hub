@@ -10,7 +10,7 @@ export default async function DirectoryPage() {
   const profileRes = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
   const orgId = profileRes.data?.org_id ?? ''
 
-  const admin = await createAdminClient()
+  const admin = createAdminClient()
   const [usersRes, deptsRes, teamsRes] = await Promise.all([
     admin.from('profiles').select(`
       id, full_name, email, avatar_url, job_title, role, dept_id, phone, is_active, last_login_at,

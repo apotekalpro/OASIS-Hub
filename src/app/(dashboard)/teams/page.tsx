@@ -21,7 +21,7 @@ export default async function TeamsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const admin = await createAdminClient()
+  const admin = createAdminClient()
 
   const { data: profileData } = await admin
     .from('profiles')

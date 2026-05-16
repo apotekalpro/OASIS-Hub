@@ -25,7 +25,7 @@ export async function createUser(data: {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured. Add it to your Netlify environment variables.')
   }
 
-  const adminClient = await createAdminClient()
+  const adminClient = createAdminClient()
 
   // Try to create auth user; if already exists, look up their existing ID
   let userId: string
@@ -111,7 +111,7 @@ export async function importUsers(
 
 // ─── Reset user password to default ──────────────────────────────────────────
 export async function resetUserPassword(userId: string) {
-  const adminClient = await createAdminClient()
+  const adminClient = createAdminClient()
 
   const { error } = await adminClient.auth.admin.updateUserById(userId, {
     password: DEFAULT_PASSWORD,
@@ -148,7 +148,7 @@ export async function changePassword(newPassword: string) {
 
 // ─── Toggle user active status ────────────────────────────────────────────────
 export async function toggleUserActive(userId: string, isActive: boolean) {
-  const adminClient = await createAdminClient()
+  const adminClient = createAdminClient()
 
   const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
     ban_duration: isActive ? 'none' : '876600h',
@@ -179,7 +179,7 @@ export async function updateUserProfile(
     phone: string
   }>
 ) {
-  const adminClient = await createAdminClient()
+  const adminClient = createAdminClient()
 
   const { chief_dept_ids, ...profileData } = data
   const { error } = await adminClient

@@ -12,7 +12,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
   const orgId = (profileRes.data as { org_id: string } | null)?.org_id ?? ''
   const currentUser = profileRes.data as { org_id: string; full_name: string; avatar_url: string | null; role: string } | null
 
-  const admin = await createAdminClient()
+  const admin = createAdminClient()
   const [taskRes, commentsRes, timeLogsRes, subtasksRes, assigneeIdsRes, watcherIdsRes, usersRes, teamsRes, deptsRes] = await Promise.all([
     supabase.from('tasks').select(`
       id, title, description, status, priority, due_date, start_date, estimated_hours,

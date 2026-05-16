@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const supabase = await createAdminClient()
+  const supabase = createAdminClient()
 
   // Process due reminders
   const { data: reminders } = await supabase

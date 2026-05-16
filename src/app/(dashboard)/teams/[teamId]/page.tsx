@@ -14,7 +14,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ tea
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const admin = await createAdminClient()
+  const admin = createAdminClient()
   const profileRes = await supabase.from('profiles').select('role, org_id').eq('id', user.id).single()
   const orgId = profileRes.data?.org_id ?? ''
 

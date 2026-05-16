@@ -7,7 +7,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tas
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const admin = await createAdminClient()
+  const admin = createAdminClient()
   const [assigneesRes, watchersRes] = await Promise.all([
     admin.from('task_assignees').select('user_id').eq('task_id', taskId),
     admin.from('task_watchers').select('user_id').eq('task_id', taskId),

@@ -9,7 +9,7 @@ import type { UserRole } from '@/types/database'
 
 export default async function UsersPage() {
   const supabase = await createClient()
-  const adminSupabase = await createAdminClient()
+  const adminSupabase = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 

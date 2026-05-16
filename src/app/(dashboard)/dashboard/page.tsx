@@ -19,7 +19,7 @@ export default async function DashboardPage() {
   const orgId = profile?.org_id ?? ''
   const isAdminRole = ['super_admin', 'org_admin'].includes(profile?.role ?? '')
 
-  const admin = await createAdminClient()
+  const admin = createAdminClient()
 
   // Build teams query: admins see all org teams, members see only teams they joined
   let teamsQ = isAdminRole

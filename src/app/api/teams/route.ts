@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const admin = await createAdminClient()
+  const admin = createAdminClient()
   const { data: profile } = await admin.from('profiles').select('org_id, role').eq('id', user.id).single()
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
