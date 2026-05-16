@@ -1,8 +1,8 @@
 -- Migration 031: Add area_manager and outlet roles, link AMs to outlets
 
--- 1. Add new roles to the enum
-ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'area_manager' AFTER 'lead';
-ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'outlet' AFTER 'viewer';
+-- 1. Add new roles to the enum (no AFTER clause — avoids failure if preceding value missing)
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'area_manager';
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'outlet';
 
 -- 2. Add area_manager_id FK to outlets (links an outlet to its Area Manager)
 ALTER TABLE outlets
