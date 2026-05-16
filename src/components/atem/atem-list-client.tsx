@@ -20,6 +20,8 @@ type AtemItem = {
   id: string
   task: string
   deadline: string | null
+  deadline_text: string | null
+  action_plan: string | null
   impact: string | null
   dependencies: string | null
   strategic_alignment: string | null
