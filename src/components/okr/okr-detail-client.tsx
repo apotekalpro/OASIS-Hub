@@ -622,6 +622,27 @@ export function OkrDetailClient({
     setAssignees(prev => prev.filter(a => a.id !== userId))
   }
 
+  // ── KR Subtask tick ──────────────────────────────────────────────────────────
+  async function toggleSubtaskDone(krId: string, task: SubTask) {
+    const newStatus = task.status === 'done' ? 'todo' : 'done'
+    setKrSubtasks(prev => ({
+      ...prev,
+      [krId]: (prev[krId] ?? []).map(t => t.id === task.id ? { ...t, status: newStatus } : t),
+    }))
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    if (!res.ok) {
+      setKrSubtasks(prev => ({
+        ...prev,
+        [krId]: (prev[krId] ?? []).map(t => t.id === task.id ? { ...t, status: task.status } : t),
+      }))
+      toast.error('Failed to update subtask')
+    }
+  }
+
   // ── KR Subtasks ──────────────────────────────────────────────────────────────
   async function fetchKrSubtasks(krId: string) {
     setKrSubtaskLoading(prev => ({ ...prev, [krId]: true }))
@@ -972,20 +993,25 @@ export function OkrDetailClient({
                           {/* KR Status selector */}
                           <div className="flex items-center gap-2 mt-2 flex-wrap">
                             <span className="text-xs text-gray-400 shrink-0">KR Status:</span>
-                            {(['not_started', 'in_progress', 'at_risk', 'completed'] as const).map(s => {
-                              const sLabel: Record<string, string> = { not_started: 'Not Started', in_progress: 'In Progress', at_risk: 'At Risk', completed: 'Completed' }
-                              const sColor: Record<string, string> = {
-                                not_started: kr.status === s ? 'bg-gray-200 text-gray-800 border-gray-300' : 'border-gray-200 text-gray-400 hover:border-gray-300',
-                                in_progress: kr.status === s ? 'bg-blue-100 text-blue-800 border-blue-300' : 'border-gray-200 text-gray-400 hover:border-gray-300',
-                                at_risk: kr.status === s ? 'bg-amber-100 text-amber-800 border-amber-300' : 'border-gray-200 text-gray-400 hover:border-gray-300',
-                                completed: kr.status === s ? 'bg-green-100 text-green-800 border-green-300' : 'border-gray-200 text-gray-400 hover:border-gray-300',
+                            {(['not_started', 'on_track', 'at_risk', 'behind', 'completed'] as const).map(s => {
+                              const sLabel: Record<string, string> = { not_started: 'Not Started', on_track: 'On Track', at_risk: 'At Risk', behind: 'Behind', completed: 'Completed' }
+                              const sActive: Record<string, string> = {
+                                not_started: 'bg-gray-200 text-gray-800 border-gray-300',
+                                on_track: 'bg-green-100 text-green-800 border-green-300',
+                                at_risk: 'bg-amber-100 text-amber-800 border-amber-300',
+                                behind: 'bg-red-100 text-red-800 border-red-300',
+                                completed: 'bg-indigo-100 text-indigo-800 border-indigo-300',
                               }
+                              const isActive = kr.status === s
                               return (
                                 <button
                                   key={s}
                                   disabled={krStatusUpdating === kr.id}
                                   onClick={() => updateKrStatus(kr, s)}
-                                  className={cn('text-xs px-2 py-0.5 rounded-full border font-medium transition-colors', sColor[s])}
+                                  className={cn(
+                                    'text-xs px-2 py-0.5 rounded-full border font-medium transition-colors',
+                                    isActive ? sActive[s] : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                                  )}
                                 >
                                   {sLabel[s]}
                                 </button>
@@ -1063,49 +1089,50 @@ export function OkrDetailClient({
                                 )}
 
                                 {!krSubtaskLoading[kr.id] && (krSubtasks[kr.id] ?? []).map(task => {
-                                  const statusColors: Record<string, string> = {
-                                    todo: 'bg-gray-400',
-                                    in_progress: 'bg-blue-500',
-                                    in_review: 'bg-amber-500',
-                                    done: 'bg-green-500',
-                                    cancelled: 'bg-gray-300',
-                                  }
+                                  const isDone = task.status === 'done'
+                                  const isCancelled = task.status === 'cancelled'
                                   const priorityColors: Record<string, string> = {
-                                    low: 'bg-gray-400',
+                                    low: 'bg-gray-300',
                                     medium: 'bg-yellow-500',
                                     high: 'bg-orange-500',
                                     urgent: 'bg-red-500',
                                   }
                                   return (
-                                    <Link
+                                    <div
                                       key={task.id}
-                                      href={`/tasks/${task.id}`}
-                                      className={cn(
-                                        'flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50 transition-colors group/task',
-                                        task.status === 'cancelled' && 'opacity-60'
-                                      )}
+                                      className={cn('flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50 transition-colors group/task', isCancelled && 'opacity-50')}
                                     >
-                                      <div className={cn('h-2 w-2 rounded-full shrink-0', priorityColors[task.priority] ?? 'bg-gray-400')} />
+                                      <button
+                                        onClick={() => toggleSubtaskDone(kr.id, task)}
+                                        className="shrink-0 flex items-center justify-center"
+                                        title={isDone ? 'Mark as todo' : 'Mark as done'}
+                                      >
+                                        {isDone
+                                          ? <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                          : <div className="h-4 w-4 rounded border-2 border-gray-300 hover:border-indigo-400 transition-colors" />
+                                        }
+                                      </button>
+                                      <div className={cn('h-1.5 w-1.5 rounded-full shrink-0', priorityColors[task.priority] ?? 'bg-gray-300')} />
                                       <span className={cn(
                                         'text-xs text-gray-700 flex-1 truncate',
-                                        task.status === 'done' && 'line-through text-gray-400',
-                                        task.status === 'cancelled' && 'line-through text-gray-400',
+                                        (isDone || isCancelled) && 'line-through text-gray-400',
                                       )}>
                                         {task.title}
                                       </span>
-                                      <span className={cn(
-                                        'text-xs px-1.5 py-0.5 rounded-full text-white shrink-0',
-                                        statusColors[task.status] ?? 'bg-gray-400'
-                                      )}>
-                                        {task.status.replace('_', ' ')}
-                                      </span>
                                       {task.due_date && (
-                                        <span className="text-xs text-gray-400 shrink-0 flex items-center gap-0.5">
+                                        <span className="text-xs text-gray-400 shrink-0 flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity">
                                           <Calendar className="h-3 w-3" />
                                           {formatDate(task.due_date)}
                                         </span>
                                       )}
-                                    </Link>
+                                      <Link
+                                        href={`/tasks/${task.id}`}
+                                        className="opacity-0 group-hover/task:opacity-100 transition-opacity text-gray-300 hover:text-indigo-500 shrink-0"
+                                        title="Open task"
+                                      >
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                      </Link>
+                                    </div>
                                   )
                                 })}
 
