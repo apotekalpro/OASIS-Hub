@@ -6,7 +6,7 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
   dept_head: 60,
   chief: 60,
   lead: 50,
-  area_manager: 45,
+  area_manager: 55,
   team_leader: 40,
   auditor: 35,
   member: 20,
@@ -101,7 +101,7 @@ export const FEATURE_DEFINITIONS: { feature: FeatureName; label: string; descrip
   { feature: 'teams', label: 'Teams', description: 'Manage teams and members', defaultMin: 'team_leader' },
   { feature: 'outlets', label: 'Outlets', description: 'Manage outlet locations', defaultMin: 'dept_head' },
   { feature: 'checklists', label: 'Checklists', description: 'Manage inspection templates', defaultMin: 'dept_head' },
-  { feature: 'schedules', label: 'Schedules', description: 'Manage inspection schedules', defaultMin: 'dept_head' },
+  { feature: 'schedules', label: 'Schedules', description: 'Manage inspection schedules', defaultMin: 'area_manager' },
 ]
 
 export type FeaturePermissions = Partial<Record<FeatureName, UserRole>>

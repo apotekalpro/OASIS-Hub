@@ -15,11 +15,12 @@ const CONFIGURABLE_ROUTES: Record<string, string> = {
 }
 
 const ROLE_LEVELS: Record<string, number> = {
-  super_admin: 100, org_admin: 80, dept_head: 60, lead: 50, team_leader: 40, auditor: 35, member: 20, viewer: 10,
+  super_admin: 100, org_admin: 80, dept_head: 60, chief: 60, lead: 50, area_manager: 55,
+  team_leader: 40, auditor: 35, member: 20, viewer: 10, outlet: 5,
 }
 
 const DEFAULT_FEATURE_MIN: Record<string, string> = {
-  teams: 'team_leader', outlets: 'dept_head', checklists: 'dept_head', schedules: 'dept_head', analytics: 'team_leader',
+  teams: 'team_leader', outlets: 'dept_head', checklists: 'dept_head', schedules: 'area_manager', analytics: 'team_leader',
 }
 
 export async function middleware(request: NextRequest) {

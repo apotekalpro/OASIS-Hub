@@ -1,7 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Calendar, Building2, ClipboardList } from 'lucide-react'
+import { Calendar, Building2 } from 'lucide-react'
 import { ScheduleManagementClient } from '@/components/inspections/schedule-management-client'
 
 const FREQ_LABELS: Record<string, string> = {
@@ -13,19 +13,51 @@ export default async function InspectionSchedulesPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const profileRes = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
+  const admin = createAdminClient()
+  const profileRes = await admin.from('profiles').select('org_id, role').eq('id', user.id).single()
   const orgId = profileRes.data?.org_id ?? ''
+  const role = profileRes.data?.role ?? ''
+  const isAreaManager = role === 'area_manager'
+
+  // For area managers, restrict outlets to only the ones they manage
+  let amOutletIds: string[] = []
+  if (isAreaManager) {
+    const { data: amOutlets } = await admin
+      .from('outlets')
+      .select('id')
+      .eq('area_manager_id', user.id)
+      .eq('status', 'active')
+    amOutletIds = (amOutlets ?? []).map(o => o.id)
+  }
+
+  let schedulesQ = admin
+    .from('inspection_schedules')
+    .select('*, inspection_templates(title, category), outlets(name, code), profiles!inspection_schedules_assigned_to_fkey(full_name)')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false })
+
+  // Area managers only see schedules for their outlets
+  if (isAreaManager && amOutletIds.length > 0) {
+    schedulesQ = schedulesQ.in('outlet_id', amOutletIds)
+  }
+
+  let outletsQ = admin.from('outlets').select('id, name, code').eq('org_id', orgId).eq('status', 'active').order('name')
+  // Area managers can only create schedules for their own outlets
+  if (isAreaManager && amOutletIds.length > 0) {
+    outletsQ = outletsQ.in('id', amOutletIds)
+  }
+
+  // For AM: only show outlet/member users as assignable; full orgs for admins
+  const usersRoleFilter = isAreaManager ? ['outlet', 'area_manager', 'member'] : null
 
   const [schedulesRes, templatesRes, outletsRes, usersRes, deptsRes] = await Promise.all([
-    supabase
-      .from('inspection_schedules')
-      .select('*, inspection_templates(title, category), outlets(name, code), profiles!inspection_schedules_assigned_to_fkey(full_name)')
-      .eq('org_id', orgId)
-      .order('created_at', { ascending: false }),
-    supabase.from('inspection_templates').select('id, title, category').eq('org_id', orgId).eq('is_active', true).order('title'),
-    supabase.from('outlets').select('id, name, code').eq('org_id', orgId).eq('status', 'active').order('name'),
-    supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
-    supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
+    schedulesQ,
+    admin.from('inspection_templates').select('id, title, category').eq('org_id', orgId).eq('is_active', true).order('title'),
+    outletsQ,
+    usersRoleFilter
+      ? admin.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).in('role', usersRoleFilter).order('full_name')
+      : admin.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
+    admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
   ])
 
   type ScheduleRow = {
