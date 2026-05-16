@@ -11,7 +11,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ROLE_LABELS } from '@/lib/auth/permissions'
-import { createUser, importUsers, resetUserPassword, toggleUserActive, updateUserProfile, sendUserInvite } from '@/lib/auth/actions'
+import { createUser, resetUserPassword, toggleUserActive, updateUserProfile, sendUserInvite } from '@/lib/auth/actions'
 import { parseCSV } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { UserRole, Profile, Department } from '@/types/database'
@@ -166,7 +166,16 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
           phone: r.phone || r.Phone || undefined,
         }
       })
-      const results = await importUsers(users, orgId ?? '')
+      const res = await fetch('/api/users/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users, org_id: orgId ?? '' }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Import failed')
+      }
+      const { results } = await res.json()
       setImportResults(results)
       router.refresh()
     } catch (err) {
