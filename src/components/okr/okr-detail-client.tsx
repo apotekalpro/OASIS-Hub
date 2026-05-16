@@ -921,6 +921,11 @@ export function OkrDetailClient({
                             )}
                           </div>
 
+                          {/* KR description */}
+                          {kr.description && kr.description !== '<p></p>' && (
+                            <div className="prose prose-sm max-w-none text-gray-600 mt-1" dangerouslySetInnerHTML={{ __html: kr.description }} />
+                          )}
+
                           {/* Progress bar */}
                           <div className="flex items-center gap-3 mt-1.5">
                             <div className="flex-1 bg-gray-100 rounded-full h-2">
@@ -984,6 +989,161 @@ export function OkrDetailClient({
                               )}
                             </div>
                           )}
+
+                          {/* Subtasks section */}
+                          <div className="mt-3 border-t border-gray-100 pt-3">
+                            <button
+                              onClick={() => toggleKrSubtaskSection(kr.id)}
+                              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 font-medium"
+                            >
+                              {krSubtaskExpanded[kr.id]
+                                ? <ChevronDown className="h-3.5 w-3.5" />
+                                : <ChevronRight className="h-3.5 w-3.5" />
+                              }
+                              Subtasks
+                              {krSubtasks[kr.id] && krSubtasks[kr.id].length > 0 && (
+                                <span className="ml-1 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full text-xs">
+                                  {krSubtasks[kr.id].length}
+                                </span>
+                              )}
+                            </button>
+
+                            {krSubtaskExpanded[kr.id] && (
+                              <div className="mt-2 space-y-1">
+                                {krSubtaskLoading[kr.id] && (
+                                  <div className="flex items-center gap-1.5 text-xs text-gray-400 py-1">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    Loading subtasks...
+                                  </div>
+                                )}
+
+                                {!krSubtaskLoading[kr.id] && (krSubtasks[kr.id] ?? []).map(task => {
+                                  const statusColors: Record<string, string> = {
+                                    todo: 'bg-gray-400',
+                                    in_progress: 'bg-blue-500',
+                                    in_review: 'bg-amber-500',
+                                    done: 'bg-green-500',
+                                    cancelled: 'bg-gray-300',
+                                  }
+                                  const priorityColors: Record<string, string> = {
+                                    low: 'bg-gray-400',
+                                    medium: 'bg-yellow-500',
+                                    high: 'bg-orange-500',
+                                    urgent: 'bg-red-500',
+                                  }
+                                  return (
+                                    <Link
+                                      key={task.id}
+                                      href={`/tasks/${task.id}`}
+                                      className={cn(
+                                        'flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50 transition-colors group/task',
+                                        task.status === 'cancelled' && 'opacity-60'
+                                      )}
+                                    >
+                                      <div className={cn('h-2 w-2 rounded-full shrink-0', priorityColors[task.priority] ?? 'bg-gray-400')} />
+                                      <span className={cn(
+                                        'text-xs text-gray-700 flex-1 truncate',
+                                        task.status === 'done' && 'line-through text-gray-400',
+                                        task.status === 'cancelled' && 'line-through text-gray-400',
+                                      )}>
+                                        {task.title}
+                                      </span>
+                                      <span className={cn(
+                                        'text-xs px-1.5 py-0.5 rounded-full text-white shrink-0',
+                                        statusColors[task.status] ?? 'bg-gray-400'
+                                      )}>
+                                        {task.status.replace('_', ' ')}
+                                      </span>
+                                      {task.due_date && (
+                                        <span className="text-xs text-gray-400 shrink-0 flex items-center gap-0.5">
+                                          <Calendar className="h-3 w-3" />
+                                          {formatDate(task.due_date)}
+                                        </span>
+                                      )}
+                                    </Link>
+                                  )
+                                })}
+
+                                {!krSubtaskLoading[kr.id] && (krSubtasks[kr.id] ?? []).length === 0 && (
+                                  <p className="text-xs text-gray-400 py-1 pl-1">No subtasks yet.</p>
+                                )}
+
+                                {/* Add subtask form */}
+                                {krSubtaskShowForm[kr.id] ? (
+                                  <div className="mt-2 space-y-2 border border-indigo-100 rounded-lg p-2 bg-indigo-50">
+                                    <input
+                                      type="text"
+                                      placeholder="Subtask title..."
+                                      value={krSubtaskForms[kr.id]?.title ?? ''}
+                                      onChange={e => setKrSubtaskForms(prev => ({
+                                        ...prev,
+                                        [kr.id]: { ...prev[kr.id], title: e.target.value },
+                                      }))}
+                                      autoFocus
+                                      onKeyDown={e => { if (e.key === 'Enter') addKrSubtask(kr.id) }}
+                                      className="w-full text-xs rounded border border-gray-300 bg-white px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                      <select
+                                        value={krSubtaskForms[kr.id]?.priority ?? 'medium'}
+                                        onChange={e => setKrSubtaskForms(prev => ({
+                                          ...prev,
+                                          [kr.id]: { ...prev[kr.id], priority: e.target.value },
+                                        }))}
+                                        className="flex-1 text-xs rounded border border-gray-300 bg-white px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                      >
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="urgent">Urgent</option>
+                                      </select>
+                                      <input
+                                        type="date"
+                                        value={krSubtaskForms[kr.id]?.due_date ?? ''}
+                                        onChange={e => setKrSubtaskForms(prev => ({
+                                          ...prev,
+                                          [kr.id]: { ...prev[kr.id], due_date: e.target.value },
+                                        }))}
+                                        className="flex-1 text-xs rounded border border-gray-300 bg-white px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <Button
+                                        size="sm"
+                                        className="h-7 text-xs px-2"
+                                        onClick={() => addKrSubtask(kr.id)}
+                                        loading={krSubtaskAdding[kr.id]}
+                                      >
+                                        Add
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs px-2"
+                                        onClick={() => setKrSubtaskShowForm(prev => ({ ...prev, [kr.id]: false }))}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setKrSubtaskForms(prev => ({
+                                        ...prev,
+                                        [kr.id]: prev[kr.id] ?? { title: '', priority: 'medium', due_date: '' },
+                                      }))
+                                      setKrSubtaskShowForm(prev => ({ ...prev, [kr.id]: true }))
+                                    }}
+                                    className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium mt-1"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                    Add subtask
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
