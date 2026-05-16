@@ -49,23 +49,18 @@ export default async function TeamsPage() {
   const departments = (deptsRes.data ?? []) as Array<{ id: string; name: string }>
   const orgUsers = (usersRes.data ?? []) as Array<{ id: string; full_name: string; avatar_url: string | null; email: string }>
 
-  // Separate member and profile fetches
+  // Fetch members, then profiles — 2 sequential queries instead of 3
   const teamIds = rawTeams.map(t => t.id)
-  const [membersRes, profilesRes] = teamIds.length > 0
-    ? await Promise.all([
-        admin.from('team_members').select('team_id, user_id, role').in('team_id', teamIds),
-        (async () => {
-          const mRes = await admin.from('team_members').select('user_id').in('team_id', teamIds)
-          const uids = [...new Set((mRes.data ?? []).map((m: { user_id: string }) => m.user_id))]
-          return uids.length > 0
-            ? admin.from('profiles').select('id, full_name, avatar_url').in('id', uids)
-            : { data: [] }
-        })(),
-      ])
-    : [{ data: [] }, { data: [] }]
+  const memberRows = teamIds.length > 0
+    ? ((await admin.from('team_members').select('team_id, user_id, role').in('team_id', teamIds)).data ?? []) as MemberRow[]
+    : [] as MemberRow[]
 
-  const memberRows = (membersRes.data ?? []) as MemberRow[]
-  const profileMap = new Map(((profilesRes.data ?? []) as ProfileRow[]).map(p => [p.id, p]))
+  const uniqueUserIds = [...new Set(memberRows.map(m => m.user_id))]
+  const profileRows = uniqueUserIds.length > 0
+    ? ((await admin.from('profiles').select('id, full_name, avatar_url').in('id', uniqueUserIds)).data ?? []) as ProfileRow[]
+    : [] as ProfileRow[]
+
+  const profileMap = new Map(profileRows.map(p => [p.id, p]))
 
   // Assemble TeamRow with members
   const membersByTeam = new Map<string, Array<{ user_id: string; role: string; profiles: ProfileRow | null }>>()

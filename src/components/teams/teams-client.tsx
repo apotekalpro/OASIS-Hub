@@ -81,10 +81,12 @@ export function TeamsClient({ departments, orgUsers, orgId, currentUserId, teamI
         const res = await fetch(`/api/teams/${teamId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
+          body: JSON.stringify({ ...data, memberIds: selectedMemberIds }),
         })
         if (!res.ok) throw new Error((await res.json()).error)
-        toast.success('Team updated')
+        toast.success(selectedMemberIds.length > 0 ? `Team updated, ${selectedMemberIds.length} member(s) added` : 'Team updated')
+        setSelectedMemberIds([])
+        setMemberSearch('')
       } else {
         const totalMembers = 1 + selectedMemberIds.length
         const res = await fetch('/api/teams', {
@@ -189,12 +191,11 @@ export function TeamsClient({ departments, orgUsers, orgId, currentUserId, teamI
             </label>
           </div>
 
-          {/* Member selector — only shown when creating */}
-          {!isEditMode && (
-            <div>
+          {/* Member selector — shown for both create and edit */}
+          <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Add Members
-                <span className="text-gray-400 font-normal ml-1">(you&apos;ll be added as Team Leader automatically)</span>
+                {isEditMode ? 'Add Members' : 'Add Members'}
+                {!isEditMode && <span className="text-gray-400 font-normal ml-1">(you&apos;ll be added as Team Leader automatically)</span>}
               </label>
 
               {/* Selected member chips */}
@@ -249,7 +250,6 @@ export function TeamsClient({ departments, orgUsers, orgId, currentUserId, teamI
                 </div>
               )}
             </div>
-          )}
 
           <div className="flex justify-end gap-3 pt-2">
             <Dialog.Close asChild>
@@ -278,47 +278,53 @@ export function TeamsClient({ departments, orgUsers, orgId, currentUserId, teamI
   }
 
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <Button variant="ghost" size="icon-sm">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content className="z-50 min-w-[160px] bg-white rounded-lg border border-gray-200 shadow-lg py-1 text-sm" align="end">
-          {!isMember ? (
-            <DropdownMenu.Item
-              className="flex items-center gap-2 px-3 py-2 text-indigo-600 hover:bg-indigo-50 cursor-pointer outline-none"
-              onClick={handleJoin}
-            >
-              <LogIn className="h-4 w-4" /> Join Team
-            </DropdownMenu.Item>
-          ) : (
+    <>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <Button variant="ghost" size="icon-sm">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content className="z-50 min-w-[160px] bg-white rounded-lg border border-gray-200 shadow-lg py-1 text-sm" align="end">
+            {!isMember ? (
+              <DropdownMenu.Item
+                className="flex items-center gap-2 px-3 py-2 text-indigo-600 hover:bg-indigo-50 cursor-pointer outline-none"
+                onClick={handleJoin}
+              >
+                <LogIn className="h-4 w-4" /> Join Team
+              </DropdownMenu.Item>
+            ) : (
+              <DropdownMenu.Item
+                className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 cursor-pointer outline-none"
+                onClick={handleLeave}
+              >
+                <UserMinus className="h-4 w-4" /> Leave Team
+              </DropdownMenu.Item>
+            )}
+
+            {/* Trigger dialog via state — NOT nested Dialog.Trigger inside DropdownMenu */}
             <DropdownMenu.Item
               className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 cursor-pointer outline-none"
-              onClick={handleLeave}
+              onSelect={e => { e.preventDefault(); setOpen(true) }}
             >
-              <UserMinus className="h-4 w-4" /> Leave Team
+              <Edit2 className="h-4 w-4" /> Edit Team
             </DropdownMenu.Item>
-          )}
 
-          <Dialog.Root open={open} onOpenChange={setOpen}>
-            <Dialog.Trigger asChild>
-              <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 cursor-pointer outline-none">
-                <Edit2 className="h-4 w-4" /> Edit Team
-              </DropdownMenu.Item>
-            </Dialog.Trigger>
-            {formDialogContent}
-          </Dialog.Root>
+            <DropdownMenu.Item
+              className="flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 cursor-pointer outline-none"
+              onClick={handleDelete}
+            >
+              <Trash2 className="h-4 w-4" /> Delete Team
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
 
-          <DropdownMenu.Item
-            className="flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 cursor-pointer outline-none"
-            onClick={handleDelete}
-          >
-            <Trash2 className="h-4 w-4" /> Delete Team
-          </DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+      {/* Dialog lives outside DropdownMenu — opens instantly via state */}
+      <Dialog.Root open={open} onOpenChange={setOpen}>
+        {formDialogContent}
+      </Dialog.Root>
+    </>
   )
 }
