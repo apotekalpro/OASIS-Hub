@@ -61,7 +61,7 @@ export async function middleware(request: NextRequest) {
   // Fetch profile for all admin routes
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, org_id, must_change_password')
+    .select('role, role_level, org_id, must_change_password')
     .eq('id', user.id)
     .single()
 
@@ -71,7 +71,7 @@ export async function middleware(request: NextRequest) {
 
   if (!profile) return NextResponse.redirect(new URL('/login', request.url))
 
-  const userLevel = ROLE_LEVELS[profile.role] ?? 0
+  const userLevel = profile.role_level ?? 0
 
   if (isSuperAdminRoute) {
     if (userLevel < ROLE_LEVELS.org_admin) return NextResponse.redirect(new URL('/dashboard', request.url))
