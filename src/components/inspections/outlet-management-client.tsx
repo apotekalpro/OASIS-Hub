@@ -167,31 +167,34 @@ export function OutletManagementClient({ orgId, departments, users, outlet, mode
 
   if (mode === 'actions') {
     return (
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild>
-          <Button variant="ghost" size="icon-sm">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
-          <DropdownMenu.Content className="z-50 min-w-[140px] bg-white rounded-lg border border-gray-200 shadow-lg py-1 text-sm" align="end">
-            <Dialog.Root open={open} onOpenChange={setOpen}>
-              <Dialog.Trigger asChild>
-                <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 cursor-pointer outline-none">
-                  <Edit2 className="h-4 w-4" /> Edit
-                </DropdownMenu.Item>
-              </Dialog.Trigger>
-              {formDialogContent}
-            </Dialog.Root>
-            <DropdownMenu.Item
-              className="flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 cursor-pointer outline-none"
-              onClick={handleDelete}
-            >
-              <Trash2 className="h-4 w-4" /> Delete
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Portal>
-      </DropdownMenu.Root>
+      <>
+        <Dialog.Root open={open} onOpenChange={setOpen}>
+          {formDialogContent}
+        </Dialog.Root>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <Button variant="ghost" size="icon-sm">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content className="z-50 min-w-[140px] bg-white rounded-lg border border-gray-200 shadow-lg py-1 text-sm" align="end">
+              <DropdownMenu.Item
+                className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 cursor-pointer outline-none"
+                onSelect={(e) => { e.preventDefault(); setOpen(true) }}
+              >
+                <Edit2 className="h-4 w-4" /> Edit
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 cursor-pointer outline-none"
+                onClick={handleDelete}
+              >
+                <Trash2 className="h-4 w-4" /> Delete
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </>
     )
   }
 

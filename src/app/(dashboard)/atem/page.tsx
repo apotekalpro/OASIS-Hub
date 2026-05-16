@@ -31,7 +31,7 @@ export default async function AtemPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">ATEM</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Action Tracking &amp; Execution Matrix — T·D·I·D·S·C·E</p>
+          <p className="text-gray-500 text-sm mt-0.5">Alpro Task Entry Model (ATEM) — T·D·I·D·S·C·E</p>
         </div>
         {canCreate && (
           <AtemForm

@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-export default async function AtemDetailPage({ params }: { params: { itemId: string } }) {
+export default async function AtemDetailPage({ params }: { params: Promise<{ itemId: string }> }) {
+  const { itemId } = await params
   const supabase = await createClient()
   const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -16,12 +17,12 @@ export default async function AtemDetailPage({ params }: { params: { itemId: str
   }
 
   const [itemRes, commentsRes, assigneesRes, watchersRes, usersRes, deptsRes, teamsRes] = await Promise.all([
-    admin.from('atem_items').select('*, departments(name), teams(name)').eq('id', params.itemId).single(),
+    admin.from('atem_items').select('*, departments(name), teams(name)').eq('id', itemId).single(),
     admin.from('atem_comments')
       .select('*, profiles!atem_comments_user_id_fkey(id, full_name, avatar_url), atem_comment_reactions(id, emoji, user_id)')
-      .eq('atem_id', params.itemId).order('created_at', { ascending: true }),
-    admin.from('atem_assignees').select('user_id').eq('atem_id', params.itemId),
-    admin.from('atem_watchers').select('user_id').eq('atem_id', params.itemId),
+      .eq('atem_id', itemId).order('created_at', { ascending: true }),
+    admin.from('atem_assignees').select('user_id').eq('atem_id', itemId),
+    admin.from('atem_watchers').select('user_id').eq('atem_id', itemId),
     admin.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
     admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     admin.from('teams').select('id, name').eq('org_id', orgId).order('name'),

@@ -10,18 +10,20 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/avatar'
+import { RichTextEditor } from '@/components/ui/rich-text-editor'
 import { toast } from 'sonner'
 
 const schema = z.object({
   task: z.string().min(1, 'Task is required'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']),
   status: z.enum(['pending', 'in_progress', 'completed', 'blocked']),
-  deadline: z.string().optional(),
+  deadline_text: z.string().optional(),
   impact: z.string().optional(),
   dependencies: z.string().optional(),
   strategic_alignment: z.string().optional(),
   consequences_of_delay: z.string().optional(),
   estimated_time: z.string().optional(),
+  nearest_deadline: z.string().optional(),
   dept_id: z.string().optional(),
   team_id: z.string().optional(),
 })
@@ -38,6 +40,8 @@ export type ExistingAtemItem = {
   priority: string
   status: string
   deadline: string | null
+  deadline_text: string | null
+  action_plan: string | null
   impact: string | null
   dependencies: string | null
   strategic_alignment: string | null
@@ -68,6 +72,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
   const [tagInput, setTagInput] = useState('')
   const [userSearch, setUserSearch] = useState('')
   const [watcherSearch, setWatcherSearch] = useState('')
+  const [actionPlan, setActionPlan] = useState(item?.action_plan ?? '')
 
   useEffect(() => {
     if (open && item?.id) {
@@ -85,6 +90,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
       setUserSearch('')
       setWatcherSearch('')
       setTags(item?.tags ?? [])
+      setActionPlan(item?.action_plan ?? '')
     }
   }, [open, item?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -94,7 +100,8 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
       task: item.task,
       priority: item.priority as FormData['priority'],
       status: item.status as FormData['status'],
-      deadline: item.deadline ? item.deadline.split('T')[0] : '',
+      deadline_text: item.deadline_text ?? '',
+      nearest_deadline: item.deadline ? item.deadline.split('T')[0] : '',
       impact: item.impact ?? '',
       dependencies: item.dependencies ?? '',
       strategic_alignment: item.strategic_alignment ?? '',
@@ -114,12 +121,14 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
         task: data.task,
         priority: data.priority,
         status: data.status,
-        deadline: data.deadline ? new Date(data.deadline).toISOString() : null,
+        deadline_text: data.deadline_text || null,
+        deadline: data.nearest_deadline ? new Date(data.nearest_deadline).toISOString() : null,
         impact: data.impact || null,
         dependencies: data.dependencies || null,
         strategic_alignment: data.strategic_alignment || null,
         consequences_of_delay: data.consequences_of_delay || null,
         estimated_time: data.estimated_time ? parseFloat(data.estimated_time) : null,
+        action_plan: actionPlan || null,
         dept_id: data.dept_id || null,
         team_id: data.team_id || null,
         tags,
@@ -152,6 +161,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
       setSelectedAssignees([])
       setSelectedWatchers([])
       setTags([])
+      setActionPlan('')
       if (!onCreated) router.refresh()
     } catch (err) {
       toast.error((err as Error).message)
@@ -229,26 +239,20 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                 </div>
               </div>
 
-              {/* D — Deadline / E — Estimated Time */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="bg-orange-100 text-orange-700 rounded px-1.5 py-0.5 text-xs font-bold">D</span>
-                      Deadline
-                    </span>
-                  </label>
-                  <Input type="date" {...register('deadline')} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 text-xs font-bold">E</span>
-                      Estimated Time (hours)
-                    </span>
-                  </label>
-                  <Input type="number" step="0.5" min="0" placeholder="0" {...register('estimated_time')} />
-                </div>
+              {/* D — Deadline (free text) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="bg-orange-100 text-orange-700 rounded px-1.5 py-0.5 text-xs font-bold">D</span>
+                    Deadline
+                  </span>
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Frontend: 15 Jan, Backend: 1 Feb, Deployment: 15 Feb"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  {...register('deadline_text')}
+                />
               </div>
 
               {/* I — Impact */}
@@ -312,6 +316,39 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                   placeholder="What happens if this is delayed or not done?"
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   {...register('consequences_of_delay')}
+                />
+              </div>
+
+              {/* E — Estimated Time */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 text-xs font-bold">E</span>
+                    Estimated Time (hours)
+                  </span>
+                </label>
+                <Input type="number" step="0.5" min="0" placeholder="0" {...register('estimated_time')} />
+              </div>
+
+              {/* Nearest Deadline */}
+              <div className="border-t border-gray-100 pt-5">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="text-gray-500 text-xs">⏰</span>
+                    Nearest Deadline
+                    <span className="text-xs font-normal text-gray-400">(for reminder &amp; countdown)</span>
+                  </span>
+                </label>
+                <Input type="date" {...register('nearest_deadline')} />
+              </div>
+
+              {/* Action Plan */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Action Plan</label>
+                <RichTextEditor
+                  value={actionPlan}
+                  onChange={setActionPlan}
+                  placeholder="Outline the step-by-step action plan..."
                 />
               </div>
 

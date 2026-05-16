@@ -52,6 +52,8 @@ type AtemItem = {
   id: string
   task: string
   deadline: string | null
+  deadline_text: string | null
+  action_plan: string | null
   impact: string | null
   dependencies: string | null
   strategic_alignment: string | null
@@ -705,6 +707,8 @@ export function AtemDetailClient({
     priority: item.priority,
     status: item.status,
     deadline: item.deadline,
+    deadline_text: item.deadline_text,
+    action_plan: item.action_plan,
     impact: item.impact,
     dependencies: item.dependencies,
     strategic_alignment: item.strategic_alignment,
@@ -773,12 +777,33 @@ export function AtemDetailClient({
 
               {/* TDIDSCE grid */}
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t border-gray-100">
+                <FieldRow label="Deadline" badge="D" badgeColor="bg-orange-100 text-orange-700" value={item.deadline_text} />
                 <FieldRow label="Impact" badge="I" badgeColor="bg-green-100 text-green-700" value={item.impact} />
                 <FieldRow label="Dependencies" badge="D" badgeColor="bg-yellow-100 text-yellow-700" value={item.dependencies} />
                 <FieldRow label="Strategic Alignment" badge="S" badgeColor="bg-blue-100 text-blue-700" value={item.strategic_alignment} />
                 <FieldRow label="Consequences of Delay" badge="C" badgeColor="bg-red-100 text-red-700" value={item.consequences_of_delay} />
+                {item.estimated_time != null && (
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
+                      <span className="bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 text-xs font-bold">E</span>
+                      Estimated Time
+                    </dt>
+                    <dd className="text-sm text-gray-800">{item.estimated_time}h</dd>
+                  </div>
+                )}
               </dl>
             </div>
+
+            {/* Action Plan */}
+            {item.action_plan && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Action Plan</h3>
+                <div
+                  className="prose prose-sm max-w-none text-gray-700"
+                  dangerouslySetInnerHTML={{ __html: item.action_plan }}
+                />
+              </div>
+            )}
 
             {/* Comments */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -955,30 +980,16 @@ export function AtemDetailClient({
                   )}
                 </div>
 
-                {/* Deadline */}
+                {/* Nearest Deadline */}
                 {item.deadline && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500 flex items-center gap-1">
-                      <span className="bg-orange-100 text-orange-700 rounded px-1 text-xs font-bold">D</span>
-                      Deadline
+                      <span className="text-gray-400">⏰</span>
+                      Nearest Deadline
                     </span>
                     <span className="flex items-center gap-1 text-gray-700 text-xs">
                       <Calendar className="h-3.5 w-3.5 text-gray-400" />
                       {formatDate(item.deadline)}
-                    </span>
-                  </div>
-                )}
-
-                {/* Estimated time */}
-                {item.estimated_time && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500 flex items-center gap-1">
-                      <span className="bg-purple-100 text-purple-700 rounded px-1 text-xs font-bold">E</span>
-                      Est. Time
-                    </span>
-                    <span className="flex items-center gap-1 text-gray-700 text-xs">
-                      <Clock className="h-3.5 w-3.5 text-gray-400" />
-                      {item.estimated_time}h
                     </span>
                   </div>
                 )}
