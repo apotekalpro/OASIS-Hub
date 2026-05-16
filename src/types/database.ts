@@ -1,15 +1,16 @@
-export type UserRole =
-  | 'super_admin'
-  | 'org_admin'
-  | 'dept_head'
-  | 'chief'
-  | 'lead'
-  | 'area_manager'
-  | 'team_leader'
-  | 'member'
-  | 'auditor'
-  | 'viewer'
-  | 'outlet'
+// Known system roles — custom roles are plain strings
+export type SystemRole = 'super_admin' | 'org_admin' | 'dept_head' | 'chief' | 'lead' | 'area_manager' | 'team_leader' | 'member' | 'auditor' | 'viewer' | 'outlet'
+export type UserRole = string  // includes SystemRole + any custom role slug
+
+export interface Role {
+  slug: string
+  label: string
+  level: number
+  color: string
+  is_system: boolean
+  org_id: string | null
+  created_at: string
+}
 
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
@@ -74,6 +75,7 @@ export interface Profile {
   phone: string | null
   job_title: string | null
   role: UserRole
+  role_level: number
   is_active: boolean
   must_change_password: boolean
   timezone: string
@@ -360,6 +362,12 @@ export type Database = {
         Row: { id: string; org_id: string | null; user_id: string | null; action: string; resource_type: string | null; resource_id: string | null; details: Json; ip_address: string | null; created_at: string }
         Insert: Partial<{ id: string; org_id: string | null; user_id: string | null; action: string; resource_type: string | null; resource_id: string | null; details: Json; ip_address: string | null; created_at: string }>
         Update: Partial<{ id: string; org_id: string | null; user_id: string | null; action: string; resource_type: string | null; resource_id: string | null; details: Json; ip_address: string | null; created_at: string }>
+        Relationships: []
+      }
+      roles: {
+        Row: Role
+        Insert: Partial<Role>
+        Update: Partial<Role>
         Relationships: []
       }
     }

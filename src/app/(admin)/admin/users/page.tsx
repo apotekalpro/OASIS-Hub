@@ -25,7 +25,8 @@ export default async function UsersPage() {
     outletsQuery = outletsQuery.eq('org_id', orgId)
   }
 
-  const [usersResult, deptsResult, outletsResult] = await Promise.all([profilesQuery, deptsQuery, outletsQuery])
+  const rolesQuery = adminSupabase.from('roles').select('slug, label, level, is_system').order('level', { ascending: false })
+  const [usersResult, deptsResult, outletsResult, rolesResult] = await Promise.all([profilesQuery, deptsQuery, outletsQuery, rolesQuery])
   const rawUsers = usersResult.data as Array<{
     id: string; full_name: string; email: string; contact_email: string | null; role: UserRole; is_active: boolean;
     must_change_password: boolean; employee_id: string | null; avatar_url: string | null;
@@ -34,6 +35,7 @@ export default async function UsersPage() {
   }> | null
   const departments = deptsResult.data as Array<{ id: string; name: string; org_id: string }> | null
   const outlets = outletsResult.data as Array<{ id: string; name: string; code: string | null }> | null
+  const rolesData = rolesResult.data as Array<{ slug: string; label: string; level: number; is_system: boolean }> | null
 
   // Fetch chief_departments separately to avoid PostgREST join issues
   const chiefUserIds = (rawUsers ?? []).filter(u => u.role === 'chief').map(u => u.id)
@@ -64,6 +66,7 @@ export default async function UsersPage() {
           departments={departments ?? []}
           outlets={outlets ?? []}
           orgId={orgId ?? ''}
+          roles={rolesData ?? []}
         />
       </div>
 
@@ -158,6 +161,7 @@ export default async function UsersPage() {
                         departments={departments ?? []}
                         outlets={outlets ?? []}
                         orgId={orgId}
+                        roles={rolesData ?? []}
                         initialChiefDeptIds={user.chief_departments?.map(cd => cd.dept_id) ?? []}
                         mode="actions"
                       />

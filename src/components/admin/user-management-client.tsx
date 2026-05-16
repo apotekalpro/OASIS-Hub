@@ -16,9 +16,9 @@ import { parseCSV } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { UserRole, Profile, Department } from '@/types/database'
 
-const ASSIGNABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'chief', 'lead', 'area_manager', 'team_leader', 'member', 'auditor', 'viewer', 'outlet']
+const DEFAULT_ASSIGNABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'chief', 'lead', 'area_manager', 'team_leader', 'member', 'auditor', 'viewer', 'outlet']
 
-const ROLE_LABEL_TO_VALUE: Record<string, UserRole> = {
+const STATIC_ROLE_LABEL_TO_VALUE: Record<string, UserRole> = {
   'org admin': 'org_admin',
   'org_admin': 'org_admin',
   'dept head': 'dept_head',
@@ -36,15 +36,20 @@ const ROLE_LABEL_TO_VALUE: Record<string, UserRole> = {
   'outlet': 'outlet',
 }
 
-function normalizeRole(raw: string): UserRole {
-  return ROLE_LABEL_TO_VALUE[raw.toLowerCase().trim()] ?? 'member'
+function makeNormalizeRole(roles: Array<{ slug: string; label: string }>) {
+  const dynamicMap: Record<string, string> = { ...STATIC_ROLE_LABEL_TO_VALUE }
+  for (const r of roles) {
+    dynamicMap[r.slug.toLowerCase()] = r.slug
+    dynamicMap[r.label.toLowerCase()] = r.slug
+  }
+  return (raw: string): UserRole => dynamicMap[raw.toLowerCase().trim()] ?? 'member'
 }
 
 const userSchema = z.object({
   email: z.string().email(),
   contact_email: z.string().email().optional().or(z.literal('')),
   full_name: z.string().min(2),
-  role: z.enum(['org_admin', 'dept_head', 'chief', 'lead', 'area_manager', 'team_leader', 'member', 'auditor', 'viewer', 'outlet']),
+  role: z.string().min(1, 'Role is required'),
   dept_id: z.string().optional(),
   employee_id: z.string().optional(),
   job_title: z.string().optional(),
@@ -61,10 +66,19 @@ interface Props {
   user?: Partial<Profile & { outlet_id?: string | null }>
   initialChiefDeptIds?: string[]
   outlets?: Array<{ id: string; name: string; code: string | null }>
+  roles?: Array<{ slug: string; label: string; level: number; is_system: boolean }>
   mode?: 'create' | 'actions'
 }
 
-export function UserManagementClient({ departments, orgId, userId, user, initialChiefDeptIds = [], outlets = [], mode = 'create' }: Props) {
+export function UserManagementClient({ departments, orgId, userId, user, initialChiefDeptIds = [], outlets = [], roles = [], mode = 'create' }: Props) {
+  // Build assignable roles: use DB roles (excluding super_admin) if available, else fall back to defaults
+  const assignableRoles: UserRole[] = roles.length > 0
+    ? roles.filter(r => r.slug !== 'super_admin').sort((a, b) => b.level - a.level).map(r => r.slug)
+    : DEFAULT_ASSIGNABLE_ROLES
+  const roleLabelMap: Record<string, string> = roles.length > 0
+    ? Object.fromEntries(roles.map(r => [r.slug, r.label]))
+    : {}
+  const normalizeRole = makeNormalizeRole(roles)
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -249,6 +263,8 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
             title="Edit User"
             departments={departments}
             outlets={outlets}
+            assignableRoles={assignableRoles}
+            roleLabelMap={roleLabelMap}
             register={register}
             handleSubmit={handleSubmit}
             onSubmit={onCreateUser}
@@ -367,6 +383,8 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
           title="Create New User"
           departments={departments}
           outlets={outlets}
+          assignableRoles={assignableRoles}
+          roleLabelMap={roleLabelMap}
           register={register}
           handleSubmit={handleSubmit}
           onSubmit={onCreateUser}
@@ -385,12 +403,14 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
 
 // Shared form dialog component
 function UserFormDialog({
-  title, departments, outlets, register, handleSubmit, onSubmit, errors, isSubmitting, open, onOpenChange,
+  title, departments, outlets, assignableRoles, roleLabelMap, register, handleSubmit, onSubmit, errors, isSubmitting, open, onOpenChange,
   watchedRole, chiefDeptIds, onChiefDeptChange,
 }: {
   title: string
   departments: Pick<Department, 'id' | 'name'>[]
   outlets: Array<{ id: string; name: string; code: string | null }>
+  assignableRoles: UserRole[]
+  roleLabelMap: Record<string, string>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   register: any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -453,8 +473,8 @@ function UserFormDialog({
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
               <select className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" {...register('role')}>
-                {ASSIGNABLE_ROLES.map(r => (
-                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                {assignableRoles.map(r => (
+                  <option key={r} value={r}>{roleLabelMap[r] ?? ROLE_LABELS[r] ?? r}</option>
                 ))}
               </select>
             </div>

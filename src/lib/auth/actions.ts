@@ -242,6 +242,70 @@ export async function signOut() {
   await supabase.auth.signOut()
 }
 
+// ─── Create a custom role ─────────────────────────────────────────────────────
+export async function createCustomRole(data: {
+  slug: string
+  label: string
+  level: number
+  color: string
+  org_id: string
+}) {
+  const adminClient = createAdminClient()
+  const { error } = await adminClient.from('roles').insert({
+    slug: data.slug,
+    label: data.label,
+    level: data.level,
+    color: data.color,
+    is_system: false,
+    org_id: data.org_id,
+  })
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/roles')
+  return { success: true }
+}
+
+// ─── Update a custom role ─────────────────────────────────────────────────────
+export async function updateCustomRole(slug: string, data: {
+  label: string
+  level: number
+  color: string
+}) {
+  const adminClient = createAdminClient()
+  const { error } = await adminClient
+    .from('roles')
+    .update({ label: data.label, level: data.level, color: data.color })
+    .eq('slug', slug)
+    .eq('is_system', false)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/roles')
+  return { success: true }
+}
+
+// ─── Delete a custom role ─────────────────────────────────────────────────────
+export async function deleteCustomRole(slug: string) {
+  const adminClient = createAdminClient()
+
+  // Check no profiles use this role
+  const { count } = await adminClient
+    .from('profiles')
+    .select('id', { count: 'exact', head: true })
+    .eq('role', slug)
+
+  if (count && count > 0) {
+    throw new Error(`Cannot delete: ${count} user${count === 1 ? '' : 's'} have this role`)
+  }
+
+  const { error } = await adminClient
+    .from('roles')
+    .delete()
+    .eq('slug', slug)
+    .eq('is_system', false)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/roles')
+  return { success: true }
+}
+
 // ─── Send invitation email to an existing user ────────────────────────────────
 export async function sendUserInvite(userId: string) {
   const supabase = await createClient()

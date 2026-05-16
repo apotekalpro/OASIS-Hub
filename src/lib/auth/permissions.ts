@@ -1,6 +1,6 @@
 import type { UserRole } from '@/types/database'
 
-const ROLE_HIERARCHY: Record<UserRole, number> = {
+export const ROLE_HIERARCHY: Record<string, number> = {
   super_admin: 100,
   org_admin: 80,
   dept_head: 60,
@@ -14,8 +14,15 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
   outlet: 5,
 }
 
+/** Alias for consumers that want the explicit name */
+export const SYSTEM_ROLE_HIERARCHY = ROLE_HIERARCHY
+
+export function getRoleLevel(role: string): number {
+  return ROLE_HIERARCHY[role] ?? 0
+}
+
 export function hasRole(userRole: UserRole, requiredRole: UserRole): boolean {
-  return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[requiredRole]
+  return (ROLE_HIERARCHY[userRole] ?? 0) >= (ROLE_HIERARCHY[requiredRole] ?? 0)
 }
 
 export function canManageUsers(role: UserRole): boolean {
@@ -66,7 +73,7 @@ export function canAccessAdminPanel(role: UserRole): boolean {
   return hasRole(role, 'dept_head')
 }
 
-export const ROLE_LABELS: Record<UserRole, string> = {
+export const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
   org_admin: 'Organization Admin',
   dept_head: 'Department Head',
@@ -80,7 +87,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   outlet: 'Outlet',
 }
 
-export const ROLE_COLORS: Record<UserRole, string> = {
+export const ROLE_COLORS: Record<string, string> = {
   super_admin: 'bg-red-100 text-red-800',
   org_admin: 'bg-purple-100 text-purple-800',
   dept_head: 'bg-blue-100 text-blue-800',

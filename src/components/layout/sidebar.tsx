@@ -7,7 +7,7 @@ import {
   LayoutDashboard, CheckSquare, MessageSquare, FileText,
   Calendar, FolderOpen, Bell, Settings, Users, Building2,
   LogOut, Shield, BookUser, BarChart3, ClipboardCheck, MapPin,
-  CalendarDays, Menu, X,
+  CalendarDays, Menu, X, KeyRound,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/ui/avatar'
@@ -50,6 +50,7 @@ const ADMIN_NAV_ITEMS = [
   { href: '/admin/inspection-templates', icon: ClipboardCheck, label: 'Checklists', feature: 'checklists' as FeatureName },
   { href: '/admin/inspection-schedules', icon: CalendarDays, label: 'Schedules', feature: 'schedules' as FeatureName },
   { href: '/admin/analytics', icon: BarChart3, label: 'Analytics', feature: 'analytics' as FeatureName },
+  { href: '/admin/roles', icon: KeyRound, label: 'Roles', minRole: 'org_admin' as UserRole },
   { href: '/admin/settings', icon: Settings, label: 'Settings', minRole: 'org_admin' as UserRole },
 ]
 
