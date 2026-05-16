@@ -1,0 +1,83 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+
+export const dynamic = 'force-dynamic'
+
+export async function GET(_req: NextRequest) {
+  const supabase = await createClient()
+  const admin = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const profile = await admin.from('profiles').select('org_id').eq('id', user.id).single()
+  const orgId = profile.data?.org_id
+  if (!orgId) return NextResponse.json({ objectives: [] })
+
+  const { data, error } = await admin.from('okr_objectives')
+    .select('*, departments(name), teams(name), okr_key_results(id, title, metric_type, start_value, target_value, current_value, unit, status, due_date), okr_assignees(user_id, role), okr_watchers(user_id)')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false })
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ objectives: data ?? [] })
+}
+
+export async function POST(req: NextRequest) {
+  const supabase = await createClient()
+  const admin = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const profile = await admin.from('profiles').select('org_id').eq('id', user.id).single()
+  const orgId = profile.data?.org_id
+  if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 400 })
+
+  const body = await req.json()
+  const { assigneeIds = [], watcherIds = [], keyResults = [], ...fields } = body
+
+  const { data: obj, error } = await admin.from('okr_objectives').insert({
+    org_id: orgId,
+    created_by: user.id,
+    title: fields.title,
+    description: fields.description || null,
+    period_type: fields.period_type || 'quarterly',
+    period_label: fields.period_label || null,
+    start_date: fields.start_date || null,
+    end_date: fields.end_date || null,
+    status: fields.status || 'on_track',
+    dept_id: fields.dept_id || null,
+    team_id: fields.team_id || null,
+  }).select().single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Insert key results
+  if (keyResults.length > 0) {
+    await admin.from('okr_key_results').insert(
+      keyResults.map((kr: Record<string, unknown>) => ({ ...kr, objective_id: obj.id }))
+    )
+  }
+
+  // Insert assignees — creator is always owner
+  const allAssignees = assigneeIds.includes(user.id)
+    ? assigneeIds
+    : [user.id, ...assigneeIds]
+
+  if (allAssignees.length > 0) {
+    await admin.from('okr_assignees').insert(
+      allAssignees.map((uid: string) => ({
+        objective_id: obj.id,
+        user_id: uid,
+        role: uid === user.id && !assigneeIds.includes(user.id) ? 'owner' : 'contributor',
+      }))
+    )
+  }
+
+  if (watcherIds.length > 0) {
+    await admin.from('okr_watchers').insert(
+      watcherIds.map((uid: string) => ({ objective_id: obj.id, user_id: uid }))
+    )
+  }
+
+  return NextResponse.json({ objective: obj }, { status: 201 })
+}

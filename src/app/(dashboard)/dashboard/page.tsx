@@ -2,7 +2,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { UserAvatar } from '@/components/ui/avatar'
-import { CheckSquare, AlertTriangle, Bell, TrendingUp, Users, Shield } from 'lucide-react'
+import { CheckSquare, AlertTriangle, Bell, TrendingUp, Users, Shield, Zap, Target } from 'lucide-react'
 import { formatRelativeTime, getDueStatus } from '@/lib/utils'
 import { ROLE_COLORS, ROLE_LABELS } from '@/lib/auth/permissions'
 import Link from 'next/link'
@@ -31,7 +31,7 @@ export default async function DashboardPage() {
       })()
     : supabase.from('teams').select('id, name, color, team_members!inner(user_id)').eq('team_members.user_id', user.id)
 
-  const [assignedRes, createdRes, notifRes, teamsRes, orgMembersRes] = await Promise.all([
+  const [assignedRes, createdRes, notifRes, teamsRes, orgMembersRes, myAtemRes, myOkrRes] = await Promise.all([
     // Tasks assigned to me (exclude subtasks)
     supabase
       .from('tasks')
@@ -60,6 +60,10 @@ export default async function DashboardPage() {
     teamsQ,
     // Org members snapshot
     supabase.from('profiles').select('id, full_name, avatar_url, role, dept_id, departments(name)').eq('is_active', true).order('full_name').limit(8),
+    // My ATEM items (assigned to me, not completed)
+    supabase.from('atem_assignees').select('atem_id').eq('user_id', user.id).limit(20),
+    // My OKR objectives (assigned to me)
+    supabase.from('okr_assignees').select('objective_id').eq('user_id', user.id).limit(20),
   ])
 
   // Merge assigned + created, deduplicate by id
@@ -99,6 +103,23 @@ export default async function DashboardPage() {
 
   type OrgMember = { id: string; full_name: string; avatar_url: string | null; role: UserRole; dept_id: string | null; departments?: { name: string } | null }
   const orgMembers = orgMembersRes.data as OrgMember[] | null
+
+  const myAtemIds = (myAtemRes.data ?? []).map((a: { atem_id: string }) => a.atem_id)
+  const myOkrIds = (myOkrRes.data ?? []).map((a: { objective_id: string }) => a.objective_id)
+
+  const [atemItemsRes, okrObjRes] = await Promise.all([
+    myAtemIds.length > 0
+      ? supabase.from('atem_items').select('id, task, status, priority, deadline').in('id', myAtemIds).not('status', 'eq', 'completed').order('deadline', { ascending: true, nullsFirst: false }).limit(5)
+      : Promise.resolve({ data: [] }),
+    myOkrIds.length > 0
+      ? supabase.from('okr_objectives').select('id, title, status, progress, end_date').in('id', myOkrIds).not('status', 'in', '("completed","cancelled")').order('end_date', { ascending: true, nullsFirst: false }).limit(5)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  type AtemItem = { id: string; task: string; status: string; priority: string; deadline: string | null }
+  type OkrObj = { id: string; title: string; status: string; progress: number; end_date: string | null }
+  const myAtemItems = (atemItemsRes.data ?? []) as AtemItem[]
+  const myOkrObjs = (okrObjRes.data ?? []) as OkrObj[]
 
   const overdueTasks = myTasks?.filter(t => t.due_date && new Date(t.due_date) < new Date()) ?? []
   const completionRate = 0 // calculated in analytics dashboard
@@ -256,6 +277,84 @@ export default async function DashboardPage() {
                       </li>
                     )
                   })}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* My ATEM Items */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-amber-500" /> My ATEM Actions
+                </CardTitle>
+                <Link href="/atem" className="text-xs text-indigo-600 hover:underline">View all</Link>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {!myAtemItems.length ? (
+                <div className="px-6 py-8 text-center text-gray-500 text-sm">No active ATEM items.</div>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {myAtemItems.map(item => (
+                    <li key={item.id}>
+                      <Link href={`/atem/${item.id}`} className="flex items-center gap-3 px-6 py-3 hover:bg-gray-50 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{item.task}</p>
+                          {item.deadline && (
+                            <p className="text-xs text-gray-400 mt-0.5">{new Date(item.deadline).toLocaleDateString()}</p>
+                          )}
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                          item.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                          item.status === 'blocked' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>{item.status.replace('_', ' ')}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* My OKR Objectives */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Target className="h-4 w-4 text-indigo-500" /> My OKRs
+                </CardTitle>
+                <Link href="/okr" className="text-xs text-indigo-600 hover:underline">View all</Link>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {!myOkrObjs.length ? (
+                <div className="px-6 py-8 text-center text-gray-500 text-sm">No active OKRs assigned.</div>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {myOkrObjs.map(obj => (
+                    <li key={obj.id}>
+                      <Link href={`/okr/${obj.id}`} className="flex items-center gap-3 px-6 py-3 hover:bg-gray-50 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{obj.title}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                              <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.round(obj.progress)}%` }} />
+                            </div>
+                            <span className="text-xs text-gray-500 shrink-0">{Math.round(obj.progress)}%</span>
+                          </div>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                          obj.status === 'on_track' ? 'bg-green-100 text-green-700' :
+                          obj.status === 'at_risk' ? 'bg-amber-100 text-amber-700' :
+                          obj.status === 'behind' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>{obj.status.replace('_', ' ')}</span>
+                      </Link>
+                    </li>
+                  ))}
                 </ul>
               )}
             </CardContent>

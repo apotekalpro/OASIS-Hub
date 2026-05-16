@@ -7,7 +7,7 @@ import {
   LayoutDashboard, CheckSquare, MessageSquare, FileText,
   Calendar, FolderOpen, Bell, Settings, Users, Building2,
   LogOut, Shield, BookUser, BarChart3, ClipboardCheck, MapPin,
-  CalendarDays, Menu, X, KeyRound,
+  CalendarDays, Menu, X, KeyRound, Target, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/ui/avatar'
@@ -25,6 +25,8 @@ const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/tasks', icon: CheckSquare, label: 'Tasks' },
+  { href: '/atem', icon: Zap, label: 'ATEM' },
+  { href: '/okr', icon: Target, label: 'OKR' },
   { href: '/messages', icon: MessageSquare, label: 'Messages' },
   { href: '/teams', icon: Shield, label: 'Teams' },
   { href: '/directory', icon: BookUser, label: 'Directory' },

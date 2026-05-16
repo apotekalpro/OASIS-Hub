@@ -4,6 +4,8 @@ import { hasRole } from '@/lib/auth/permissions'
 import type { UserRole } from '@/types/database'
 import { AnalyticsDashboard } from '@/components/analytics/analytics-dashboard'
 import { InspectionAnalyticsDashboard } from '@/components/analytics/inspection-analytics-dashboard'
+import { AtemAnalyticsDashboard } from '@/components/analytics/atem-analytics-dashboard'
+import { OkrAnalyticsDashboard } from '@/components/analytics/okr-analytics-dashboard'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +35,74 @@ export default async function AnalyticsPage({
 
   const { tab: tabParam } = await searchParams
   const tab = tabParam ?? 'tasks'
+
+  // ── ATEM tab ──────────────────────────────────────────────────────────────
+  if (tab === 'atem' && orgId) {
+    const [itemsRes, assigneesRes] = await Promise.all([
+      supabase.from('atem_items').select('id, status, priority, deadline, created_at, dept_id, departments(name)').eq('org_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('atem_assignees').select('atem_id, user_id'),
+    ])
+    type AtemRow = { id: string; status: string; priority: string; deadline: string | null; created_at: string; dept_id: string | null; departments?: { name: string } | null }
+    const items = (itemsRes.data ?? []) as AtemRow[]
+    const now = new Date().toISOString()
+    const atemStats = {
+      total: items.length,
+      pending: items.filter(i => i.status === 'pending').length,
+      in_progress: items.filter(i => i.status === 'in_progress').length,
+      completed: items.filter(i => i.status === 'completed').length,
+      blocked: items.filter(i => i.status === 'blocked').length,
+      overdue: items.filter(i => i.deadline && i.deadline < now && i.status !== 'completed').length,
+      urgent: items.filter(i => i.priority === 'urgent').length,
+      high: items.filter(i => i.priority === 'high').length,
+    }
+    const deptBreakdown = Object.values(
+      items.reduce<Record<string, { name: string; total: number; completed: number }>>((acc, i) => {
+        const key = i.dept_id ?? 'none'
+        const name = i.departments?.name ?? 'No Department'
+        if (!acc[key]) acc[key] = { name, total: 0, completed: 0 }
+        acc[key].total++
+        if (i.status === 'completed') acc[key].completed++
+        return acc
+      }, {})
+    )
+    return <AtemAnalyticsDashboard stats={atemStats} deptBreakdown={deptBreakdown} items={items.slice(0, 10).map(i => ({ id: i.id, status: i.status, priority: i.priority, deadline: i.deadline, created_at: i.created_at }))} scopeLabel={isOrgWide ? 'Organisation-wide' : 'Your ATEM'} />
+  }
+
+  // ── OKR tab ───────────────────────────────────────────────────────────────
+  if (tab === 'okr' && orgId) {
+    const [objRes, krRes] = await Promise.all([
+      supabase.from('okr_objectives').select('id, status, progress, period_type, dept_id, departments(name), created_at').eq('org_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('okr_key_results').select('id, objective_id, status, current_value, target_value, metric_type'),
+    ])
+    type OkrRow = { id: string; status: string; progress: number; period_type: string; dept_id: string | null; departments?: { name: string } | null; created_at: string }
+    type KrRow = { id: string; objective_id: string; status: string; current_value: number; target_value: number; metric_type: string }
+    const objs = (objRes.data ?? []) as OkrRow[]
+    const krs = (krRes.data ?? []) as KrRow[]
+    const okrStats = {
+      total: objs.length,
+      on_track: objs.filter(o => o.status === 'on_track').length,
+      at_risk: objs.filter(o => o.status === 'at_risk').length,
+      behind: objs.filter(o => o.status === 'behind').length,
+      completed: objs.filter(o => o.status === 'completed').length,
+      cancelled: objs.filter(o => o.status === 'cancelled').length,
+      avg_progress: objs.length > 0 ? Math.round(objs.reduce((s, o) => s + o.progress, 0) / objs.length) : 0,
+      total_krs: krs.length,
+      completed_krs: krs.filter(k => k.status === 'completed').length,
+    }
+    const deptBreakdown = Object.values(
+      objs.reduce<Record<string, { name: string; total: number; completed: number; avg_progress: number; items: number }>>((acc, o) => {
+        const key = o.dept_id ?? 'none'
+        const name = o.departments?.name ?? 'No Department'
+        if (!acc[key]) acc[key] = { name, total: 0, completed: 0, avg_progress: 0, items: 0 }
+        acc[key].total++
+        acc[key].items++
+        acc[key].avg_progress = (acc[key].avg_progress * (acc[key].items - 1) + o.progress) / acc[key].items
+        if (o.status === 'completed') acc[key].completed++
+        return acc
+      }, {})
+    ).map(d => ({ ...d, avg_progress: Math.round(d.avg_progress) }))
+    return <OkrAnalyticsDashboard stats={okrStats} deptBreakdown={deptBreakdown} scopeLabel={isOrgWide ? 'Organisation-wide' : 'Your OKRs'} />
+  }
 
   // ── Inspections tab (org-wide RPCs, only for admins) ──────────────────────
   if (tab === 'inspections' && isOrgWide && orgId) {
