@@ -744,9 +744,8 @@ export function TaskDetailClient({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main content */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Title + status */}
+          {/* Title card — row 1 left on desktop, row 1 on mobile */}
+          <div className="lg:col-span-2">
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <div className="flex items-start gap-3">
                 <span className={cn('mt-2 h-2.5 w-2.5 rounded-full shrink-0', PRIORITY_DOT[task.priority as keyof typeof PRIORITY_DOT])} />
@@ -783,179 +782,10 @@ export function TaskDetailClient({
                 </div>
               )}
             </div>
-
-            {/* Tabs */}
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="flex border-b border-gray-100">
-                {TABS.map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setTab(t)}
-                    className={cn(
-                      'px-5 py-3 text-sm font-medium border-b-2 transition-colors',
-                      tab === t ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-                    )}
-                  >
-                    {t}
-                    {t === 'Comments' && comments.length > 0 && (
-                      <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{comments.length}</span>
-                    )}
-                    {t === 'Subtasks' && subtasks.length > 0 && (
-                      <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{doneSubs}/{subtasks.length}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              <div className="p-5">
-                {/* Comments Tab */}
-                {tab === 'Comments' && (
-                  <div className="space-y-4">
-                    <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
-                      {threadedComments.length === 0 && (
-                        <p className="text-sm text-gray-400 text-center py-6">No comments yet. Start the conversation!</p>
-                      )}
-                      {threadedComments.map(c => (
-                        <CommentItem
-                          key={c.id}
-                          comment={c}
-                          currentUserId={currentUserId}
-                          users={users}
-                          onDelete={deleteComment}
-                          onReact={handleReact}
-                          onReply={setReplyTo}
-                        />
-                      ))}
-                      <div ref={commentEndRef} />
-                    </div>
-
-                    {/* Reply-to banner */}
-                    {replyTo && (
-                      <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-xs text-indigo-700">
-                        <CornerDownRight className="h-3 w-3 shrink-0" />
-                        <span className="flex-1">Replying to <strong>{replyTo.user.full_name}</strong></span>
-                        <button onClick={() => setReplyTo(null)}><X className="h-3 w-3" /></button>
-                      </div>
-                    )}
-
-                    {/* Pending file previews */}
-                    {pendingFiles.length > 0 && (
-                      <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                        {pendingFiles.map((f, i) => (
-                          <div key={i} className="relative group">
-                            {f.type.startsWith('image/') ? (
-                              <img
-                                src={URL.createObjectURL(f)}
-                                alt={f.name}
-                                className="h-16 w-16 object-cover rounded-lg border border-gray-200"
-                              />
-                            ) : (
-                              <div className="h-16 w-32 flex items-center gap-2 px-2 bg-white rounded-lg border border-gray-200 text-xs text-gray-600 truncate">
-                                <FileText className="h-4 w-4 shrink-0 text-gray-400" />
-                                {f.name}
-                              </div>
-                            )}
-                            <button
-                              onClick={() => removePendingFile(i)}
-                              className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="h-2.5 w-2.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Comment input */}
-                    <div className="pt-3 border-t border-gray-100 space-y-2">
-                      <div className="flex gap-2 items-end">
-                        <UserAvatar name={currentUserName} avatarUrl={currentUserAvatar} size="sm" className="w-8 h-8 shrink-0" />
-                        <MentionTextarea
-                          value={commentText}
-                          onChange={setCommentText}
-                          onKeyDown={handleCommentKeyDown}
-                          onPaste={handlePaste}
-                          placeholder={replyTo ? `Reply to ${replyTo.user.full_name}… (@ to mention)` : 'Write a comment… (@ to mention, Ctrl+V to paste image)'}
-                          users={users}
-                          textareaRef={textareaRef}
-                        />
-                        <div className="flex flex-col gap-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => fileInputRef.current?.click()}
-                            title="Attach file"
-                            className="px-2"
-                          >
-                            <Paperclip className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" onClick={postComment} loading={submittingComment} disabled={!commentText.trim() && pendingFiles.length === 0}>
-                            <Send className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-400 ml-10">Enter to send · Shift+Enter for new line · @ to mention · Ctrl+V to paste image</p>
-                    </div>
-
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                      className="hidden"
-                      onChange={handleFileSelect}
-                    />
-                  </div>
-                )}
-
-                {/* Subtasks Tab */}
-                {tab === 'Subtasks' && (
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="New subtask..."
-                        value={newSubtask}
-                        onChange={e => setNewSubtask(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') addSubtask() }}
-                        className="flex-1"
-                      />
-                      <Button size="sm" onClick={addSubtask} loading={addingSubtask}>
-                        <Plus className="h-4 w-4" />Add
-                      </Button>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      {subtasks.length === 0 && (
-                        <p className="text-sm text-gray-400 text-center py-4">No subtasks yet</p>
-                      )}
-                      {subtasks.map(sub => (
-                        <div key={sub.id} className="flex items-center gap-2 group py-1.5 px-2 rounded-lg hover:bg-gray-50">
-                          <button onClick={() => toggleSubtask(sub)} className="shrink-0 text-gray-400 hover:text-indigo-600 transition-colors">
-                            {sub.status === 'done'
-                              ? <CheckCircle2 className="h-4 w-4 text-green-500" />
-                              : <Circle className="h-4 w-4" />}
-                          </button>
-                          <Link href={`/tasks/${sub.id}`} className={cn('flex-1 text-sm', sub.status === 'done' && 'line-through text-gray-400')}>
-                            {sub.title}
-                          </Link>
-                          <span className={cn('h-2 w-2 rounded-full shrink-0', PRIORITY_DOT[sub.priority as keyof typeof PRIORITY_DOT])} />
-                          <button
-                            onClick={() => deleteSubtask(sub.id)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-4">
+          {/* Sidebar — spans both rows on desktop (right column), appears 2nd on mobile */}
+          <div className="lg:row-span-2 lg:row-start-1 space-y-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-700">Details</h3>
 
@@ -1181,6 +1011,177 @@ export function TaskDetailClient({
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Tabs — row 2 left on desktop, row 3 on mobile */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="flex border-b border-gray-100">
+                {TABS.map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setTab(t)}
+                    className={cn(
+                      'px-5 py-3 text-sm font-medium border-b-2 transition-colors',
+                      tab === t ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                    )}
+                  >
+                    {t}
+                    {t === 'Comments' && comments.length > 0 && (
+                      <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{comments.length}</span>
+                    )}
+                    {t === 'Subtasks' && subtasks.length > 0 && (
+                      <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{doneSubs}/{subtasks.length}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-5">
+                {/* Comments Tab */}
+                {tab === 'Comments' && (
+                  <div className="space-y-4">
+                    <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
+                      {threadedComments.length === 0 && (
+                        <p className="text-sm text-gray-400 text-center py-6">No comments yet. Start the conversation!</p>
+                      )}
+                      {threadedComments.map(c => (
+                        <CommentItem
+                          key={c.id}
+                          comment={c}
+                          currentUserId={currentUserId}
+                          users={users}
+                          onDelete={deleteComment}
+                          onReact={handleReact}
+                          onReply={setReplyTo}
+                        />
+                      ))}
+                      <div ref={commentEndRef} />
+                    </div>
+
+                    {/* Reply-to banner */}
+                    {replyTo && (
+                      <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-xs text-indigo-700">
+                        <CornerDownRight className="h-3 w-3 shrink-0" />
+                        <span className="flex-1">Replying to <strong>{replyTo.user.full_name}</strong></span>
+                        <button onClick={() => setReplyTo(null)}><X className="h-3 w-3" /></button>
+                      </div>
+                    )}
+
+                    {/* Pending file previews */}
+                    {pendingFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                        {pendingFiles.map((f, i) => (
+                          <div key={i} className="relative group">
+                            {f.type.startsWith('image/') ? (
+                              <img
+                                src={URL.createObjectURL(f)}
+                                alt={f.name}
+                                className="h-16 w-16 object-cover rounded-lg border border-gray-200"
+                              />
+                            ) : (
+                              <div className="h-16 w-32 flex items-center gap-2 px-2 bg-white rounded-lg border border-gray-200 text-xs text-gray-600 truncate">
+                                <FileText className="h-4 w-4 shrink-0 text-gray-400" />
+                                {f.name}
+                              </div>
+                            )}
+                            <button
+                              onClick={() => removePendingFile(i)}
+                              className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Comment input */}
+                    <div className="pt-3 border-t border-gray-100 space-y-2">
+                      <div className="flex gap-2 items-end">
+                        <UserAvatar name={currentUserName} avatarUrl={currentUserAvatar} size="sm" className="w-8 h-8 shrink-0" />
+                        <MentionTextarea
+                          value={commentText}
+                          onChange={setCommentText}
+                          onKeyDown={handleCommentKeyDown}
+                          onPaste={handlePaste}
+                          placeholder={replyTo ? `Reply to ${replyTo.user.full_name}… (@ to mention)` : 'Write a comment… (@ to mention, Ctrl+V to paste image)'}
+                          users={users}
+                          textareaRef={textareaRef}
+                        />
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => fileInputRef.current?.click()}
+                            title="Attach file"
+                            className="px-2"
+                          >
+                            <Paperclip className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" onClick={postComment} loading={submittingComment} disabled={!commentText.trim() && pendingFiles.length === 0}>
+                            <Send className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-400 ml-10">Enter to send · Shift+Enter for new line · @ to mention · Ctrl+V to paste image</p>
+                    </div>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+                  </div>
+                )}
+
+                {/* Subtasks Tab */}
+                {tab === 'Subtasks' && (
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="New subtask..."
+                        value={newSubtask}
+                        onChange={e => setNewSubtask(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') addSubtask() }}
+                        className="flex-1"
+                      />
+                      <Button size="sm" onClick={addSubtask} loading={addingSubtask}>
+                        <Plus className="h-4 w-4" />Add
+                      </Button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {subtasks.length === 0 && (
+                        <p className="text-sm text-gray-400 text-center py-4">No subtasks yet</p>
+                      )}
+                      {subtasks.map(sub => (
+                        <div key={sub.id} className="flex items-center gap-2 group py-1.5 px-2 rounded-lg hover:bg-gray-50">
+                          <button onClick={() => toggleSubtask(sub)} className="shrink-0 text-gray-400 hover:text-indigo-600 transition-colors">
+                            {sub.status === 'done'
+                              ? <CheckCircle2 className="h-4 w-4 text-green-500" />
+                              : <Circle className="h-4 w-4" />}
+                          </button>
+                          <Link href={`/tasks/${sub.id}`} className={cn('flex-1 text-sm', sub.status === 'done' && 'line-through text-gray-400')}>
+                            {sub.title}
+                          </Link>
+                          <span className={cn('h-2 w-2 rounded-full shrink-0', PRIORITY_DOT[sub.priority as keyof typeof PRIORITY_DOT])} />
+                          <button
+                            onClick={() => deleteSubtask(sub.id)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
