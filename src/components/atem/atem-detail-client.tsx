@@ -727,7 +727,7 @@ export function AtemDetailClient({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-3xl mx-auto p-6 space-y-4">
+      <div className="max-w-7xl mx-auto p-6 space-y-4">
         {/* Back + actions */}
         <div className="flex items-center justify-between">
           <Link href="/atem" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors">
@@ -760,6 +760,12 @@ export function AtemDetailClient({
             )}
           </div>
         </div>
+
+        {/* ── Two-column layout ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
+
+        {/* ── LEFT: TDIDSCE + Action Plan ── */}
+        <div className="space-y-4">
 
         {/* ── T: Task ── */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -857,6 +863,22 @@ export function AtemDetailClient({
           </div>
         )}
 
+        {/* ── Action Plan ── */}
+        {item.action_plan && item.action_plan !== '<p></p>' && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-base">📋</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Action Plan</span>
+            </div>
+            <div className="prose prose-sm max-w-none text-gray-700" dangerouslySetInnerHTML={{ __html: item.action_plan }} />
+          </div>
+        )}
+
+        </div>{/* end left column */}
+
+        {/* ── RIGHT SIDEBAR ── */}
+        <div className="space-y-4">
+
         {/* ── Nearest Deadline ── */}
         {item.deadline && (
           <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -869,17 +891,6 @@ export function AtemDetailClient({
               <Calendar className="h-4 w-4 text-gray-400" />
               {formatDate(item.deadline)}
             </p>
-          </div>
-        )}
-
-        {/* ── Action Plan ── */}
-        {item.action_plan && item.action_plan !== '<p></p>' && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-base">📋</span>
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Action Plan</span>
-            </div>
-            <div className="prose prose-sm max-w-none text-gray-700" dangerouslySetInnerHTML={{ __html: item.action_plan }} />
           </div>
         )}
 
@@ -1146,6 +1157,9 @@ export function AtemDetailClient({
             <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" onChange={handleFileSelect} />
           </div>
         </div>
+
+        </div>{/* end right sidebar */}
+        </div>{/* end two-column grid */}
       </div>
     </div>
   )
