@@ -21,9 +21,9 @@ export async function createUser(data: {
   employee_id?: string
   job_title?: string
   phone?: string
-}) {
+}): Promise<{ success: true; userId: string } | { success: false; error: string }> {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured. Add it to your Netlify environment variables.')
+    return { success: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not configured. Add it to your Netlify environment variables.' }
   }
 
   const adminClient = createAdminClient()
@@ -39,13 +39,12 @@ export async function createUser(data: {
 
   if (authError) {
     if (authError.message.toLowerCase().includes('already') || authError.message.toLowerCase().includes('exists')) {
-      // User exists in auth but may lack a profile — look them up
       const { data: existing } = await adminClient.auth.admin.listUsers()
       const found = existing?.users?.find(u => u.email === data.email)
-      if (!found) throw new Error(authError.message)
+      if (!found) return { success: false, error: authError.message }
       userId = found.id
     } else {
-      throw new Error(authError.message)
+      return { success: false, error: authError.message }
     }
   } else {
     userId = authUser.user.id
@@ -73,14 +72,14 @@ export async function createUser(data: {
       must_change_password: true,
     })
 
-  if (profileError) throw new Error(profileError.message)
+  if (profileError) return { success: false, error: profileError.message }
 
   // Handle multi-department assignments for chiefs
   if (data.role === 'chief') {
     await adminClient.from('chief_departments').delete().eq('user_id', userId)
     for (const deptId of (data.chief_dept_ids ?? [])) {
       const { error: insErr } = await adminClient.from('chief_departments').insert({ user_id: userId, dept_id: deptId })
-      if (insErr) throw new Error(`Failed to assign department: ${insErr.message}`)
+      if (insErr) return { success: false, error: `Failed to assign department: ${insErr.message}` }
     }
   }
 
@@ -187,7 +186,7 @@ export async function updateUserProfile(
     job_title: string
     phone: string
   }>
-) {
+): Promise<{ success: true } | { success: false; error: string }> {
   const adminClient = createAdminClient()
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -205,14 +204,14 @@ export async function updateUserProfile(
     .update(safeProfileData)
     .eq('id', userId)
 
-  if (error) throw new Error(error.message)
+  if (error) return { success: false, error: error.message }
 
   // Sync chief_departments when role is chief or being cleared
   if (data.role === 'chief') {
     await adminClient.from('chief_departments').delete().eq('user_id', userId)
     for (const deptId of (chief_dept_ids ?? [])) {
       const { error: insErr } = await adminClient.from('chief_departments').insert({ user_id: userId, dept_id: deptId })
-      if (insErr) throw new Error(`Failed to assign department: ${insErr.message}`)
+      if (insErr) return { success: false, error: `Failed to assign department: ${insErr.message}` }
     }
   } else if (data.role) {
     // Role changed away from chief — clear their department assignments
