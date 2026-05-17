@@ -26,15 +26,15 @@ export async function POST(request: Request) {
 
   if (teamErr) return NextResponse.json({ error: teamErr.message }, { status: 500 })
 
-  // Add creator as team_leader + selected members
-  const rows = [
-    { team_id: team.id, user_id: user.id, role: 'team_leader' },
-    ...(memberIds as string[]).filter(id => id !== user.id).map((uid: string) => ({
-      team_id: team.id, user_id: uid, role: 'member',
-    })),
-  ]
-  const { error: memberErr } = await admin.from('team_members').insert(rows)
-  if (memberErr) return NextResponse.json({ error: memberErr.message }, { status: 500 })
+  // Trigger trg_team_creator_leader already inserts creator as team_leader on team insert.
+  // Only add the explicitly selected members (excluding creator to avoid duplicate).
+  const extraMembers = (memberIds as string[])
+    .filter(id => id !== user.id)
+    .map((uid: string) => ({ team_id: team.id, user_id: uid, role: 'member' }))
+  if (extraMembers.length > 0) {
+    const { error: memberErr } = await admin.from('team_members').insert(extraMembers)
+    if (memberErr) return NextResponse.json({ error: memberErr.message }, { status: 500 })
+  }
 
   return NextResponse.json({ id: team.id })
 }

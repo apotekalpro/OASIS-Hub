@@ -51,6 +51,11 @@ export async function createUser(data: {
     userId = authUser.user.id
   }
 
+  // For chiefs, dept_id on profile = first selected dept (for backwards compat)
+  const profileDeptId = data.role === 'chief' && data.chief_dept_ids?.length
+    ? data.chief_dept_ids[0]
+    : data.dept_id || null
+
   const { error: profileError } = await adminClient
     .from('profiles')
     .upsert({
@@ -58,7 +63,7 @@ export async function createUser(data: {
       email: data.email,
       contact_email: data.contact_email || null,
       org_id: data.org_id,
-      dept_id: data.dept_id || null,
+      dept_id: profileDeptId,
       employee_id: data.employee_id || null,
       full_name: data.full_name,
       role: data.role,
@@ -72,11 +77,13 @@ export async function createUser(data: {
 
   // Handle multi-department assignments for chiefs
   if (data.role === 'chief') {
-    await adminClient.from('chief_departments').delete().eq('user_id', userId)
+    const { error: delErr } = await adminClient.from('chief_departments').delete().eq('user_id', userId)
+    if (delErr) throw new Error(delErr.message)
     if (data.chief_dept_ids?.length) {
-      await adminClient.from('chief_departments').insert(
+      const { error: insErr } = await adminClient.from('chief_departments').insert(
         data.chief_dept_ids.map(deptId => ({ user_id: userId, dept_id: deptId }))
       )
+      if (insErr) throw new Error(insErr.message)
     }
   }
 
@@ -205,11 +212,13 @@ export async function updateUserProfile(
 
   // Sync chief_departments when role is chief or being cleared
   if (data.role === 'chief') {
-    await adminClient.from('chief_departments').delete().eq('user_id', userId)
+    const { error: delErr } = await adminClient.from('chief_departments').delete().eq('user_id', userId)
+    if (delErr) throw new Error(delErr.message)
     if (chief_dept_ids?.length) {
-      await adminClient.from('chief_departments').insert(
+      const { error: insErr } = await adminClient.from('chief_departments').insert(
         chief_dept_ids.map(deptId => ({ user_id: userId, dept_id: deptId }))
       )
+      if (insErr) throw new Error(insErr.message)
     }
   } else if (data.role) {
     // Role changed away from chief — clear their department assignments

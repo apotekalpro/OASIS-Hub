@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { AnalyticsFilterBar } from './analytics-filter-bar'
 import { Target, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react'
 
 interface OkrStats {
@@ -14,10 +15,15 @@ interface DeptBreakdown {
   name: string; total: number; completed: number; avg_progress: number
 }
 
+interface FilterDept { id: string; name: string }
+interface FilterUser { id: string; full_name: string }
+interface OutletOption { id: string; name: string; code: string }
+
 interface Props {
   stats: OkrStats
   deptBreakdown: DeptBreakdown[]
   scopeLabel: string
+  filterOptions?: { departments: FilterDept[]; users: FilterUser[]; outlets: OutletOption[] }
 }
 
 const TAB_LINKS = [
@@ -35,7 +41,7 @@ const STATUS_BARS = [
   { key: 'cancelled', label: 'Cancelled', color: 'bg-gray-300' },
 ] as const
 
-export function OkrAnalyticsDashboard({ stats, deptBreakdown, scopeLabel }: Props) {
+export function OkrAnalyticsDashboard({ stats, deptBreakdown, scopeLabel, filterOptions }: Props) {
   const krCompletionRate = stats.total_krs > 0 ? Math.round((stats.completed_krs / stats.total_krs) * 100) : 0
 
   return (
@@ -59,6 +65,16 @@ export function OkrAnalyticsDashboard({ stats, deptBreakdown, scopeLabel }: Prop
           >{t.label}</Link>
         ))}
       </div>
+
+      {/* Filters */}
+      {filterOptions && (
+        <AnalyticsFilterBar
+          departments={filterOptions.departments}
+          users={filterOptions.users}
+          outlets={filterOptions.outlets}
+          tab="okr"
+        />
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

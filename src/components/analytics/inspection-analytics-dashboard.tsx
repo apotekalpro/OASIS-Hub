@@ -10,6 +10,7 @@ import { KpiDonut } from './kpi-donut'
 import { TrendAreaChart } from './trend-area-chart'
 import { HorizontalBarChart } from './horizontal-bar-chart'
 import { SeverityDonut } from './severity-donut'
+import { AnalyticsFilterBar } from './analytics-filter-bar'
 import { cn } from '@/lib/utils'
 
 type SeverityRow = { severity: string; total: number; open_count: number; resolved_count: number }
@@ -18,6 +19,10 @@ type TrendRow = { day: string; opened: number; resolved: number; escalated: numb
 type SessionTrendRow = { day: string; scheduled: number; completed: number; missed: number }
 type UserStat = { user_id: string; full_name: string; avatar_url: string; sessions_conducted: number; sessions_completed: number; issues_raised: number; issues_resolved: number; completion_rate: number }
 type IssueCounts = { total: number; open: number; in_progress: number; escalated: number; resolved: number; closed: number }
+
+interface FilterDept { id: string; name: string }
+interface FilterUser { id: string; full_name: string }
+interface OutletOption { id: string; name: string; code: string }
 
 interface Props {
   irr: number
@@ -30,6 +35,7 @@ interface Props {
   avgResolutionMins: number
   userStats: UserStat[]
   issueCounts: IssueCounts
+  filterOptions?: { departments: FilterDept[]; users: FilterUser[]; outlets: OutletOption[] }
 }
 
 type MainTab = 'executive' | 'operational' | 'issues'
@@ -42,7 +48,7 @@ const MAIN_TABS: { key: MainTab; label: string }[] = [
 
 export function InspectionAnalyticsDashboard({
   irr, rcr, severity, outletStats, issueTrend, sessionTrend,
-  avgResolutionHours, avgResolutionMins, userStats, issueCounts,
+  avgResolutionHours, avgResolutionMins, userStats, issueCounts, filterOptions,
 }: Props) {
   const [tab, setTab] = useState<MainTab>('executive')
   const [trendMode, setTrendMode] = useState<'issues' | 'reports'>('issues')
@@ -131,6 +137,16 @@ export function InspectionAnalyticsDashboard({
       </div>
 
       <div className="max-w-[1400px] mx-auto p-6 space-y-5">
+
+        {/* Filters */}
+        {filterOptions && (
+          <AnalyticsFilterBar
+            departments={filterOptions.departments}
+            users={filterOptions.users}
+            outlets={filterOptions.outlets}
+            tab="inspections"
+          />
+        )}
 
         {/* ═══════════════ EXECUTIVE SUMMARY ═══════════════ */}
         {tab === 'executive' && (

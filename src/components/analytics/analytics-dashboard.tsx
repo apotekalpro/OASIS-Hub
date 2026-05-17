@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { MiniSparkline } from './mini-sparkline'
 import { BarChart } from './bar-chart'
 import { DonutChart } from './donut-chart'
+import { AnalyticsFilterBar } from './analytics-filter-bar'
 
 type TaskStats = { total: number; todo: number; in_progress: number; in_review: number; done: number; cancelled: number; overdue: number; urgent: number; high: number }
 type TrendRow = { day: string; completed: number; created: number }
@@ -29,6 +30,7 @@ interface Props {
   recentTasks: RecentTask[]
   completionRate: number
   scopeLabel?: string
+  filterOptions?: { departments: { id: string; name: string }[]; users: { id: string; full_name: string }[]; outlets: { id: string; name: string; code: string }[] }
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -38,7 +40,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   urgent: 'bg-red-500', high: 'bg-orange-500', medium: 'bg-blue-500', low: 'bg-gray-400',
 }
 
-export function AnalyticsDashboard({ taskStats, trend, teamStats, contributors, formDeptStats, activeUsers, priorityCounts, recentTasks, completionRate, scopeLabel }: Props) {
+export function AnalyticsDashboard({ taskStats, trend, teamStats, contributors, formDeptStats, activeUsers, priorityCounts, recentTasks, completionRate, scopeLabel, filterOptions }: Props) {
   const trendCompleted = trend.map(t => t.completed)
   const trendCreated = trend.map(t => t.created)
   const trendLabels = trend.map(t => {
@@ -74,6 +76,16 @@ export function AnalyticsDashboard({ taskStats, trend, teamStats, contributors, 
           <a href="/analytics?tab=inspections" className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Inspections</a>
         </div>
       </div>
+
+      {/* Filters */}
+      {filterOptions && (
+        <AnalyticsFilterBar
+          departments={filterOptions.departments}
+          users={filterOptions.users}
+          outlets={filterOptions.outlets}
+          tab="tasks"
+        />
+      )}
 
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">

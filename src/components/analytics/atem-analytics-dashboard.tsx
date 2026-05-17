@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { AnalyticsFilterBar } from './analytics-filter-bar'
 import { Zap, AlertTriangle, CheckCircle2, Clock, BarChart3 } from 'lucide-react'
 
 interface AtemStats {
@@ -18,11 +19,16 @@ interface AtemItem {
   id: string; status: string; priority: string; deadline: string | null; created_at: string
 }
 
+interface FilterDept { id: string; name: string }
+interface FilterUser { id: string; full_name: string }
+interface OutletOption { id: string; name: string; code: string }
+
 interface Props {
   stats: AtemStats
   deptBreakdown: DeptBreakdown[]
   items: AtemItem[]
   scopeLabel: string
+  filterOptions?: { departments: FilterDept[]; users: FilterUser[]; outlets: OutletOption[] }
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -46,7 +52,7 @@ const TAB_LINKS = [
   { href: '?tab=inspections', label: 'Inspections' },
 ]
 
-export function AtemAnalyticsDashboard({ stats, deptBreakdown, items, scopeLabel }: Props) {
+export function AtemAnalyticsDashboard({ stats, deptBreakdown, items, scopeLabel, filterOptions }: Props) {
   const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0
 
   return (
@@ -70,6 +76,16 @@ export function AtemAnalyticsDashboard({ stats, deptBreakdown, items, scopeLabel
           >{t.label}</Link>
         ))}
       </div>
+
+      {/* Filters */}
+      {filterOptions && (
+        <AnalyticsFilterBar
+          departments={filterOptions.departments}
+          users={filterOptions.users}
+          outlets={filterOptions.outlets}
+          tab="atem"
+        />
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
