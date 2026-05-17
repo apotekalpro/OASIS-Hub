@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AnalyticsFilterBar } from './analytics-filter-bar'
@@ -68,12 +69,14 @@ export function OkrAnalyticsDashboard({ stats, deptBreakdown, scopeLabel, filter
 
       {/* Filters */}
       {filterOptions && (
-        <AnalyticsFilterBar
-          departments={filterOptions.departments}
-          users={filterOptions.users}
-          outlets={filterOptions.outlets}
-          tab="okr"
-        />
+        <Suspense fallback={null}>
+          <AnalyticsFilterBar
+            departments={filterOptions.departments}
+            users={filterOptions.users}
+            outlets={filterOptions.outlets}
+            tab="okr"
+          />
+        </Suspense>
       )}
 
       {/* KPI Cards */}

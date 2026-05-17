@@ -32,21 +32,23 @@ export default async function DashboardPage() {
     : supabase.from('teams').select('id, name, color, team_members!inner(user_id)').eq('team_members.user_id', user.id)
 
   const [assignedRes, createdRes, notifRes, teamsRes, orgMembersRes, myAtemRes, myOkrRes] = await Promise.all([
-    // Tasks assigned to me (exclude subtasks)
+    // Tasks assigned to me (exclude subtasks and OKR subtasks)
     supabase
       .from('tasks')
       .select('id, title, status, priority, due_date, created_by, task_assignees!inner(user_id)')
       .eq('task_assignees.user_id', user.id)
       .is('parent_id', null)
+      .is('kr_id', null)
       .not('status', 'in', '("done","cancelled")')
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(20),
-    // Tasks created by me, not necessarily assigned to me (exclude subtasks)
+    // Tasks created by me, not necessarily assigned to me (exclude subtasks and OKR subtasks)
     supabase
       .from('tasks')
       .select('id, title, status, priority, due_date, created_by, task_assignees(user_id)')
       .eq('created_by', user.id)
       .is('parent_id', null)
+      .is('kr_id', null)
       .not('status', 'in', '("done","cancelled")')
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(20),

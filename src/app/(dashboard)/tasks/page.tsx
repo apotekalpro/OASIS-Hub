@@ -38,7 +38,7 @@ export default async function TasksPage() {
 
   if (isSuperAdmin || (isAdmin && orgId)) {
     // Admins: fetch tasks + supporting data all in parallel (exclude subtasks)
-    const tasksQuery = supabase.from('tasks').select(taskSelect).is('parent_id', null).order('created_at', { ascending: false })
+    const tasksQuery = supabase.from('tasks').select(taskSelect).is('parent_id', null).is('kr_id', null).order('created_at', { ascending: false })
     if (!isSuperAdmin && orgId) tasksQuery.eq('org_id', orgId)
 
     const [tasksResult, ...rest] = await Promise.all([
@@ -70,6 +70,7 @@ export default async function TasksPage() {
     const res = await supabase.from('tasks')
       .select(taskSelect)
       .is('parent_id', null)
+      .is('kr_id', null)
       .or(orParts.join(','))
       .order('created_at', { ascending: false })
     rawTasks = (res.data as unknown as RawTask[]) ?? []

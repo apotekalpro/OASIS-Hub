@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertCircle, CheckCircle2, Clock, TrendingUp, Building2,
@@ -140,12 +140,14 @@ export function InspectionAnalyticsDashboard({
 
         {/* Filters */}
         {filterOptions && (
-          <AnalyticsFilterBar
-            departments={filterOptions.departments}
-            users={filterOptions.users}
-            outlets={filterOptions.outlets}
-            tab="inspections"
-          />
+          <Suspense fallback={null}>
+            <AnalyticsFilterBar
+              departments={filterOptions.departments}
+              users={filterOptions.users}
+              outlets={filterOptions.outlets}
+              tab="inspections"
+            />
+          </Suspense>
         )}
 
         {/* ═══════════════ EXECUTIVE SUMMARY ═══════════════ */}

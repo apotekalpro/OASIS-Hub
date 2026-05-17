@@ -77,13 +77,12 @@ export async function createUser(data: {
 
   // Handle multi-department assignments for chiefs
   if (data.role === 'chief') {
-    const { error: delErr } = await adminClient.from('chief_departments').delete().eq('user_id', userId)
-    if (delErr) throw new Error(delErr.message)
+    await adminClient.from('chief_departments').delete().eq('user_id', userId)
     if (data.chief_dept_ids?.length) {
       const { error: insErr } = await adminClient.from('chief_departments').insert(
         data.chief_dept_ids.map(deptId => ({ user_id: userId, dept_id: deptId }))
       )
-      if (insErr) throw new Error(insErr.message)
+      if (insErr) console.error('chief_departments insert failed:', insErr.message)
     }
   }
 
@@ -212,13 +211,12 @@ export async function updateUserProfile(
 
   // Sync chief_departments when role is chief or being cleared
   if (data.role === 'chief') {
-    const { error: delErr } = await adminClient.from('chief_departments').delete().eq('user_id', userId)
-    if (delErr) throw new Error(delErr.message)
+    await adminClient.from('chief_departments').delete().eq('user_id', userId)
     if (chief_dept_ids?.length) {
       const { error: insErr } = await adminClient.from('chief_departments').insert(
         chief_dept_ids.map(deptId => ({ user_id: userId, dept_id: deptId }))
       )
-      if (insErr) throw new Error(insErr.message)
+      if (insErr) console.error('chief_departments insert failed:', insErr.message)
     }
   } else if (data.role) {
     // Role changed away from chief — clear their department assignments

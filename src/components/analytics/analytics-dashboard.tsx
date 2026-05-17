@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { UserAvatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -79,12 +80,14 @@ export function AnalyticsDashboard({ taskStats, trend, teamStats, contributors, 
 
       {/* Filters */}
       {filterOptions && (
-        <AnalyticsFilterBar
-          departments={filterOptions.departments}
-          users={filterOptions.users}
-          outlets={filterOptions.outlets}
-          tab="tasks"
-        />
+        <Suspense fallback={null}>
+          <AnalyticsFilterBar
+            departments={filterOptions.departments}
+            users={filterOptions.users}
+            outlets={filterOptions.outlets}
+            tab="tasks"
+          />
+        </Suspense>
       )}
 
       {/* KPI row */}

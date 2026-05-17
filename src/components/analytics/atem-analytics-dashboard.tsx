@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -79,12 +80,14 @@ export function AtemAnalyticsDashboard({ stats, deptBreakdown, items, scopeLabel
 
       {/* Filters */}
       {filterOptions && (
-        <AnalyticsFilterBar
-          departments={filterOptions.departments}
-          users={filterOptions.users}
-          outlets={filterOptions.outlets}
-          tab="atem"
-        />
+        <Suspense fallback={null}>
+          <AnalyticsFilterBar
+            departments={filterOptions.departments}
+            users={filterOptions.users}
+            outlets={filterOptions.outlets}
+            tab="atem"
+          />
+        </Suspense>
       )}
 
       {/* KPI Cards */}
