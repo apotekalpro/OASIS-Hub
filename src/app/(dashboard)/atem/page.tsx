@@ -1,7 +1,10 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { AtemListClient } from '@/components/atem/atem-list-client'
 import { AtemForm } from '@/components/atem/atem-form'
+import type { PickerUser } from '@/components/ui/assignee-picker'
 import type { UserRole } from '@/types/database'
+
+type PickerTeam = { id: string; name: string; team_members?: Array<{ user_id: string; profiles?: PickerUser | null }> }
 
 export const dynamic = 'force-dynamic'
 
@@ -19,9 +22,9 @@ export default async function AtemPage() {
       .select('*, departments(name), teams(name), atem_assignees(user_id), atem_watchers(user_id)')
       .eq('org_id', orgId)
       .order('created_at', { ascending: false }),
-    admin.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
+    admin.from('profiles').select('id, full_name, email, avatar_url, dept_id, role').eq('org_id', orgId).eq('is_active', true).order('full_name'),
     admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
-    admin.from('teams').select('id, name').eq('org_id', orgId).order('name'),
+    admin.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url, dept_id, role))').eq('org_id', orgId).order('name'),
   ])
 
   const canCreate = ['super_admin', 'org_admin', 'dept_head', 'chief', 'lead', 'area_manager', 'team_leader'].includes(role)
@@ -37,9 +40,9 @@ export default async function AtemPage() {
           <AtemForm
             orgId={orgId}
             currentUserId={user.id}
-            users={usersRes.data ?? []}
+            users={(usersRes.data ?? []) as unknown as PickerUser[]}
             departments={deptsRes.data ?? []}
-            teams={teamsRes.data ?? []}
+            teams={(teamsRes.data ?? []) as unknown as PickerTeam[]}
           />
         )}
       </div>

@@ -9,8 +9,8 @@ import { Plus, X, Tag, Eye } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { UserAvatar } from '@/components/ui/avatar'
 import { RichTextEditor } from '@/components/ui/rich-text-editor'
+import { AssigneePicker, type PickerUser } from '@/components/ui/assignee-picker'
 import { toast } from 'sonner'
 
 const schema = z.object({
@@ -24,9 +24,9 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
-type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+type OrgUser = PickerUser
 type Department = { id: string; name: string }
-type Team = { id: string; name: string }
+type Team = { id: string; name: string; team_members?: Array<{ user_id: string; profiles?: OrgUser | null }> }
 
 export type ExistingAtemItem = {
   id: string
@@ -64,8 +64,6 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
   const [selectedWatchers, setSelectedWatchers] = useState<OrgUser[]>([])
   const [tags, setTags] = useState<string[]>(item?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
-  const [userSearch, setUserSearch] = useState('')
-  const [watcherSearch, setWatcherSearch] = useState('')
   const [taskContent, setTaskContent] = useState(item?.task ?? '')
   const [taskError, setTaskError] = useState('')
   const [deadlineText, setDeadlineText] = useState(item?.deadline_text ?? '')
@@ -88,8 +86,6 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
     if (!open) {
       setSelectedAssignees([])
       setSelectedWatchers([])
-      setUserSearch('')
-      setWatcherSearch('')
       setTags(item?.tags ?? [])
       setTaskContent(item?.task ?? '')
       setTaskError('')
@@ -184,19 +180,6 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
     if (t && !tags.includes(t)) setTags([...tags, t])
     setTagInput('')
   }
-
-  const filteredUsers = users.filter(
-    u => !selectedAssignees.find(a => a.id === u.id) &&
-      (u.full_name.toLowerCase().includes(userSearch.toLowerCase()) ||
-       u.email.toLowerCase().includes(userSearch.toLowerCase()))
-  )
-
-  const filteredWatchers = users.filter(
-    u => !selectedWatchers.find(w => w.id === u.id) &&
-      !selectedAssignees.find(a => a.id === u.id) &&
-      (u.full_name.toLowerCase().includes(watcherSearch.toLowerCase()) ||
-       u.email.toLowerCase().includes(watcherSearch.toLowerCase()))
-  )
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -384,41 +367,14 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
               {/* Assignees */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Assignees</label>
-                {selectedAssignees.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {selectedAssignees.map(u => (
-                      <div key={u.id} className="flex items-center gap-1.5 bg-indigo-50 rounded-full pl-1 pr-2 py-0.5">
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
-                        <span className="text-xs font-medium text-indigo-700">{u.full_name.split(' ')[0]}</span>
-                        <button type="button" onClick={() => setSelectedAssignees(selectedAssignees.filter(a => a.id !== u.id))} className="text-indigo-300 hover:text-red-500 text-xs">×</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Input
-                  placeholder="Search and add assignees..."
-                  value={userSearch}
-                  onChange={e => setUserSearch(e.target.value)}
+                <AssigneePicker
+                  users={users}
+                  teams={teams}
+                  departments={departments}
+                  selected={selectedAssignees}
+                  onChange={setSelectedAssignees}
+                  pillColor="indigo"
                 />
-                {userSearch && (
-                  <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                    {filteredUsers.slice(0, 8).map(u => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { setSelectedAssignees([...selectedAssignees, u]); setUserSearch('') }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
-                      >
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 text-xs" />
-                        <span>{u.full_name}</span>
-                        <span className="text-gray-400 text-xs ml-auto">{u.email}</span>
-                      </button>
-                    ))}
-                    {filteredUsers.length === 0 && (
-                      <p className="px-3 py-2 text-sm text-gray-400">No users found</p>
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* Watchers / CC */}
@@ -427,41 +383,16 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                   <Eye className="h-3.5 w-3.5 text-gray-400" />
                   CC <span className="font-normal text-gray-400">(spectators — can track but are not responsible)</span>
                 </label>
-                {selectedWatchers.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {selectedWatchers.map(u => (
-                      <div key={u.id} className="flex items-center gap-1.5 bg-amber-50 rounded-full pl-1 pr-2 py-0.5">
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
-                        <span className="text-xs font-medium text-amber-700">{u.full_name.split(' ')[0]}</span>
-                        <button type="button" onClick={() => setSelectedWatchers(selectedWatchers.filter(w => w.id !== u.id))} className="text-amber-300 hover:text-red-500 text-xs">×</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Input
+                <AssigneePicker
+                  users={users}
+                  teams={teams}
+                  departments={departments}
+                  selected={selectedWatchers}
+                  excluded={selectedAssignees}
+                  onChange={setSelectedWatchers}
                   placeholder="Add people to CC..."
-                  value={watcherSearch}
-                  onChange={e => setWatcherSearch(e.target.value)}
+                  pillColor="amber"
                 />
-                {watcherSearch && (
-                  <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                    {filteredWatchers.slice(0, 8).map(u => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { setSelectedWatchers([...selectedWatchers, u]); setWatcherSearch('') }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
-                      >
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 text-xs" />
-                        <span>{u.full_name}</span>
-                        <span className="text-gray-400 text-xs ml-auto">{u.email}</span>
-                      </button>
-                    ))}
-                    {filteredWatchers.length === 0 && (
-                      <p className="px-3 py-2 text-sm text-gray-400">No users found</p>
-                    )}
-                  </div>
-                )}
               </div>
             </form>
           </div>
