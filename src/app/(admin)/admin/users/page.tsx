@@ -1,10 +1,8 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { UserAvatar } from '@/components/ui/avatar'
-import { ROLE_LABELS, ROLE_COLORS } from '@/lib/auth/permissions'
-import { formatDate } from '@/lib/utils'
+import { Card, CardContent } from '@/components/ui/card'
+import { ROLE_LABELS } from '@/lib/auth/permissions'
 import { UserManagementClient } from '@/components/admin/user-management-client'
+import { UsersTableClient } from '@/components/admin/users-table-client'
 import type { UserRole } from '@/types/database'
 
 export default async function UsersPage() {
@@ -84,95 +82,14 @@ export default async function UsersPage() {
         ))}
       </div>
 
-      {/* Users table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">All Users ({users?.length ?? 0})</CardTitle>
-          <CardDescription>
-            Active users in your organization. Default password: <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">Alpro@123</code>
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-6 py-3 font-medium text-gray-500">User</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Role</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Department</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Joined</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Last Login</th>
-                  <th className="text-right px-6 py-3 font-medium text-gray-500">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {users?.map(user => (
-                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <UserAvatar name={user.full_name} avatarUrl={user.avatar_url} size="sm" />
-                        <div>
-                          <p className="font-medium text-gray-900">{user.full_name}</p>
-                          <p className="text-xs text-gray-500">{user.email}</p>
-                          {user.contact_email && (
-                            <p className="text-xs text-indigo-500">{user.contact_email} <span className="text-gray-300">(contact)</span></p>
-                          )}
-                          {user.employee_id && (
-                            <p className="text-xs text-gray-400">ID: {user.employee_id}</p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${ROLE_COLORS[user.role as UserRole]}`}>
-                        {ROLE_LABELS[user.role as UserRole]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-gray-500 text-sm">
-                      {user.role === 'chief' && user.chief_departments?.length
-                        ? user.chief_departments.map(cd => departments?.find(d => d.id === cd.dept_id)?.name).filter(Boolean).join(', ')
-                        : user.role === 'outlet' && user.outlet_id
-                          ? <span className="text-orange-700">{outlets?.find(o => o.id === user.outlet_id)?.name ?? '—'}</span>
-                          : departments?.find(d => d.id === user.dept_id)?.name ?? '—'}
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex flex-col gap-1">
-                        <Badge variant={user.is_active ? 'success' : 'destructive'}>
-                          {user.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                        {user.must_change_password && (
-                          <Badge variant="warning" className="text-xs">
-                            Pending PW
-                          </Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-gray-500">
-                      {formatDate(user.created_at)}
-                    </td>
-                    <td className="px-4 py-4 text-gray-500">
-                      {user.last_login_at ? formatDate(user.last_login_at) : <span className="text-gray-300">Never</span>}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <UserManagementClient
-                        userId={user.id}
-                        user={user}
-                        departments={departments ?? []}
-                        outlets={outlets ?? []}
-                        orgId={orgId}
-                        roles={rolesData ?? []}
-                        initialChiefDeptIds={user.chief_departments?.map(cd => cd.dept_id) ?? []}
-                        mode="actions"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Users table with search/filter */}
+      <UsersTableClient
+        users={users}
+        departments={departments ?? []}
+        outlets={outlets ?? []}
+        rolesData={rolesData ?? []}
+        orgId={orgId}
+      />
     </div>
   )
 }

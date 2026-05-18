@@ -223,13 +223,13 @@ export async function updateUserProfile(
 }
 
 // ─── Sign in ──────────────────────────────────────────────────────────────────
-export async function signIn(email: string, password: string) {
+export async function signIn(email: string, password: string): Promise<{ success: true } | { success: false; error: string }> {
   const supabase = await createClient()
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) throw new Error(error.message)
+  if (error) return { success: false, error: error.message }
 
-  // Update last login
+  // Update last login (best-effort, don't block on failure)
   await supabase
     .from('profiles')
     .update({ last_login_at: new Date().toISOString() })

@@ -29,13 +29,12 @@ export default function LoginPage() {
 
   async function onSubmit(data: FormData) {
     setError(null)
-    try {
-      await signIn(data.email, data.password)
-      router.push('/dashboard')
-      router.refresh()
-    } catch (err) {
-      setError((err as Error).message || 'Login failed. Please check your credentials.')
+    const result = await signIn(data.email, data.password)
+    if (!result.success) {
+      setError(result.error || 'Login failed. Please check your credentials.')
+      return
     }
+    router.push('/dashboard')
   }
 
   return (
