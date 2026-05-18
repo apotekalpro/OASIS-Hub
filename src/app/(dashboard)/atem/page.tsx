@@ -17,11 +17,35 @@ export default async function AtemPage() {
   const profileRes = await admin.from('profiles').select('org_id, full_name, role').eq('id', user.id).single()
   const { org_id: orgId, role } = (profileRes.data ?? {}) as { org_id: string; full_name: string; role: UserRole }
 
+  const isAdmin = ['super_admin', 'org_admin'].includes(role)
+
+  // Non-admins only see items they created, are assigned to, or are watching
+  let visibleAtemIds: string[] | null = null
+  if (!isAdmin) {
+    const [assignedRes, watchedRes, createdRes] = await Promise.all([
+      admin.from('atem_assignees').select('atem_id').eq('user_id', user.id),
+      admin.from('atem_watchers').select('atem_id').eq('user_id', user.id),
+      admin.from('atem_items').select('id').eq('created_by', user.id).eq('org_id', orgId),
+    ])
+    visibleAtemIds = [...new Set([
+      ...(assignedRes.data ?? []).map(r => r.atem_id),
+      ...(watchedRes.data ?? []).map(r => r.atem_id),
+      ...(createdRes.data ?? []).map(r => r.id),
+    ])]
+  }
+
   const [itemsRes, usersRes, deptsRes, teamsRes] = await Promise.all([
-    admin.from('atem_items')
-      .select('*, departments(name), teams(name), atem_assignees(user_id), atem_watchers(user_id)')
-      .eq('org_id', orgId)
-      .order('created_at', { ascending: false }),
+    (() => {
+      let q = admin.from('atem_items')
+        .select('*, departments(name), teams(name), atem_assignees(user_id), atem_watchers(user_id)')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+      if (visibleAtemIds !== null) {
+        if (visibleAtemIds.length === 0) return Promise.resolve({ data: [] })
+        q = q.in('id', visibleAtemIds)
+      }
+      return q
+    })(),
     admin.from('profiles').select('id, full_name, email, avatar_url, dept_id, role').eq('org_id', orgId).eq('is_active', true).order('full_name'),
     admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     admin.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url, dept_id, role))').eq('org_id', orgId).order('name'),

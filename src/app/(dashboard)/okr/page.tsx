@@ -17,12 +17,36 @@ export default async function OkrPage() {
   const profileRes = await admin.from('profiles').select('org_id, full_name, role').eq('id', user.id).single()
   const { org_id: orgId, role } = (profileRes.data ?? {}) as { org_id: string; full_name: string; role: UserRole }
 
+  const isAdmin = ['super_admin', 'org_admin'].includes(role)
+
+  // Non-admins only see objectives they created, are assigned to, or are watching
+  let visibleOkrIds: string[] | null = null
+  if (!isAdmin) {
+    const [assignedRes, watchedRes, createdRes] = await Promise.all([
+      admin.from('okr_assignees').select('objective_id').eq('user_id', user.id),
+      admin.from('okr_watchers').select('objective_id').eq('user_id', user.id),
+      admin.from('okr_objectives').select('id').eq('created_by', user.id).eq('org_id', orgId),
+    ])
+    visibleOkrIds = [...new Set([
+      ...(assignedRes.data ?? []).map(r => r.objective_id),
+      ...(watchedRes.data ?? []).map(r => r.objective_id),
+      ...(createdRes.data ?? []).map(r => r.id),
+    ])]
+  }
+
   const [objectivesRes, usersRes, deptsRes, teamsRes] = await Promise.all([
-    admin
-      .from('okr_objectives')
-      .select('*, departments(name), teams(name), okr_key_results(id, title, metric_type, start_value, target_value, current_value, unit, status, due_date), okr_assignees(user_id, role), okr_watchers(user_id)')
-      .eq('org_id', orgId)
-      .order('created_at', { ascending: false }),
+    (() => {
+      let q = admin
+        .from('okr_objectives')
+        .select('*, departments(name), teams(name), okr_key_results(id, title, metric_type, start_value, target_value, current_value, unit, status, due_date), okr_assignees(user_id, role), okr_watchers(user_id)')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+      if (visibleOkrIds !== null) {
+        if (visibleOkrIds.length === 0) return Promise.resolve({ data: [] })
+        q = q.in('id', visibleOkrIds)
+      }
+      return q
+    })(),
     admin.from('profiles').select('id, full_name, email, avatar_url, dept_id, role').eq('org_id', orgId).eq('is_active', true).order('full_name'),
     admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     admin.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url, dept_id, role))').eq('org_id', orgId).order('name'),
