@@ -4,15 +4,18 @@ import type { AppNotification } from '@/types/database'
 interface NotificationState {
   notifications: AppNotification[]
   unreadCount: number
+  unreadMessages: number
   setNotifications: (notifications: AppNotification[]) => void
   addNotification: (notification: AppNotification) => void
   markRead: (id: string) => void
   markAllRead: () => void
+  setUnreadMessages: (count: number) => void
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
+  unreadMessages: 0,
   setNotifications: (notifications) =>
     set({ notifications, unreadCount: notifications.filter(n => !n.is_read).length }),
   addNotification: (notification) => {
@@ -27,4 +30,5 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const notifications = get().notifications.map(n => ({ ...n, is_read: true }))
     set({ notifications, unreadCount: 0 })
   },
+  setUnreadMessages: (count) => set({ unreadMessages: count }),
 }))

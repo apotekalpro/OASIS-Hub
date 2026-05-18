@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useNotificationStore } from '@/store/notifications'
 import { ChannelSidebar } from './channel-sidebar'
 import { MessageFeed } from './message-feed'
 import { ChannelMembersDialog } from './channel-members-dialog'
@@ -37,6 +38,14 @@ export function MessagesLayout({ channels: initialChannels, orgUsers, department
   const [channels, setChannels] = useState<Channel[]>(initialChannels)
   const [activeChannelId, setActiveChannelId] = useState<string | null>(initialChannels[0]?.id ?? null)
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>(initialUnreadCounts)
+  const setUnreadMessages = useNotificationStore(s => s.setUnreadMessages)
+
+  // Keep sidebar Messages badge in sync
+  useEffect(() => {
+    const total = Object.values(unreadCounts).reduce((s, n) => s + n, 0)
+    setUnreadMessages(total)
+    return () => setUnreadMessages(0)
+  }, [unreadCounts, setUnreadMessages])
 
   const activeChannel = channels.find(c => c.id === activeChannelId) ?? null
   // Mobile: track whether the feed is open (true) or sidebar is shown (false)

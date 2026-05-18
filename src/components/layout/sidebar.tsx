@@ -87,6 +87,7 @@ export function Sidebar() {
   const profile = useAuthStore(s => s.profile)
   const featurePermissions = useAuthStore(s => s.featurePermissions)
   const unreadCount = useNotificationStore(s => s.unreadCount)
+  const unreadMessages = useNotificationStore(s => s.unreadMessages)
   const [signingOut, setSigningOut] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [isStandalone, setIsStandalone] = useState(false)
@@ -149,7 +150,7 @@ export function Sidebar() {
             label={item.label}
             isActive={pathname === item.href || pathname.startsWith(item.href + '/')}
             onClick={onNavClick}
-            badge={item.label === 'Notifications' ? unreadCount : undefined}
+            badge={item.label === 'Notifications' ? unreadCount : item.label === 'Messages' ? unreadMessages : undefined}
           />
         ))}
 
