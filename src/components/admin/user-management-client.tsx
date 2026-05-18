@@ -112,31 +112,29 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
   const isOutletRole = watchedRole === 'outlet'
 
   async function onCreateUser(data: UserFormData) {
-    try {
-      if (userId) {
-        await updateUserProfile(userId, {
-          ...data,
-          contact_email: data.contact_email || null,
-          chief_dept_ids: isChiefRole ? chiefDeptIds : [],
-          outlet_id: isOutletRole ? (data.outlet_id || null) : null,
-        })
-        toast.success('User updated successfully')
-      } else {
-        await createUser({
-          ...data,
-          contact_email: data.contact_email || null,
-          org_id: orgId ?? '',
-          chief_dept_ids: isChiefRole ? chiefDeptIds : [],
-          outlet_id: isOutletRole ? (data.outlet_id || null) : null,
-        })
-        toast.success(`User created. Default password: Alpro@123`)
-      }
-      setCreateOpen(false)
-      reset()
-      router.refresh()
-    } catch (err) {
-      toast.error((err as Error).message)
+    if (userId) {
+      const result = await updateUserProfile(userId, {
+        ...data,
+        contact_email: data.contact_email || null,
+        chief_dept_ids: isChiefRole ? chiefDeptIds : [],
+        outlet_id: isOutletRole ? (data.outlet_id || null) : null,
+      })
+      if (!result.success) { toast.error(result.error); return }
+      toast.success('User updated successfully')
+    } else {
+      const result = await createUser({
+        ...data,
+        contact_email: data.contact_email || null,
+        org_id: orgId ?? '',
+        chief_dept_ids: isChiefRole ? chiefDeptIds : [],
+        outlet_id: isOutletRole ? (data.outlet_id || null) : null,
+      })
+      if (!result.success) { toast.error(result.error); return }
+      toast.success(`User created. Default password: Alpro@123`)
     }
+    setCreateOpen(false)
+    reset()
+    router.refresh()
   }
 
   async function handleCSVImport(e: React.ChangeEvent<HTMLInputElement>) {
