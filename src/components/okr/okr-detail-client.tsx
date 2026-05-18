@@ -6,6 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Edit2, Trash2, Plus, Send, Smile, CornerDownRight,
   X, Users, Eye, Target, Calendar, Building2, Search, CheckCircle2,
+  ChevronDown, ChevronRight, Loader2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,15 @@ type Comment = {
   reactions: Reaction[]
   _rawReactions?: Array<{ id: string; emoji: string; user_id: string }>
   replies?: Comment[]
+}
+
+type SubTask = {
+  id: string
+  title: string
+  status: string
+  priority: string
+  due_date: string | null
+  task_assignees: { user_id: string }[]
 }
 
 type Objective = {
@@ -326,6 +336,7 @@ export function OkrDetailClient({
   // KR inline update
   const [krEditing, setKrEditing] = useState<Record<string, string>>({})
   const [krUpdating, setKrUpdating] = useState<string | null>(null)
+  const [krStatusUpdating, setKrStatusUpdating] = useState<string | null>(null)
 
   // Add KR
   const [showAddKr, setShowAddKr] = useState(false)
@@ -339,6 +350,14 @@ export function OkrDetailClient({
   const [showAddAssignee, setShowAddAssignee] = useState(false)
   const [assigneeSearch, setAssigneeSearch] = useState('')
   const [addingAssignee, setAddingAssignee] = useState(false)
+
+  // KR subtasks
+  const [krSubtasks, setKrSubtasks] = useState<Record<string, SubTask[]>>({})
+  const [krSubtaskExpanded, setKrSubtaskExpanded] = useState<Record<string, boolean>>({})
+  const [krSubtaskAdding, setKrSubtaskAdding] = useState<Record<string, boolean>>({})
+  const [krSubtaskLoading, setKrSubtaskLoading] = useState<Record<string, boolean>>({})
+  const [krSubtaskForms, setKrSubtaskForms] = useState<Record<string, { title: string; priority: string; due_date: string }>>({})
+  const [krSubtaskShowForm, setKrSubtaskShowForm] = useState<Record<string, boolean>>({})
 
   function buildReactions(raw: Array<{ id: string; emoji: string; user_id: string }>, uid: string): Reaction[] {
     const map: Record<string, { count: number; reacted: boolean }> = {}
@@ -409,6 +428,26 @@ export function OkrDetailClient({
       toast.error((err as Error).message)
     } finally {
       setKrUpdating(null)
+    }
+  }
+
+  async function updateKrStatus(kr: KeyResult, newStatus: string) {
+    if (kr.status === newStatus) return
+    setKrStatusUpdating(kr.id)
+    try {
+      const res = await fetch(`/api/okr/${objective.id}/key-results`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: kr.id, status: newStatus }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setKrs(prev => prev.map(k => k.id === kr.id ? { ...k, status: newStatus } : k))
+      toast.success('KR status updated')
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setKrStatusUpdating(null)
     }
   }
 
@@ -583,6 +622,82 @@ export function OkrDetailClient({
     setAssignees(prev => prev.filter(a => a.id !== userId))
   }
 
+  // ── KR Subtask tick ──────────────────────────────────────────────────────────
+  async function toggleSubtaskDone(krId: string, task: SubTask) {
+    const newStatus = task.status === 'done' ? 'todo' : 'done'
+    setKrSubtasks(prev => ({
+      ...prev,
+      [krId]: (prev[krId] ?? []).map(t => t.id === task.id ? { ...t, status: newStatus } : t),
+    }))
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    if (!res.ok) {
+      setKrSubtasks(prev => ({
+        ...prev,
+        [krId]: (prev[krId] ?? []).map(t => t.id === task.id ? { ...t, status: task.status } : t),
+      }))
+      toast.error('Failed to update subtask')
+    }
+  }
+
+  // ── KR Subtasks ──────────────────────────────────────────────────────────────
+  async function fetchKrSubtasks(krId: string) {
+    setKrSubtaskLoading(prev => ({ ...prev, [krId]: true }))
+    try {
+      const res = await fetch(`/api/tasks?kr_id=${krId}`)
+      const json = await res.json()
+      if (res.ok) {
+        setKrSubtasks(prev => ({ ...prev, [krId]: json.tasks ?? [] }))
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setKrSubtaskLoading(prev => ({ ...prev, [krId]: false }))
+    }
+  }
+
+  function toggleKrSubtaskSection(krId: string) {
+    const willExpand = !krSubtaskExpanded[krId]
+    setKrSubtaskExpanded(prev => ({ ...prev, [krId]: willExpand }))
+    if (willExpand && !(krId in krSubtasks)) {
+      fetchKrSubtasks(krId)
+    }
+  }
+
+  async function addKrSubtask(krId: string) {
+    const form = krSubtaskForms[krId]
+    if (!form?.title?.trim()) { toast.error('Title required'); return }
+    setKrSubtaskAdding(prev => ({ ...prev, [krId]: true }))
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: form.title.trim(),
+          priority: form.priority || 'medium',
+          due_date: form.due_date || null,
+          kr_id: krId,
+          org_id: objective.id ? orgId : orgId,
+          status: 'todo',
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      // Refresh subtask list
+      await fetchKrSubtasks(krId)
+      setKrSubtaskForms(prev => ({ ...prev, [krId]: { title: '', priority: 'medium', due_date: '' } }))
+      setKrSubtaskShowForm(prev => ({ ...prev, [krId]: false }))
+      toast.success('Subtask added')
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setKrSubtaskAdding(prev => ({ ...prev, [krId]: false }))
+    }
+  }
+
   // ── Delete objective ─────────────────────────────────────────────────────────
   async function deleteObjective() {
     if (!confirm('Delete this objective and all its key results? This cannot be undone.')) return
@@ -689,7 +804,7 @@ export function OkrDetailClient({
                   </div>
                   <h1 className="text-xl font-bold text-gray-900">{objective.title}</h1>
                   {objective.description && (
-                    <p className="mt-2 text-sm text-gray-600 leading-relaxed">{objective.description}</p>
+                    <div className="mt-2 prose prose-sm max-w-none text-gray-600" dangerouslySetInnerHTML={{ __html: objective.description }} />
                   )}
 
                   <div className="flex flex-wrap gap-4 mt-3 text-xs text-gray-500">
@@ -848,6 +963,11 @@ export function OkrDetailClient({
                             )}
                           </div>
 
+                          {/* KR description */}
+                          {kr.description && kr.description !== '<p></p>' && (
+                            <div className="prose prose-sm max-w-none text-gray-600 mt-1" dangerouslySetInnerHTML={{ __html: kr.description }} />
+                          )}
+
                           {/* Progress bar */}
                           <div className="flex items-center gap-3 mt-1.5">
                             <div className="flex-1 bg-gray-100 rounded-full h-2">
@@ -868,6 +988,35 @@ export function OkrDetailClient({
                                 Due {formatDate(kr.due_date)}
                               </span>
                             )}
+                          </div>
+
+                          {/* KR Status selector */}
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <span className="text-xs text-gray-400 shrink-0">KR Status:</span>
+                            {(['not_started', 'on_track', 'at_risk', 'behind', 'completed'] as const).map(s => {
+                              const sLabel: Record<string, string> = { not_started: 'Not Started', on_track: 'On Track', at_risk: 'At Risk', behind: 'Behind', completed: 'Completed' }
+                              const sActive: Record<string, string> = {
+                                not_started: 'bg-gray-200 text-gray-800 border-gray-300',
+                                on_track: 'bg-green-100 text-green-800 border-green-300',
+                                at_risk: 'bg-amber-100 text-amber-800 border-amber-300',
+                                behind: 'bg-red-100 text-red-800 border-red-300',
+                                completed: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+                              }
+                              const isActive = kr.status === s
+                              return (
+                                <button
+                                  key={s}
+                                  disabled={krStatusUpdating === kr.id}
+                                  onClick={() => updateKrStatus(kr, s)}
+                                  className={cn(
+                                    'text-xs px-2 py-0.5 rounded-full border font-medium transition-colors',
+                                    isActive ? sActive[s] : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                                  )}
+                                >
+                                  {sLabel[s]}
+                                </button>
+                              )
+                            })}
                           </div>
 
                           {/* Inline current value update */}
@@ -911,6 +1060,162 @@ export function OkrDetailClient({
                               )}
                             </div>
                           )}
+
+                          {/* Subtasks section */}
+                          <div className="mt-3 border-t border-gray-100 pt-3">
+                            <button
+                              onClick={() => toggleKrSubtaskSection(kr.id)}
+                              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 font-medium"
+                            >
+                              {krSubtaskExpanded[kr.id]
+                                ? <ChevronDown className="h-3.5 w-3.5" />
+                                : <ChevronRight className="h-3.5 w-3.5" />
+                              }
+                              Subtasks
+                              {krSubtasks[kr.id] && krSubtasks[kr.id].length > 0 && (
+                                <span className="ml-1 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full text-xs">
+                                  {krSubtasks[kr.id].length}
+                                </span>
+                              )}
+                            </button>
+
+                            {krSubtaskExpanded[kr.id] && (
+                              <div className="mt-2 space-y-1">
+                                {krSubtaskLoading[kr.id] && (
+                                  <div className="flex items-center gap-1.5 text-xs text-gray-400 py-1">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    Loading subtasks...
+                                  </div>
+                                )}
+
+                                {!krSubtaskLoading[kr.id] && (krSubtasks[kr.id] ?? []).map(task => {
+                                  const isDone = task.status === 'done'
+                                  const isCancelled = task.status === 'cancelled'
+                                  const priorityColors: Record<string, string> = {
+                                    low: 'bg-gray-300',
+                                    medium: 'bg-yellow-500',
+                                    high: 'bg-orange-500',
+                                    urgent: 'bg-red-500',
+                                  }
+                                  return (
+                                    <div
+                                      key={task.id}
+                                      className={cn('flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50 transition-colors group/task', isCancelled && 'opacity-50')}
+                                    >
+                                      <button
+                                        onClick={() => toggleSubtaskDone(kr.id, task)}
+                                        className="shrink-0 flex items-center justify-center"
+                                        title={isDone ? 'Mark as todo' : 'Mark as done'}
+                                      >
+                                        {isDone
+                                          ? <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                          : <div className="h-4 w-4 rounded border-2 border-gray-300 hover:border-indigo-400 transition-colors" />
+                                        }
+                                      </button>
+                                      <div className={cn('h-1.5 w-1.5 rounded-full shrink-0', priorityColors[task.priority] ?? 'bg-gray-300')} />
+                                      <span className={cn(
+                                        'text-xs text-gray-700 flex-1 truncate',
+                                        (isDone || isCancelled) && 'line-through text-gray-400',
+                                      )}>
+                                        {task.title}
+                                      </span>
+                                      {task.due_date && (
+                                        <span className="text-xs text-gray-400 shrink-0 flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity">
+                                          <Calendar className="h-3 w-3" />
+                                          {formatDate(task.due_date)}
+                                        </span>
+                                      )}
+                                      <Link
+                                        href={`/tasks/${task.id}`}
+                                        className="opacity-0 group-hover/task:opacity-100 transition-opacity text-gray-300 hover:text-indigo-500 shrink-0"
+                                        title="Open task"
+                                      >
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                      </Link>
+                                    </div>
+                                  )
+                                })}
+
+                                {!krSubtaskLoading[kr.id] && (krSubtasks[kr.id] ?? []).length === 0 && (
+                                  <p className="text-xs text-gray-400 py-1 pl-1">No subtasks yet.</p>
+                                )}
+
+                                {/* Add subtask form */}
+                                {krSubtaskShowForm[kr.id] ? (
+                                  <div className="mt-2 space-y-2 border border-indigo-100 rounded-lg p-2 bg-indigo-50">
+                                    <input
+                                      type="text"
+                                      placeholder="Subtask title..."
+                                      value={krSubtaskForms[kr.id]?.title ?? ''}
+                                      onChange={e => setKrSubtaskForms(prev => ({
+                                        ...prev,
+                                        [kr.id]: { ...prev[kr.id], title: e.target.value },
+                                      }))}
+                                      autoFocus
+                                      onKeyDown={e => { if (e.key === 'Enter') addKrSubtask(kr.id) }}
+                                      className="w-full text-xs rounded border border-gray-300 bg-white px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                      <select
+                                        value={krSubtaskForms[kr.id]?.priority ?? 'medium'}
+                                        onChange={e => setKrSubtaskForms(prev => ({
+                                          ...prev,
+                                          [kr.id]: { ...prev[kr.id], priority: e.target.value },
+                                        }))}
+                                        className="flex-1 text-xs rounded border border-gray-300 bg-white px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                      >
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="urgent">Urgent</option>
+                                      </select>
+                                      <input
+                                        type="date"
+                                        value={krSubtaskForms[kr.id]?.due_date ?? ''}
+                                        onChange={e => setKrSubtaskForms(prev => ({
+                                          ...prev,
+                                          [kr.id]: { ...prev[kr.id], due_date: e.target.value },
+                                        }))}
+                                        className="flex-1 text-xs rounded border border-gray-300 bg-white px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <Button
+                                        size="sm"
+                                        className="h-7 text-xs px-2"
+                                        onClick={() => addKrSubtask(kr.id)}
+                                        loading={krSubtaskAdding[kr.id]}
+                                      >
+                                        Add
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs px-2"
+                                        onClick={() => setKrSubtaskShowForm(prev => ({ ...prev, [kr.id]: false }))}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setKrSubtaskForms(prev => ({
+                                        ...prev,
+                                        [kr.id]: prev[kr.id] ?? { title: '', priority: 'medium', due_date: '' },
+                                      }))
+                                      setKrSubtaskShowForm(prev => ({ ...prev, [kr.id]: true }))
+                                    }}
+                                    className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium mt-1"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                    Add subtask
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-export default async function OkrDetailPage({ params }: { params: { objectiveId: string } }) {
+export default async function OkrDetailPage({ params }: { params: Promise<{ objectiveId: string }> }) {
+  const { objectiveId } = await params
   const supabase = await createClient()
   const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -23,20 +24,20 @@ export default async function OkrDetailPage({ params }: { params: { objectiveId:
     admin
       .from('okr_objectives')
       .select('*, departments(name), teams(name)')
-      .eq('id', params.objectiveId)
+      .eq('id', objectiveId)
       .single(),
     admin
       .from('okr_key_results')
       .select('*')
-      .eq('objective_id', params.objectiveId)
+      .eq('objective_id', objectiveId)
       .order('created_at', { ascending: true }),
     admin
       .from('okr_comments')
       .select('*, profiles!okr_comments_user_id_fkey(id, full_name, avatar_url), okr_comment_reactions(id, emoji, user_id)')
-      .eq('objective_id', params.objectiveId)
+      .eq('objective_id', objectiveId)
       .order('created_at', { ascending: true }),
-    admin.from('okr_assignees').select('user_id, role').eq('objective_id', params.objectiveId),
-    admin.from('okr_watchers').select('user_id').eq('objective_id', params.objectiveId),
+    admin.from('okr_assignees').select('user_id, role').eq('objective_id', objectiveId),
+    admin.from('okr_watchers').select('user_id').eq('objective_id', objectiveId),
     admin.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
     admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     admin.from('teams').select('id, name').eq('org_id', orgId).order('name'),

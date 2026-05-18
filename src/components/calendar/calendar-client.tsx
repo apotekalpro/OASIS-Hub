@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { EventFormDialog } from './event-form-dialog'
-import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Users, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import * as Dialog from '@radix-ui/react-dialog'
@@ -20,9 +20,11 @@ type CalEvent = {
   event_attendees?: Array<{ user_id: string; rsvp: string }>
 }
 type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+type DueItem = { id: string; title: string; date: string; type: 'task' | 'kr' | 'atem'; status: string; link: string }
 
 interface Props {
   initialEvents: CalEvent[]
+  dueItems: DueItem[]
   orgId: string
   currentUserId: string
   users: OrgUser[]
@@ -32,35 +34,52 @@ interface Props {
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
-
 const EVENT_COLORS = ['#6366f1','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#14b8a6']
 
-export function CalendarClient({ initialEvents, orgId, currentUserId, users, teams, departments }: Props) {
+const DUE_TYPE = {
+  task: { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300', dot: 'bg-amber-500', label: 'Task' },
+  kr:   { bg: 'bg-violet-100', text: 'text-violet-800', border: 'border-violet-300', dot: 'bg-violet-500', label: 'KR' },
+  atem: { bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-300', dot: 'bg-teal-500', label: 'ATEM' },
+}
+
+// Extract local date parts from any ISO string (handles both date and timestamptz)
+function toLocalDateParts(iso: string): { y: number; m: number; d: number } {
+  // KR due_date is plain date "YYYY-MM-DD"; append T00:00 to avoid UTC shift
+  const str = iso.includes('T') ? iso : iso + 'T00:00:00'
+  const dt = new Date(str)
+  return { y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate() }
+}
+
+export function CalendarClient({ initialEvents, dueItems, orgId, currentUserId, users, teams, departments }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [events, setEvents] = useState<CalEvent[]>(initialEvents)
   const [today] = useState(() => new Date())
   const [viewing, setViewing] = useState(() => { const d = new Date(); d.setDate(1); return d })
   const [selected, setSelected] = useState<CalEvent | null>(null)
-  const [view, setView] = useState<'month' | 'week'>('month')
 
   const year = viewing.getFullYear()
   const month = viewing.getMonth()
 
-  // Build calendar grid
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ]
-  // Pad to complete last week
   while (cells.length % 7 !== 0) cells.push(null)
 
   function eventsForDay(day: number) {
     return events.filter(e => {
       const d = new Date(e.start_at)
       return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day
+    })
+  }
+
+  function dueItemsForDay(day: number): DueItem[] {
+    return dueItems.filter(item => {
+      const { y, m, d } = toLocalDateParts(item.date)
+      return y === year && m === month && d === day
     })
   }
 
@@ -126,15 +145,24 @@ export function CalendarClient({ initialEvents, orgId, currentUserId, users, tea
             Today
           </Button>
         </div>
-        <EventFormDialog
-          orgId={orgId}
-          currentUserId={currentUserId}
-          users={users}
-          teams={teams}
-          departments={departments}
-          onCreated={(e) => { setEvents(prev => [...prev, e]); router.refresh() }}
-          trigger={<Button size="sm"><Plus className="h-4 w-4" /> New Event</Button>}
-        />
+        <div className="flex items-center gap-4">
+          {/* Legend */}
+          <div className="hidden sm:flex items-center gap-3 text-xs text-gray-500">
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />Event</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" />Task due</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-violet-500" />KR deadline</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-teal-500" />ATEM deadline</span>
+          </div>
+          <EventFormDialog
+            orgId={orgId}
+            currentUserId={currentUserId}
+            users={users}
+            teams={teams}
+            departments={departments}
+            onCreated={(e) => { setEvents(prev => [...prev, e]); router.refresh() }}
+            trigger={<Button size="sm"><Plus className="h-4 w-4" /> New Event</Button>}
+          />
+        </div>
       </div>
 
       {/* Calendar grid */}
@@ -152,7 +180,11 @@ export function CalendarClient({ initialEvents, orgId, currentUserId, users, tea
         <div className="grid grid-cols-7 flex-1">
           {cells.map((day, i) => {
             const dayEvents = day ? eventsForDay(day) : []
+            const dayDue = day ? dueItemsForDay(day) : []
             const isTod = day ? isToday(day) : false
+            const allItems = [...dayEvents.map(e => ({ kind: 'event' as const, data: e })), ...dayDue.map(d => ({ kind: 'due' as const, data: d }))]
+            const shown = allItems.slice(0, 4)
+            const overflow = allItems.length - shown.length
             return (
               <div
                 key={i}
@@ -171,19 +203,40 @@ export function CalendarClient({ initialEvents, orgId, currentUserId, users, tea
                       {day}
                     </span>
                     <div className="space-y-0.5">
-                      {dayEvents.slice(0, 3).map(e => (
-                        <button
-                          key={e.id}
-                          onClick={() => setSelected(e)}
-                          className="w-full text-left rounded px-1.5 py-0.5 text-xs font-medium truncate transition-opacity hover:opacity-80"
-                          style={{ backgroundColor: (e.teams?.color ?? EVENT_COLORS[0]) + '20', color: e.teams?.color ?? EVENT_COLORS[0] }}
-                        >
-                          {e.is_all_day ? '' : formatTime(e.start_at) + ' '}
-                          {e.title}
-                        </button>
-                      ))}
-                      {dayEvents.length > 3 && (
-                        <p className="text-xs text-gray-400 px-1">+{dayEvents.length - 3} more</p>
+                      {shown.map((item, idx) => {
+                        if (item.kind === 'event') {
+                          const e = item.data as CalEvent
+                          return (
+                            <button
+                              key={e.id}
+                              onClick={() => setSelected(e)}
+                              className="w-full text-left rounded px-1.5 py-0.5 text-xs font-medium truncate transition-opacity hover:opacity-80"
+                              style={{ backgroundColor: (e.teams?.color ?? EVENT_COLORS[0]) + '20', color: e.teams?.color ?? EVENT_COLORS[0] }}
+                            >
+                              {e.is_all_day ? '' : formatTime(e.start_at) + ' '}
+                              {e.title}
+                            </button>
+                          )
+                        } else {
+                          const d = item.data as DueItem
+                          const cfg = DUE_TYPE[d.type]
+                          return (
+                            <button
+                              key={d.id + idx}
+                              onClick={() => router.push(d.link)}
+                              className={cn(
+                                'w-full text-left rounded px-1.5 py-0.5 text-xs font-medium truncate transition-opacity hover:opacity-80 border',
+                                cfg.bg, cfg.text, cfg.border
+                              )}
+                              title={`${cfg.label}: ${d.title}`}
+                            >
+                              <span className="opacity-60 mr-0.5">{cfg.label}:</span>{d.title}
+                            </button>
+                          )
+                        }
+                      })}
+                      {overflow > 0 && (
+                        <p className="text-xs text-gray-400 px-1">+{overflow} more</p>
                       )}
                     </div>
                   </>

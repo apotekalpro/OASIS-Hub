@@ -1,16 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Bell, CheckCheck, CheckSquare, MessageSquare, ClipboardList, Calendar, AtSign, AlertCircle } from 'lucide-react'
 import { formatRelativeTime, cn } from '@/lib/utils'
 import { toast } from 'sonner'
-
-type Notif = { id: string; type: string; title: string; body: string | null; data: Record<string, unknown>; is_read: boolean; created_at: string }
+import { useNotificationStore } from '@/store/notifications'
+import type { AppNotification } from '@/types/database'
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
   task_assigned:   <CheckSquare className="h-4 w-4 text-indigo-500" />,
@@ -25,34 +23,34 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   reminder:        <Bell className="h-4 w-4 text-gray-500" />,
 }
 
-function getLink(n: Notif): string | null {
-  const d = n.data
-  if (d.task_id) return `/tasks/${d.task_id}`
-  if (d.form_id && d.submission_id) return `/forms/${d.form_id}/submissions/${d.submission_id}`
-  if (d.form_id) return `/forms/${d.form_id}`
-  if (d.channel_id) return `/messages`
-  if (d.event_id) return `/calendar`
+function getLink(n: AppNotification): string | null {
+  const d = n.data as Record<string, unknown>
+  if (d?.task_id) return `/tasks/${d.task_id}`
+  if (d?.form_id && d?.submission_id) return `/forms/${d.form_id}/submissions/${d.submission_id}`
+  if (d?.form_id) return `/forms/${d.form_id}`
+  if (d?.channel_id) return `/messages`
+  if (d?.event_id) return `/calendar`
   return null
 }
 
-export function NotificationsClient({ notifications: initial }: { notifications: Notif[] }) {
+// Props kept for backwards compat but ignored — store is the source of truth
+export function NotificationsClient({ notifications: _initial }: { notifications: AppNotification[] }) {
   const supabase = createClient()
-  const router = useRouter()
-  const [notifs, setNotifs] = useState(initial)
+  const { notifications, unreadCount, markRead: storeMarkRead, markAllRead: storeMarkAllRead } = useNotificationStore()
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
 
-  const shown = filter === 'unread' ? notifs.filter(n => !n.is_read) : notifs
-  const unreadCount = notifs.filter(n => !n.is_read).length
+  const shown = filter === 'unread' ? notifications.filter(n => !n.is_read) : notifications
 
   async function markRead(ids: string[]) {
     await supabase.from('notifications').update({ is_read: true } as never).in('id', ids)
-    setNotifs(prev => prev.map(n => ids.includes(n.id) ? { ...n, is_read: true } : n))
+    ids.forEach(id => storeMarkRead(id))
   }
 
   async function markAllRead() {
-    const ids = notifs.filter(n => !n.is_read).map(n => n.id)
+    const ids = notifications.filter(n => !n.is_read).map(n => n.id)
     if (ids.length === 0) return
-    await markRead(ids)
+    await supabase.from('notifications').update({ is_read: true } as never).in('id', ids)
+    storeMarkAllRead()
     toast.success('All marked as read')
   }
 

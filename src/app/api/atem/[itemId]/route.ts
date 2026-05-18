@@ -3,7 +3,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(_req: NextRequest, { params }: { params: { itemId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ itemId: string }> }) {
+  const { itemId } = await params
   const supabase = await createClient()
   const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -11,12 +12,12 @@ export async function GET(_req: NextRequest, { params }: { params: { itemId: str
 
   const { data, error } = await admin.from('atem_items')
     .select('*, departments(name), teams(name)')
-    .eq('id', params.itemId).single()
+    .eq('id', itemId).single()
   if (error) return NextResponse.json({ error: error.message }, { status: 404 })
 
   const [assigneesRes, watchersRes] = await Promise.all([
-    admin.from('atem_assignees').select('user_id').eq('atem_id', params.itemId),
-    admin.from('atem_watchers').select('user_id').eq('atem_id', params.itemId),
+    admin.from('atem_assignees').select('user_id').eq('atem_id', itemId),
+    admin.from('atem_watchers').select('user_id').eq('atem_id', itemId),
   ])
 
   return NextResponse.json({
@@ -26,7 +27,8 @@ export async function GET(_req: NextRequest, { params }: { params: { itemId: str
   })
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { itemId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ itemId: string }> }) {
+  const { itemId } = await params
   const supabase = await createClient()
   const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -35,32 +37,33 @@ export async function PATCH(req: NextRequest, { params }: { params: { itemId: st
   const body = await req.json()
   const { assigneeIds, watcherIds, ...fields } = body
 
-  const { error } = await admin.from('atem_items').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', params.itemId)
+  const { error } = await admin.from('atem_items').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', itemId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   if (assigneeIds !== undefined) {
-    await admin.from('atem_assignees').delete().eq('atem_id', params.itemId)
+    await admin.from('atem_assignees').delete().eq('atem_id', itemId)
     if (assigneeIds.length > 0) {
-      await admin.from('atem_assignees').insert(assigneeIds.map((uid: string) => ({ atem_id: params.itemId, user_id: uid, assigned_by: user.id })))
+      await admin.from('atem_assignees').insert(assigneeIds.map((uid: string) => ({ atem_id: itemId, user_id: uid, assigned_by: user.id })))
     }
   }
   if (watcherIds !== undefined) {
-    await admin.from('atem_watchers').delete().eq('atem_id', params.itemId)
+    await admin.from('atem_watchers').delete().eq('atem_id', itemId)
     if (watcherIds.length > 0) {
-      await admin.from('atem_watchers').insert(watcherIds.map((uid: string) => ({ atem_id: params.itemId, user_id: uid })))
+      await admin.from('atem_watchers').insert(watcherIds.map((uid: string) => ({ atem_id: itemId, user_id: uid })))
     }
   }
 
   return NextResponse.json({ success: true })
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { itemId: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ itemId: string }> }) {
+  const { itemId } = await params
   const supabase = await createClient()
   const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { error } = await admin.from('atem_items').delete().eq('id', params.itemId)
+  const { error } = await admin.from('atem_items').delete().eq('id', itemId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
 }

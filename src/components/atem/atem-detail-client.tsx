@@ -52,6 +52,8 @@ type AtemItem = {
   id: string
   task: string
   deadline: string | null
+  deadline_text: string | null
+  action_plan: string | null
   impact: string | null
   dependencies: string | null
   strategic_alignment: string | null
@@ -85,9 +87,9 @@ interface Props {
   teams: Team[]
 }
 
-const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'success' | 'destructive' | 'warning' | 'info'> = {
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'success' | 'destructive' | 'warning' | 'outline'> = {
   pending: 'secondary',
-  in_progress: 'info',
+  in_progress: 'default',
   completed: 'success',
   blocked: 'destructive',
 }
@@ -388,22 +390,28 @@ function CommentItem({
   )
 }
 
-// ─── TDIDSCE field row ─────────────────────────────────────────────────────────
-function FieldRow({ label, badge, badgeColor, value, mono = false }: {
+// ─── Field content renderer ───────────────────────────────────────────────────
+function FieldRow({ label, badge, badgeColor, value }: {
   label: string
   badge: string
   badgeColor: string
   value: string | null | undefined
-  mono?: boolean
 }) {
-  if (!value) return null
+  if (!value || value === '<p></p>') return null
+  const isHtml = value.trimStart().startsWith('<')
+  const hasHeader = badge || label
   return (
     <div className="space-y-1">
-      <dt className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase">
-        <span className={cn('rounded px-1.5 py-0.5 text-xs font-bold', badgeColor)}>{badge}</span>
-        {label}
-      </dt>
-      <dd className={cn('text-sm text-gray-800 whitespace-pre-wrap leading-relaxed', mono && 'font-mono text-xs')}>{value}</dd>
+      {hasHeader && (
+        <dt className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase">
+          {badge && <span className={cn('rounded px-1.5 py-0.5 text-xs font-bold', badgeColor)}>{badge}</span>}
+          {label}
+        </dt>
+      )}
+      {isHtml
+        ? <dd className="prose prose-sm max-w-none text-gray-800" dangerouslySetInnerHTML={{ __html: value }} />
+        : <dd className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{value}</dd>
+      }
     </div>
   )
 }
@@ -705,6 +713,8 @@ export function AtemDetailClient({
     priority: item.priority,
     status: item.status,
     deadline: item.deadline,
+    deadline_text: item.deadline_text,
+    action_plan: item.action_plan,
     impact: item.impact,
     dependencies: item.dependencies,
     strategic_alignment: item.strategic_alignment,
@@ -717,7 +727,7 @@ export function AtemDetailClient({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto p-6 space-y-6">
+      <div className="max-w-7xl mx-auto p-6 space-y-4">
         {/* Back + actions */}
         <div className="flex items-center justify-between">
           <Link href="/atem" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors">
@@ -751,416 +761,405 @@ export function AtemDetailClient({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Title card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-start gap-3 mb-4">
-                <span className={cn('mt-1.5 h-2.5 w-2.5 rounded-full shrink-0', PRIORITY_DOT[item.priority])} />
-                <h1 className="text-xl font-bold text-gray-900 leading-snug">{item.task}</h1>
-              </div>
+        {/* ── Two-column layout ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
 
-              {item.tags?.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-4">
-                  {item.tags.map(tag => (
-                    <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 text-indigo-700 px-2.5 py-0.5 text-xs font-medium">
-                      <Tag className="h-3 w-3" />{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
+        {/* ── LEFT: TDIDSCE + Action Plan ── */}
+        <div className="space-y-4">
 
-              {/* TDIDSCE grid */}
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t border-gray-100">
-                <FieldRow label="Impact" badge="I" badgeColor="bg-green-100 text-green-700" value={item.impact} />
-                <FieldRow label="Dependencies" badge="D" badgeColor="bg-yellow-100 text-yellow-700" value={item.dependencies} />
-                <FieldRow label="Strategic Alignment" badge="S" badgeColor="bg-blue-100 text-blue-700" value={item.strategic_alignment} />
-                <FieldRow label="Consequences of Delay" badge="C" badgeColor="bg-red-100 text-red-700" value={item.consequences_of_delay} />
-              </dl>
-            </div>
-
-            {/* Comments */}
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-700">
-                  Comments
-                  {comments.length > 0 && (
-                    <span className="ml-2 text-xs bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{comments.length}</span>
-                  )}
-                </h3>
-              </div>
-
-              <div className="p-5 space-y-4">
-                <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
-                  {threadedComments.length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-6">No comments yet. Start the conversation!</p>
-                  )}
-                  {threadedComments.map(c => (
-                    <CommentItem
-                      key={c.id}
-                      comment={c}
-                      currentUserId={currentUserId}
-                      users={users}
-                      onDelete={deleteComment}
-                      onReact={handleReact}
-                      onReply={setReplyTo}
-                    />
-                  ))}
-                  <div ref={commentEndRef} />
-                </div>
-
-                {/* Reply-to banner */}
-                {replyTo && (
-                  <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-xs text-indigo-700">
-                    <CornerDownRight className="h-3 w-3 shrink-0" />
-                    <span className="flex-1">Replying to <strong>{replyTo.user.full_name}</strong></span>
-                    <button onClick={() => setReplyTo(null)}><X className="h-3 w-3" /></button>
-                  </div>
-                )}
-
-                {/* Pending file previews */}
-                {pendingFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                    {pendingFiles.map((f, i) => (
-                      <div key={i} className="relative group">
-                        {f.type.startsWith('image/') ? (
-                          <img
-                            src={URL.createObjectURL(f)}
-                            alt={f.name}
-                            className="h-16 w-16 object-cover rounded-lg border border-gray-200"
-                          />
-                        ) : (
-                          <div className="h-16 w-32 flex items-center gap-2 px-2 bg-white rounded-lg border border-gray-200 text-xs text-gray-600 truncate">
-                            <FileText className="h-4 w-4 shrink-0 text-gray-400" />
-                            {f.name}
-                          </div>
-                        )}
-                        <button
-                          onClick={() => removePendingFile(i)}
-                          className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="h-2.5 w-2.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Comment input */}
-                <div className="pt-3 border-t border-gray-100 space-y-2">
-                  <div className="flex gap-2 items-end">
-                    <UserAvatar name={currentUserName} avatarUrl={currentUserAvatar} size="sm" className="w-8 h-8 shrink-0" />
-                    <MentionTextarea
-                      value={commentText}
-                      onChange={setCommentText}
-                      onKeyDown={handleCommentKeyDown}
-                      onPaste={handlePaste}
-                      placeholder={replyTo ? `Reply to ${replyTo.user.full_name}… (@ to mention)` : 'Write a comment… (@ to mention, Ctrl+V to paste image)'}
-                      users={users}
-                      textareaRef={textareaRef}
-                    />
-                    <div className="flex flex-col gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                        title="Attach file"
-                        className="px-2"
-                      >
-                        <Paperclip className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" onClick={postComment} loading={submittingComment} disabled={!commentText.trim() && pendingFiles.length === 0}>
-                        <Send className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-400 ml-10">Enter to send · Shift+Enter for new line · @ to mention</p>
-                </div>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
-              </div>
+        {/* ── T: Task ── */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="bg-indigo-100 text-indigo-700 rounded px-1.5 py-0.5 text-xs font-bold">T</span>
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Task</span>
+            <div className="ml-auto flex items-center gap-2">
+              <Badge variant={STATUS_VARIANT[item.status] ?? 'secondary'}>{STATUS_LABEL[item.status] ?? item.status}</Badge>
+              <span className={cn('inline-flex items-center gap-1 text-xs font-medium capitalize', {
+                'text-red-600': item.priority === 'urgent',
+                'text-orange-500': item.priority === 'high',
+                'text-blue-600': item.priority === 'medium',
+                'text-gray-400': item.priority === 'low',
+              })}>
+                <span className={cn('h-2 w-2 rounded-full', PRIORITY_DOT[item.priority])} />
+                {item.priority}
+              </span>
             </div>
           </div>
-
-          {/* Sidebar */}
-          <div className="space-y-4">
-            {/* Details */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-              <h3 className="text-sm font-semibold text-gray-700">Details</h3>
-
-              <div className="space-y-3 text-sm">
-                {/* Status — inline editable */}
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500">Status</span>
-                  {editingStatus ? (
-                    <select
-                      autoFocus
-                      defaultValue={item.status}
-                      onBlur={() => setEditingStatus(false)}
-                      onChange={e => handleStatusChange(e.target.value)}
-                      className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="completed">Completed</option>
-                      <option value="blocked">Blocked</option>
-                    </select>
-                  ) : (
-                    <button onClick={() => setEditingStatus(true)} title="Click to change status">
-                      <Badge variant={STATUS_VARIANT[item.status] ?? 'secondary'}>
-                        {STATUS_LABEL[item.status] ?? item.status}
-                      </Badge>
-                    </button>
-                  )}
-                </div>
-
-                {/* Priority — inline editable */}
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500">Priority</span>
-                  {editingPriority ? (
-                    <select
-                      autoFocus
-                      defaultValue={item.priority}
-                      onBlur={() => setEditingPriority(false)}
-                      onChange={e => handlePriorityChange(e.target.value)}
-                      className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
-                  ) : (
-                    <button
-                      onClick={() => setEditingPriority(true)}
-                      title="Click to change priority"
-                      className={cn('inline-flex items-center gap-1 capitalize font-medium text-sm', {
-                        'text-red-600': item.priority === 'urgent',
-                        'text-orange-500': item.priority === 'high',
-                        'text-blue-600': item.priority === 'medium',
-                        'text-gray-500': item.priority === 'low',
-                      })}
-                    >
-                      <span className={cn('h-2 w-2 rounded-full', PRIORITY_DOT[item.priority])} />
-                      {item.priority}
-                    </button>
-                  )}
-                </div>
-
-                {/* Deadline */}
-                {item.deadline && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500 flex items-center gap-1">
-                      <span className="bg-orange-100 text-orange-700 rounded px-1 text-xs font-bold">D</span>
-                      Deadline
-                    </span>
-                    <span className="flex items-center gap-1 text-gray-700 text-xs">
-                      <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                      {formatDate(item.deadline)}
-                    </span>
-                  </div>
-                )}
-
-                {/* Estimated time */}
-                {item.estimated_time && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500 flex items-center gap-1">
-                      <span className="bg-purple-100 text-purple-700 rounded px-1 text-xs font-bold">E</span>
-                      Est. Time
-                    </span>
-                    <span className="flex items-center gap-1 text-gray-700 text-xs">
-                      <Clock className="h-3.5 w-3.5 text-gray-400" />
-                      {item.estimated_time}h
-                    </span>
-                  </div>
-                )}
-
-                {/* Dept / Team */}
-                {item.departments?.name && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Department</span>
-                    <span className="font-medium text-gray-700 text-xs">{item.departments.name}</span>
-                  </div>
-                )}
-                {item.teams?.name && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Team</span>
-                    <span className="font-medium text-gray-700 text-xs">{item.teams.name}</span>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500">Created</span>
-                  <span className="text-gray-700 text-xs">{formatDate(item.created_at)}</span>
-                </div>
-              </div>
+          <div className="prose prose-sm max-w-none text-gray-900 [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1" dangerouslySetInnerHTML={{ __html: item.task }} />
+          {item.tags?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-4 pt-4 border-t border-gray-100">
+              {item.tags.map(tag => (
+                <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 text-indigo-700 px-2.5 py-0.5 text-xs font-medium">
+                  <Tag className="h-3 w-3" />{tag}
+                </span>
+              ))}
             </div>
+          )}
+        </div>
 
-            {/* Assignees */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Assignees ({assigneesList.length})
-                </h3>
-                {canEdit && (
-                  <button
-                    onClick={() => { setShowAddAssignee(v => !v); setAssigneeSearch('') }}
-                    className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
-                  >
-                    <UserPlus className="h-3.5 w-3.5" />
-                    Add
-                  </button>
-                )}
-              </div>
+        {/* ── D: Deadline ── */}
+        {item.deadline_text && item.deadline_text !== '<p></p>' && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="bg-orange-100 text-orange-700 rounded px-1.5 py-0.5 text-xs font-bold">D</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Deadline</span>
+            </div>
+            <FieldRow label="" badge="" badgeColor="" value={item.deadline_text} />
+          </div>
+        )}
 
-              {showAddAssignee && (
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-gray-100">
-                    <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                    <input
-                      autoFocus
-                      type="text"
-                      placeholder="Search people…"
-                      value={assigneeSearch}
-                      onChange={e => setAssigneeSearch(e.target.value)}
-                      className="flex-1 text-xs outline-none bg-transparent placeholder-gray-400"
-                    />
-                  </div>
-                  <div className="max-h-40 overflow-y-auto">
-                    {users
-                      .filter(u =>
-                        !assigneesList.some(a => a.id === u.id) &&
-                        u.full_name.toLowerCase().includes(assigneeSearch.toLowerCase())
-                      )
-                      .slice(0, 8)
-                      .map(u => (
-                        <button
-                          key={u.id}
-                          onClick={() => addAssignee(u)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-indigo-50 transition-colors text-left"
-                        >
-                          <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 shrink-0" />
-                          <span className="truncate">{u.full_name}</span>
-                        </button>
-                      ))}
-                    {users.filter(u => !assigneesList.some(a => a.id === u.id) && u.full_name.toLowerCase().includes(assigneeSearch.toLowerCase())).length === 0 && (
-                      <p className="text-xs text-gray-400 text-center py-3">No users found</p>
-                    )}
-                  </div>
-                </div>
+        {/* ── I: Impact ── */}
+        {item.impact && item.impact !== '<p></p>' && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="bg-green-100 text-green-700 rounded px-1.5 py-0.5 text-xs font-bold">I</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Impact</span>
+            </div>
+            <FieldRow label="" badge="" badgeColor="" value={item.impact} />
+          </div>
+        )}
+
+        {/* ── D: Dependencies ── */}
+        {item.dependencies && item.dependencies !== '<p></p>' && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="bg-yellow-100 text-yellow-700 rounded px-1.5 py-0.5 text-xs font-bold">D</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Dependencies</span>
+            </div>
+            <FieldRow label="" badge="" badgeColor="" value={item.dependencies} />
+          </div>
+        )}
+
+        {/* ── S: Strategic Alignment ── */}
+        {item.strategic_alignment && item.strategic_alignment !== '<p></p>' && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="bg-blue-100 text-blue-700 rounded px-1.5 py-0.5 text-xs font-bold">S</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Strategic Alignment</span>
+            </div>
+            <FieldRow label="" badge="" badgeColor="" value={item.strategic_alignment} />
+          </div>
+        )}
+
+        {/* ── C: Consequences of Delay ── */}
+        {item.consequences_of_delay && item.consequences_of_delay !== '<p></p>' && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="bg-red-100 text-red-700 rounded px-1.5 py-0.5 text-xs font-bold">C</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Consequences of Delay</span>
+            </div>
+            <FieldRow label="" badge="" badgeColor="" value={item.consequences_of_delay} />
+          </div>
+        )}
+
+        {/* ── E: Estimated Time ── */}
+        {item.estimated_time != null && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 text-xs font-bold">E</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Estimated Time</span>
+            </div>
+            <p className="text-sm text-gray-800 font-medium">{item.estimated_time} day{item.estimated_time !== 1 ? 's' : ''}</p>
+          </div>
+        )}
+
+        {/* ── Action Plan ── */}
+        {item.action_plan && item.action_plan !== '<p></p>' && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-base">📋</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Action Plan</span>
+            </div>
+            <div className="prose prose-sm max-w-none text-gray-700" dangerouslySetInnerHTML={{ __html: item.action_plan }} />
+          </div>
+        )}
+
+        </div>{/* end left column */}
+
+        {/* ── RIGHT SIDEBAR ── */}
+        <div className="space-y-4">
+
+        {/* ── Nearest Deadline ── */}
+        {item.deadline && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-base">⏰</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nearest Deadline</span>
+              <span className="ml-auto text-xs text-gray-400">(for reminder &amp; countdown)</span>
+            </div>
+            <p className="text-sm text-gray-800 font-medium flex items-center gap-1.5">
+              <Calendar className="h-4 w-4 text-gray-400" />
+              {formatDate(item.deadline)}
+            </p>
+          </div>
+        )}
+
+        {/* ── Details ── */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Details</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-gray-400 mb-1">Status</p>
+              {editingStatus ? (
+                <select
+                  autoFocus
+                  defaultValue={item.status}
+                  onBlur={() => setEditingStatus(false)}
+                  onChange={e => handleStatusChange(e.target.value)}
+                  className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full"
+                >
+                  <option value="pending">Pending</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="blocked">Blocked</option>
+                </select>
+              ) : (
+                <button onClick={() => setEditingStatus(true)} title="Click to change">
+                  <Badge variant={STATUS_VARIANT[item.status] ?? 'secondary'}>{STATUS_LABEL[item.status] ?? item.status}</Badge>
+                </button>
               )}
-
-              <div className="space-y-2">
-                {assigneesList.map(a => (
-                  <div key={a.id} className="flex items-center gap-2 group">
-                    <UserAvatar name={a.full_name} avatarUrl={a.avatar_url} size="sm" className="w-7 h-7 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 truncate">{a.full_name}</p>
-                      <p className="text-xs text-gray-400 truncate">{a.email}</p>
-                    </div>
-                    {canEdit && assigneesList.length > 1 && (
-                      <button
-                        onClick={() => removeAssignee(a.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500 shrink-0"
-                        title="Remove assignee"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {assigneesList.length === 0 && <p className="text-sm text-gray-400">No assignees</p>}
-              </div>
             </div>
-
-            {/* Watchers / CC */}
-            <div className="bg-amber-50 rounded-xl border border-amber-100 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-amber-700 flex items-center gap-2">
-                  <Eye className="h-4 w-4" />
-                  CC / Watchers ({watchersList.length})
-                </h3>
-                {canEdit && (
-                  <button
-                    onClick={() => { setShowAddWatcher(v => !v); setWatcherSearch('') }}
-                    className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 font-medium"
-                  >
-                    <UserPlus className="h-3.5 w-3.5" />
-                    Add
-                  </button>
-                )}
-              </div>
-
-              {showAddWatcher && (
-                <div className="border border-amber-200 rounded-lg overflow-hidden bg-white">
-                  <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-amber-100">
-                    <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                    <input
-                      autoFocus
-                      type="text"
-                      placeholder="Search people…"
-                      value={watcherSearch}
-                      onChange={e => setWatcherSearch(e.target.value)}
-                      className="flex-1 text-xs outline-none bg-transparent placeholder-gray-400"
-                    />
-                  </div>
-                  <div className="max-h-40 overflow-y-auto">
-                    {users
-                      .filter(u =>
-                        !watchersList.some(w => w.id === u.id) &&
-                        u.full_name.toLowerCase().includes(watcherSearch.toLowerCase())
-                      )
-                      .slice(0, 8)
-                      .map(u => (
-                        <button
-                          key={u.id}
-                          onClick={() => addWatcher(u)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-amber-50 transition-colors text-left"
-                        >
-                          <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 shrink-0" />
-                          <span className="truncate">{u.full_name}</span>
-                        </button>
-                      ))}
-                    {users.filter(u => !watchersList.some(w => w.id === u.id) && u.full_name.toLowerCase().includes(watcherSearch.toLowerCase())).length === 0 && (
-                      <p className="text-xs text-gray-400 text-center py-3">No users found</p>
-                    )}
-                  </div>
-                </div>
+            <div>
+              <p className="text-xs text-gray-400 mb-1">Priority</p>
+              {editingPriority ? (
+                <select
+                  autoFocus
+                  defaultValue={item.priority}
+                  onBlur={() => setEditingPriority(false)}
+                  onChange={e => handlePriorityChange(e.target.value)}
+                  className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              ) : (
+                <button
+                  onClick={() => setEditingPriority(true)}
+                  className={cn('inline-flex items-center gap-1 capitalize font-medium text-sm', {
+                    'text-red-600': item.priority === 'urgent',
+                    'text-orange-500': item.priority === 'high',
+                    'text-blue-600': item.priority === 'medium',
+                    'text-gray-500': item.priority === 'low',
+                  })}
+                >
+                  <span className={cn('h-2 w-2 rounded-full', PRIORITY_DOT[item.priority])} />
+                  {item.priority}
+                </button>
               )}
-
-              <div className="space-y-2">
-                {watchersList.map(w => (
-                  <div key={w.id} className="flex items-center gap-2 group">
-                    <UserAvatar name={w.full_name} avatarUrl={w.avatar_url} size="sm" className="w-7 h-7" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 truncate">{w.full_name}</p>
-                      <p className="text-xs text-gray-400 truncate">{w.email}</p>
-                    </div>
-                    {canEdit && (
-                      <button
-                        onClick={() => removeWatcher(w.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500 shrink-0"
-                        title="Remove watcher"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {watchersList.length === 0 && <p className="text-sm text-amber-600/60">No watchers</p>}
-              </div>
             </div>
+            <div>
+              <p className="text-xs text-gray-400 mb-1">Created</p>
+              <p className="text-sm text-gray-700">{formatDate(item.created_at)}</p>
+            </div>
+            {item.departments?.name && (
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Department</p>
+                <p className="text-sm text-gray-700 font-medium">{item.departments.name}</p>
+              </div>
+            )}
+            {item.teams?.name && (
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Team</p>
+                <p className="text-sm text-gray-700 font-medium">{item.teams.name}</p>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* ── Assignees ── */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Assignees ({assigneesList.length})
+            </h3>
+            {canEdit && (
+              <button
+                onClick={() => { setShowAddAssignee(v => !v); setAssigneeSearch('') }}
+                className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                Add
+              </button>
+            )}
+          </div>
+          {showAddAssignee && (
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-gray-100">
+                <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Search people…"
+                  value={assigneeSearch}
+                  onChange={e => setAssigneeSearch(e.target.value)}
+                  className="flex-1 text-xs outline-none bg-transparent placeholder-gray-400"
+                />
+              </div>
+              <div className="max-h-40 overflow-y-auto">
+                {users.filter(u => !assigneesList.some(a => a.id === u.id) && u.full_name.toLowerCase().includes(assigneeSearch.toLowerCase())).slice(0, 8).map(u => (
+                  <button key={u.id} onClick={() => addAssignee(u)} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-indigo-50 transition-colors text-left">
+                    <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 shrink-0" />
+                    <span className="truncate">{u.full_name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {assigneesList.map(a => (
+              <div key={a.id} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 group">
+                <UserAvatar name={a.full_name} avatarUrl={a.avatar_url} size="sm" className="w-8 h-8 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 truncate">{a.full_name}</p>
+                  <p className="text-xs text-gray-400 truncate">{a.email}</p>
+                </div>
+                {canEdit && assigneesList.length > 1 && (
+                  <button onClick={() => removeAssignee(a.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500 shrink-0" title="Remove">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+            {assigneesList.length === 0 && <p className="text-sm text-gray-400">No assignees</p>}
+          </div>
+        </div>
+
+        {/* ── CC / Watchers ── */}
+        <div className="bg-amber-50 rounded-xl border border-amber-100 p-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wide flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              CC / Watchers ({watchersList.length})
+            </h3>
+            {canEdit && (
+              <button
+                onClick={() => { setShowAddWatcher(v => !v); setWatcherSearch('') }}
+                className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 font-medium"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                Add
+              </button>
+            )}
+          </div>
+          {showAddWatcher && (
+            <div className="border border-amber-200 rounded-lg overflow-hidden bg-white">
+              <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-amber-100">
+                <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Search people…"
+                  value={watcherSearch}
+                  onChange={e => setWatcherSearch(e.target.value)}
+                  className="flex-1 text-xs outline-none bg-transparent placeholder-gray-400"
+                />
+              </div>
+              <div className="max-h-40 overflow-y-auto">
+                {users.filter(u => !watchersList.some(w => w.id === u.id) && u.full_name.toLowerCase().includes(watcherSearch.toLowerCase())).slice(0, 8).map(u => (
+                  <button key={u.id} onClick={() => addWatcher(u)} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-amber-50 transition-colors text-left">
+                    <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 shrink-0" />
+                    <span className="truncate">{u.full_name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {watchersList.map(w => (
+              <div key={w.id} className="flex items-center gap-2 p-2 rounded-lg bg-amber-50/50 group">
+                <UserAvatar name={w.full_name} avatarUrl={w.avatar_url} size="sm" className="w-8 h-8" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 truncate">{w.full_name}</p>
+                  <p className="text-xs text-gray-400 truncate">{w.email}</p>
+                </div>
+                {canEdit && (
+                  <button onClick={() => removeWatcher(w.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500 shrink-0" title="Remove">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+            {watchersList.length === 0 && <p className="text-sm text-amber-600/60">No watchers</p>}
+          </div>
+        </div>
+
+        {/* ── Comments ── */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Comments
+              {comments.length > 0 && (
+                <span className="ml-2 text-xs bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5 normal-case font-normal">{comments.length}</span>
+              )}
+            </h3>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
+              {threadedComments.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-6">No comments yet. Start the conversation!</p>
+              )}
+              {threadedComments.map(c => (
+                <CommentItem key={c.id} comment={c} currentUserId={currentUserId} users={users} onDelete={deleteComment} onReact={handleReact} onReply={setReplyTo} />
+              ))}
+              <div ref={commentEndRef} />
+            </div>
+            {replyTo && (
+              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-xs text-indigo-700">
+                <CornerDownRight className="h-3 w-3 shrink-0" />
+                <span className="flex-1">Replying to <strong>{replyTo.user.full_name}</strong></span>
+                <button onClick={() => setReplyTo(null)}><X className="h-3 w-3" /></button>
+              </div>
+            )}
+            {pendingFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                {pendingFiles.map((f, i) => (
+                  <div key={i} className="relative group">
+                    {f.type.startsWith('image/') ? (
+                      <img src={URL.createObjectURL(f)} alt={f.name} className="h-16 w-16 object-cover rounded-lg border border-gray-200" />
+                    ) : (
+                      <div className="h-16 w-32 flex items-center gap-2 px-2 bg-white rounded-lg border border-gray-200 text-xs text-gray-600 truncate">
+                        <FileText className="h-4 w-4 shrink-0 text-gray-400" />{f.name}
+                      </div>
+                    )}
+                    <button onClick={() => removePendingFile(i)} className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="pt-3 border-t border-gray-100 space-y-2">
+              <div className="flex gap-2 items-end">
+                <UserAvatar name={currentUserName} avatarUrl={currentUserAvatar} size="sm" className="w-8 h-8 shrink-0" />
+                <MentionTextarea
+                  value={commentText}
+                  onChange={setCommentText}
+                  onKeyDown={handleCommentKeyDown}
+                  onPaste={handlePaste}
+                  placeholder={replyTo ? `Reply to ${replyTo.user.full_name}… (@ to mention)` : 'Write a comment… (@ to mention)'}
+                  users={users}
+                  textareaRef={textareaRef}
+                />
+                <div className="flex flex-col gap-1">
+                  <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} title="Attach file" className="px-2">
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" onClick={postComment} loading={submittingComment} disabled={!commentText.trim() && pendingFiles.length === 0}>
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 ml-10">Enter to send · Shift+Enter for new line · @ to mention</p>
+            </div>
+            <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" onChange={handleFileSelect} />
+          </div>
+        </div>
+
+        </div>{/* end right sidebar */}
+        </div>{/* end two-column grid */}
       </div>
     </div>
   )

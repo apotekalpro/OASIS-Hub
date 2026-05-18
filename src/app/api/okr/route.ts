@@ -51,11 +51,31 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Insert key results
+  // Insert key results, then create any subtasks linked to each KR
   if (keyResults.length > 0) {
-    await admin.from('okr_key_results').insert(
-      keyResults.map((kr: Record<string, unknown>) => ({ ...kr, objective_id: obj.id }))
-    )
+    const { data: insertedKrs } = await admin.from('okr_key_results').insert(
+      keyResults.map((kr: Record<string, unknown>) => {
+        const { subtasks: _s, ...krFields } = kr as Record<string, unknown>
+        return { ...krFields, objective_id: obj.id }
+      })
+    ).select('id')
+
+    for (let i = 0; i < keyResults.length; i++) {
+      const subtasks = ((keyResults[i] as Record<string, unknown>).subtasks as Array<{ title: string; priority?: string }>) ?? []
+      const krId = insertedKrs?.[i]?.id
+      if (krId && subtasks.length > 0) {
+        await admin.from('tasks').insert(
+          subtasks.filter(s => s.title?.trim()).map(s => ({
+            title: s.title.trim(),
+            priority: s.priority || 'medium',
+            status: 'todo',
+            org_id: orgId,
+            created_by: user.id,
+            kr_id: krId,
+          }))
+        )
+      }
+    }
   }
 
   // Insert assignees — creator is always owner

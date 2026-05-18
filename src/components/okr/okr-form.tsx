@@ -6,13 +6,16 @@ import { Plus, X, Eye, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { UserAvatar } from '@/components/ui/avatar'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { RichTextEditor } from '@/components/ui/rich-text-editor'
+import { AssigneePicker, type PickerUser } from '@/components/ui/assignee-picker'
 
-type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+type OrgUser = PickerUser
 type Department = { id: string; name: string }
-type Team = { id: string; name: string }
+type Team = { id: string; name: string; team_members?: Array<{ user_id: string; profiles?: OrgUser | null }> }
+
+type SubtaskDraft = { _id: string; title: string; priority: 'low' | 'medium' | 'high' }
 
 type KeyResultDraft = {
   _id: string
@@ -22,6 +25,8 @@ type KeyResultDraft = {
   target_value: string
   unit: string
   due_date: string
+  description: string
+  subtasks: SubtaskDraft[]
 }
 
 type ExistingObjective = {
@@ -64,7 +69,13 @@ function newKrDraft(): KeyResultDraft {
     target_value: '100',
     unit: '',
     due_date: '',
+    description: '',
+    subtasks: [],
   }
+}
+
+function newSubtaskDraft(): SubtaskDraft {
+  return { _id: Math.random().toString(36).slice(2), title: '', priority: 'medium' }
 }
 
 export function OkrForm({ orgId, currentUserId, users, departments, teams, objective, trigger, onCreated }: Props) {
@@ -91,11 +102,9 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
 
   // Assignees
   const [assignees, setAssignees] = useState<OrgUser[]>([])
-  const [assigneeSearch, setAssigneeSearch] = useState('')
 
   // Watchers
   const [watchers, setWatchers] = useState<OrgUser[]>([])
-  const [watcherSearch, setWatcherSearch] = useState('')
 
   // Load existing assignees/watchers when editing
   useEffect(() => {
@@ -105,7 +114,7 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
         .then(({ assignees: a = [], watchers: w = [], keyResults: krs = [] }: {
           assignees: Array<{ user_id: string; role: string }>
           watchers: Array<{ user_id: string }>
-          keyResults: Array<{ id: string; title: string; metric_type: string; start_value: number; target_value: number; unit: string | null; due_date: string | null }>
+          keyResults: Array<{ id: string; title: string; description: string | null; metric_type: string; start_value: number; target_value: number; unit: string | null; due_date: string | null }>
         }) => {
           setAssignees(users.filter(u => a.some((x: { user_id: string }) => x.user_id === u.id)))
           setWatchers(users.filter(u => w.some((x: { user_id: string }) => x.user_id === u.id)))
@@ -118,6 +127,8 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
               target_value: String(kr.target_value),
               unit: kr.unit ?? '',
               due_date: kr.due_date ?? '',
+              description: kr.description ?? '',
+              subtasks: [],
             })))
           }
         })
@@ -139,8 +150,6 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
         setAssignees([])
         setWatchers([])
       }
-      setAssigneeSearch('')
-      setWatcherSearch('')
       setKrExpanded({})
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -159,18 +168,20 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
     setKeyResults(prev => prev.map(kr => kr._id === id ? { ...kr, [field]: value } : kr))
   }
 
-  const filteredAssigneeUsers = users.filter(
-    u => !assignees.find(a => a.id === u.id) &&
-      (u.full_name.toLowerCase().includes(assigneeSearch.toLowerCase()) ||
-       u.email.toLowerCase().includes(assigneeSearch.toLowerCase()))
-  )
+  function addSubtask(krId: string) {
+    const st = newSubtaskDraft()
+    setKeyResults(prev => prev.map(kr => kr._id === krId ? { ...kr, subtasks: [...kr.subtasks, st] } : kr))
+  }
 
-  const filteredWatcherUsers = users.filter(
-    u => !watchers.find(w => w.id === u.id) &&
-      !assignees.find(a => a.id === u.id) &&
-      (u.full_name.toLowerCase().includes(watcherSearch.toLowerCase()) ||
-       u.email.toLowerCase().includes(watcherSearch.toLowerCase()))
-  )
+  function removeSubtask(krId: string, stId: string) {
+    setKeyResults(prev => prev.map(kr => kr._id === krId ? { ...kr, subtasks: kr.subtasks.filter(s => s._id !== stId) } : kr))
+  }
+
+  function updateSubtask(krId: string, stId: string, field: keyof SubtaskDraft, value: string) {
+    setKeyResults(prev => prev.map(kr =>
+      kr._id === krId ? { ...kr, subtasks: kr.subtasks.map(s => s._id === stId ? { ...s, [field]: value } : s) } : kr
+    ))
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -203,6 +214,8 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
           target_value: parseFloat(kr.target_value) || 100,
           unit: kr.unit.trim() || null,
           due_date: kr.due_date || null,
+          description: kr.description || null,
+          subtasks: kr.subtasks.filter(s => s.title.trim()).map(s => ({ title: s.title.trim(), priority: s.priority })),
         })),
       }
 
@@ -274,13 +287,7 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
               {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  placeholder="Why does this objective matter?"
-                  rows={3}
-                  className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 resize-none"
-                />
+                <RichTextEditor value={description} onChange={setDescription} placeholder="Why does this objective matter?" />
               </div>
 
               {/* Period / Status */}
@@ -458,6 +465,61 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
                                 className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                               />
                             </div>
+                            <div className="col-span-2">
+                              <label className="block text-xs text-gray-500 mb-1">Description</label>
+                              <RichTextEditor
+                                value={kr.description}
+                                onChange={val => updateKr(kr._id, 'description', val)}
+                                placeholder="Describe what achieving this key result means..."
+                              />
+                            </div>
+
+                            {/* Subtasks */}
+                            <div className="col-span-2">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="block text-xs text-gray-500">Subtasks</label>
+                                <button
+                                  type="button"
+                                  onClick={() => addSubtask(kr._id)}
+                                  className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                                >
+                                  <Plus className="h-3 w-3" /> Add subtask
+                                </button>
+                              </div>
+                              {kr.subtasks.length === 0 ? (
+                                <p className="text-xs text-gray-400 italic">No subtasks yet. Click "Add subtask" to add tasks linked to this KR.</p>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  {kr.subtasks.map(st => (
+                                    <div key={st._id} className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={st.title}
+                                        onChange={e => updateSubtask(kr._id, st._id, 'title', e.target.value)}
+                                        placeholder="Subtask title..."
+                                        className="flex-1 h-7 rounded border border-gray-200 bg-white px-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 placeholder:text-gray-400"
+                                      />
+                                      <select
+                                        value={st.priority}
+                                        onChange={e => updateSubtask(kr._id, st._id, 'priority', e.target.value)}
+                                        className="h-7 rounded border border-gray-200 bg-white px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                      >
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                      </select>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeSubtask(kr._id, st._id)}
+                                        className="text-gray-300 hover:text-red-500 shrink-0"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -469,47 +531,14 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
               {/* Assignees */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Owners / Assignees</label>
-                {assignees.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {assignees.map(u => (
-                      <div key={u.id} className="flex items-center gap-1.5 bg-indigo-50 rounded-full pl-1 pr-2 py-0.5">
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
-                        <span className="text-xs font-medium text-indigo-700">{u.full_name.split(' ')[0]}</span>
-                        <button
-                          type="button"
-                          onClick={() => setAssignees(assignees.filter(a => a.id !== u.id))}
-                          className="text-indigo-300 hover:text-red-500 text-xs"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Input
-                  placeholder="Search and add assignees..."
-                  value={assigneeSearch}
-                  onChange={e => setAssigneeSearch(e.target.value)}
+                <AssigneePicker
+                  users={users}
+                  teams={teams}
+                  departments={departments}
+                  selected={assignees}
+                  onChange={setAssignees}
+                  pillColor="indigo"
                 />
-                {assigneeSearch && (
-                  <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                    {filteredAssigneeUsers.slice(0, 8).map(u => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { setAssignees([...assignees, u]); setAssigneeSearch('') }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
-                      >
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 text-xs" />
-                        <span>{u.full_name}</span>
-                        <span className="text-gray-400 text-xs ml-auto">{u.email}</span>
-                      </button>
-                    ))}
-                    {filteredAssigneeUsers.length === 0 && (
-                      <p className="px-3 py-2 text-sm text-gray-400">No users found</p>
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* Watchers / CC */}
@@ -518,47 +547,16 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
                   <Eye className="h-3.5 w-3.5 text-gray-400" />
                   CC <span className="font-normal text-gray-400">(spectators — can track but are not responsible)</span>
                 </label>
-                {watchers.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {watchers.map(u => (
-                      <div key={u.id} className="flex items-center gap-1.5 bg-amber-50 rounded-full pl-1 pr-2 py-0.5">
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
-                        <span className="text-xs font-medium text-amber-700">{u.full_name.split(' ')[0]}</span>
-                        <button
-                          type="button"
-                          onClick={() => setWatchers(watchers.filter(w => w.id !== u.id))}
-                          className="text-amber-300 hover:text-red-500 text-xs"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Input
+                <AssigneePicker
+                  users={users}
+                  teams={teams}
+                  departments={departments}
+                  selected={watchers}
+                  excluded={assignees}
+                  onChange={setWatchers}
                   placeholder="Add people to CC..."
-                  value={watcherSearch}
-                  onChange={e => setWatcherSearch(e.target.value)}
+                  pillColor="amber"
                 />
-                {watcherSearch && (
-                  <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                    {filteredWatcherUsers.slice(0, 8).map(u => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { setWatchers([...watchers, u]); setWatcherSearch('') }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
-                      >
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 text-xs" />
-                        <span>{u.full_name}</span>
-                        <span className="text-gray-400 text-xs ml-auto">{u.email}</span>
-                      </button>
-                    ))}
-                    {filteredWatcherUsers.length === 0 && (
-                      <p className="px-3 py-2 text-sm text-gray-400">No users found</p>
-                    )}
-                  </div>
-                )}
               </div>
             </form>
           </div>

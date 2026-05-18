@@ -38,13 +38,13 @@ export default async function TasksPage() {
 
   if (isSuperAdmin || (isAdmin && orgId)) {
     // Admins: fetch tasks + supporting data all in parallel (exclude subtasks)
-    const tasksQuery = supabase.from('tasks').select(taskSelect).is('parent_id', null).order('created_at', { ascending: false })
+    const tasksQuery = supabase.from('tasks').select(taskSelect).is('parent_id', null).is('kr_id', null).order('created_at', { ascending: false })
     if (!isSuperAdmin && orgId) tasksQuery.eq('org_id', orgId)
 
     const [tasksResult, ...rest] = await Promise.all([
       tasksQuery,
-      supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
-      admin.from('teams').select('id, name').eq('org_id', orgId).order('name'),
+      supabase.from('profiles').select('id, full_name, email, avatar_url, dept_id, role').eq('org_id', orgId).eq('is_active', true).order('full_name'),
+      admin.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url, dept_id, role))').eq('org_id', orgId).order('name'),
       supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     ])
     rawTasks = (tasksResult.data as unknown as RawTask[]) ?? [];
@@ -54,8 +54,8 @@ export default async function TasksPage() {
     const [assignedRes, watcherRes, ...rest] = await Promise.all([
       supabase.from('task_assignees').select('task_id').eq('user_id', user.id),
       supabase.from('task_watchers').select('task_id').eq('user_id', user.id),
-      supabase.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('is_active', true).order('full_name'),
-      admin.from('teams').select('id, name').eq('org_id', orgId).order('name'),
+      supabase.from('profiles').select('id, full_name, email, avatar_url, dept_id, role').eq('org_id', orgId).eq('is_active', true).order('full_name'),
+      admin.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url, dept_id, role))').eq('org_id', orgId).order('name'),
       supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     ])
     ;[usersRes, teamsRes, deptsRes] = rest
@@ -70,12 +70,13 @@ export default async function TasksPage() {
     const res = await supabase.from('tasks')
       .select(taskSelect)
       .is('parent_id', null)
+      .is('kr_id', null)
       .or(orParts.join(','))
       .order('created_at', { ascending: false })
     rawTasks = (res.data as unknown as RawTask[]) ?? []
   }
 
-  type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+  type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null; dept_id?: string | null; role?: string | null }
   const userMap = new Map<string, OrgUser>(
     ((usersRes.data as OrgUser[]) ?? []).map(u => [u.id, u])
   )
@@ -124,7 +125,7 @@ export default async function TasksPage() {
       orgId={orgId}
       currentUserId={user.id}
       users={(usersRes.data as OrgUser[]) ?? []}
-      teams={(teamsRes.data as unknown as Array<{ id: string; name: string; team_members?: Array<{ user_id: string; profiles?: { id: string; full_name: string; email: string; avatar_url: string | null } | null }> }>) ?? []}
+      teams={(teamsRes.data as unknown as Array<{ id: string; name: string; team_members?: Array<{ user_id: string; profiles?: OrgUser | null }> }>) ?? []}
       departments={(deptsRes.data as Array<{ id: string; name: string }>) ?? []}
     />
   )

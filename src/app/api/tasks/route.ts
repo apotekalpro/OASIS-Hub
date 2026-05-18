@@ -1,5 +1,28 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
+
+export async function GET(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const admin = createAdminClient()
+  const { searchParams } = new URL(request.url)
+  const krId = searchParams.get('kr_id')
+
+  let query = admin
+    .from('tasks')
+    .select('id, title, status, priority, due_date, kr_id, task_assignees(user_id)')
+    .order('created_at', { ascending: true })
+
+  if (krId) {
+    query = query.eq('kr_id', krId)
+  }
+
+  const { data, error } = await query
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ tasks: data ?? [] })
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient()

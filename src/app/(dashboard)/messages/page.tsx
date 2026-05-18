@@ -36,6 +36,22 @@ export default async function MessagesPage() {
     c.channel_members?.some(m => m.user_id === user.id)
   )
 
+  // Compute initial unread counts: messages after last_read_at, not sent by current user
+  const unreadResults = await Promise.all(
+    channels.map(async ch => {
+      const lastReadAt = ch.channel_members?.find(m => m.user_id === user.id)?.last_read_at ?? null
+      const query = supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('channel_id', ch.id)
+        .neq('user_id', user.id)
+      if (lastReadAt) query.gt('created_at', lastReadAt)
+      const { count } = await query
+      return [ch.id, count ?? 0] as [string, number]
+    })
+  )
+  const initialUnreadCounts = Object.fromEntries(unreadResults)
+
   return (
     <MessagesLayout
       channels={channels}
@@ -45,6 +61,7 @@ export default async function MessagesPage() {
       currentUserId={user.id}
       currentUserName={profile?.full_name ?? ''}
       currentUserAvatar={profile?.avatar_url ?? null}
+      initialUnreadCounts={initialUnreadCounts}
     />
   )
 }

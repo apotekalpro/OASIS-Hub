@@ -28,14 +28,15 @@ interface Props {
   currentUserId: string
   currentUserName: string
   currentUserAvatar: string | null
+  initialUnreadCounts: Record<string, number>
 }
 
-export function MessagesLayout({ channels: initialChannels, orgUsers, departments, orgId, currentUserId, currentUserName, currentUserAvatar }: Props) {
+export function MessagesLayout({ channels: initialChannels, orgUsers, departments, orgId, currentUserId, currentUserName, currentUserAvatar, initialUnreadCounts }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [channels, setChannels] = useState<Channel[]>(initialChannels)
   const [activeChannelId, setActiveChannelId] = useState<string | null>(initialChannels[0]?.id ?? null)
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>(initialUnreadCounts)
 
   const activeChannel = channels.find(c => c.id === activeChannelId) ?? null
   // Mobile: track whether the feed is open (true) or sidebar is shown (false)

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Channel, OrgUser } from './messages-layout'
 import { UserAvatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -26,7 +25,6 @@ interface Props {
 export function ChannelSidebar({
   channels, orgUsers, orgId, currentUserId, activeChannelId, unreadCounts, onSelect, onStartDM, onChannelCreated,
 }: Props) {
-  const supabase = createClient()
   const [showNewChannel, setShowNewChannel] = useState(false)
   const [showNewDM, setShowNewDM] = useState(false)
   const [channelName, setChannelName] = useState('')
@@ -41,22 +39,16 @@ export function ChannelSidebar({
   async function createChannel() {
     if (!channelName.trim()) return
     setCreating(true)
-    const { data, error } = await supabase.from('channels').insert({
-      org_id: orgId,
-      name: channelName.trim().toLowerCase().replace(/\s+/g, '-'),
-      description: channelDesc.trim() || null,
-      is_private: isPrivate,
-      is_direct: false,
-      created_by: currentUserId,
-    }).select('id, name, description, is_private, is_direct, team_id, dept_id, created_at').single()
 
-    if (error) { toast.error(error.message); setCreating(false); return }
+    const res = await fetch('/api/channels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: channelName.trim(), description: channelDesc.trim() || null, is_private: isPrivate }),
+    })
+    const data = await res.json()
+    if (!res.ok) { toast.error(data.error ?? 'Failed to create channel'); setCreating(false); return }
+
     const ch = data as Channel
-
-    // Add creator as member
-    const { error: memberError } = await supabase.from('channel_members').insert({ channel_id: ch.id, user_id: currentUserId })
-    if (memberError) { toast.error(memberError.message); setCreating(false); return }
-
     onChannelCreated(ch)
     setChannelName('')
     setChannelDesc('')

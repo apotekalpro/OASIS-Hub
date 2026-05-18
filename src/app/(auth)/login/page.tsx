@@ -35,7 +35,6 @@ export default function LoginPage() {
       return
     }
     router.push('/dashboard')
-    router.refresh()
   }
 
   return (
@@ -109,6 +108,16 @@ export default function LoginPage() {
             {error && (
               <div className="bg-red-500/20 border border-red-400/30 rounded-lg px-4 py-3">
                 <p className="text-sm text-red-200">{error}</p>
+              </div>
+            )}
+
+            {isSubmitting && (
+              <div className="flex items-center justify-center gap-2 text-indigo-300 text-sm">
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Logging in…
               </div>
             )}
 

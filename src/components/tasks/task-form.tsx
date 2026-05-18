@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, X, Tag, Eye, Users } from 'lucide-react'
+import { Plus, X, Tag, Eye } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { UserAvatar } from '@/components/ui/avatar'
 import { RichTextEditor } from '@/components/ui/rich-text-editor'
+import { AssigneePicker, type PickerUser } from '@/components/ui/assignee-picker'
 import { toast } from 'sonner'
 
 const schema = z.object({
@@ -26,7 +26,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
-type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+type OrgUser = PickerUser
 type Team = { id: string; name: string; team_members?: Array<{ user_id: string; profiles?: OrgUser | null }> }
 type Department = { id: string; name: string }
 type ExistingTask = {
@@ -55,9 +55,6 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
   const [description, setDescription] = useState<string>(task?.description ?? '')
   const [tags, setTags] = useState<string[]>(task?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
-  const [userSearch, setUserSearch] = useState('')
-  const [ccSearch, setCcSearch] = useState('')
-
   // Load existing assignees + watchers when editing
   useEffect(() => {
     if (open && task?.id) {
@@ -72,13 +69,11 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
     if (!open) {
       setSelectedCC([])
       setSelectedAssignees([])
-      setUserSearch('')
-      setCcSearch('')
       setDescription(task?.description ?? '')
     }
   }, [open, task?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: task ? {
       title: task.title,
@@ -163,30 +158,6 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
     setTagInput('')
   }
 
-  const filteredUsers = users.filter(
-    u => !selectedAssignees.find(a => a.id === u.id) &&
-      (u.full_name.toLowerCase().includes(userSearch.toLowerCase()) ||
-       u.email.toLowerCase().includes(userSearch.toLowerCase()))
-  )
-
-  const filteredCCUsers = users.filter(
-    u => !selectedCC.find(c => c.id === u.id) &&
-      !selectedAssignees.find(a => a.id === u.id) &&
-      (u.full_name.toLowerCase().includes(ccSearch.toLowerCase()) ||
-       u.email.toLowerCase().includes(ccSearch.toLowerCase()))
-  )
-
-  const watchedTeamId = watch('team_id')
-  const selectedTeam = teams.find(t => t.id === watchedTeamId)
-  const teamMemberUsers: OrgUser[] = (selectedTeam?.team_members ?? [])
-    .map(m => m.profiles)
-    .filter((p): p is OrgUser => !!p)
-
-  function addAllTeamMembers() {
-    const toAdd = teamMemberUsers.filter(u => !selectedAssignees.find(a => a.id === u.id))
-    if (toAdd.length > 0) setSelectedAssignees(prev => [...prev, ...toAdd])
-  }
-
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
@@ -250,16 +221,6 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
                     <option value="">— None —</option>
                     {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
-                  {!task && watchedTeamId && teamMemberUsers.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={addAllTeamMembers}
-                      className="mt-1.5 flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-                    >
-                      <Users className="h-3 w-3" />
-                      Add all {teamMemberUsers.length} team member{teamMemberUsers.length !== 1 ? 's' : ''} as assignees
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -306,41 +267,14 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
               {/* Assignees (PIC) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Assignees (PIC)</label>
-                {selectedAssignees.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {selectedAssignees.map(u => (
-                      <div key={u.id} className="flex items-center gap-1.5 bg-indigo-50 rounded-full pl-1 pr-2 py-0.5">
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
-                        <span className="text-xs font-medium text-indigo-700">{u.full_name.split(' ')[0]}</span>
-                        <button type="button" onClick={() => setSelectedAssignees(selectedAssignees.filter(a => a.id !== u.id))} className="text-indigo-300 hover:text-red-500 text-xs">×</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Input
-                  placeholder="Search and add assignees..."
-                  value={userSearch}
-                  onChange={e => setUserSearch(e.target.value)}
+                <AssigneePicker
+                  users={users}
+                  teams={teams}
+                  departments={departments}
+                  selected={selectedAssignees}
+                  onChange={setSelectedAssignees}
+                  pillColor="indigo"
                 />
-                {userSearch && (
-                  <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                    {filteredUsers.slice(0, 8).map(u => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { setSelectedAssignees([...selectedAssignees, u]); setUserSearch('') }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
-                      >
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 text-xs" />
-                        <span>{u.full_name}</span>
-                        <span className="text-gray-400 text-xs ml-auto">{u.email}</span>
-                      </button>
-                    ))}
-                    {filteredUsers.length === 0 && (
-                      <p className="px-3 py-2 text-sm text-gray-400">No users found</p>
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* CC — always editable */}
@@ -349,41 +283,16 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
                   <Eye className="h-3.5 w-3.5 text-gray-400" />
                   CC <span className="font-normal text-gray-400">(spectators — can track but are not responsible)</span>
                 </label>
-                {selectedCC.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {selectedCC.map(u => (
-                      <div key={u.id} className="flex items-center gap-1.5 bg-amber-50 rounded-full pl-1 pr-2 py-0.5">
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
-                        <span className="text-xs font-medium text-amber-700">{u.full_name.split(' ')[0]}</span>
-                        <button type="button" onClick={() => setSelectedCC(selectedCC.filter(c => c.id !== u.id))} className="text-amber-300 hover:text-red-500 text-xs">×</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Input
+                <AssigneePicker
+                  users={users}
+                  teams={teams}
+                  departments={departments}
+                  selected={selectedCC}
+                  excluded={selectedAssignees}
+                  onChange={setSelectedCC}
                   placeholder="Add people to CC..."
-                  value={ccSearch}
-                  onChange={e => setCcSearch(e.target.value)}
+                  pillColor="amber"
                 />
-                {ccSearch && (
-                  <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                    {filteredCCUsers.slice(0, 8).map(u => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { setSelectedCC([...selectedCC, u]); setCcSearch('') }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
-                      >
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 text-xs" />
-                        <span>{u.full_name}</span>
-                        <span className="text-gray-400 text-xs ml-auto">{u.email}</span>
-                      </button>
-                    ))}
-                    {filteredCCUsers.length === 0 && (
-                      <p className="px-3 py-2 text-sm text-gray-400">No users found</p>
-                    )}
-                  </div>
-                )}
               </div>
             </form>
           </div>

@@ -195,13 +195,10 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
 
   async function handleToggleActive() {
     if (!userId || !user) return
-    try {
-      await toggleUserActive(userId, !user.is_active)
-      toast.success(user.is_active ? 'User deactivated' : 'User activated')
-      router.refresh()
-    } catch (err) {
-      toast.error((err as Error).message)
-    }
+    const result = await toggleUserActive(userId, !user.is_active)
+    if (!result.success) { toast.error(result.error); return }
+    toast.success(user.is_active ? 'User deactivated' : 'User activated')
+    router.refresh()
   }
 
   async function handleSendInvite() {

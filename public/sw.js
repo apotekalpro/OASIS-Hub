@@ -1,11 +1,12 @@
-const CACHE_NAME = 'oasis-hub-v2'
+const CACHE_NAME = 'oasis-hub-v4'
 
 self.addEventListener('install', event => {
   // Take control immediately without waiting
   self.skipWaiting()
+  // Pre-cache only lightweight assets
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache =>
-      cache.addAll(['/oasis-hub-logo.png']).catch(() => {})
+      cache.addAll(['/icon-192.png', '/icon-512.png']).catch(() => {})
     )
   )
 })

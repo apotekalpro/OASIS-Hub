@@ -9,28 +9,24 @@ import { Plus, X, Tag, Eye } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { UserAvatar } from '@/components/ui/avatar'
+import { RichTextEditor } from '@/components/ui/rich-text-editor'
+import { AssigneePicker, type PickerUser } from '@/components/ui/assignee-picker'
 import { toast } from 'sonner'
 
 const schema = z.object({
-  task: z.string().min(1, 'Task is required'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']),
   status: z.enum(['pending', 'in_progress', 'completed', 'blocked']),
-  deadline: z.string().optional(),
-  impact: z.string().optional(),
-  dependencies: z.string().optional(),
-  strategic_alignment: z.string().optional(),
-  consequences_of_delay: z.string().optional(),
   estimated_time: z.string().optional(),
+  nearest_deadline: z.string().optional(),
   dept_id: z.string().optional(),
   team_id: z.string().optional(),
 })
 
 type FormData = z.infer<typeof schema>
 
-type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+type OrgUser = PickerUser
 type Department = { id: string; name: string }
-type Team = { id: string; name: string }
+type Team = { id: string; name: string; team_members?: Array<{ user_id: string; profiles?: OrgUser | null }> }
 
 export type ExistingAtemItem = {
   id: string
@@ -38,6 +34,8 @@ export type ExistingAtemItem = {
   priority: string
   status: string
   deadline: string | null
+  deadline_text: string | null
+  action_plan: string | null
   impact: string | null
   dependencies: string | null
   strategic_alignment: string | null
@@ -66,8 +64,14 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
   const [selectedWatchers, setSelectedWatchers] = useState<OrgUser[]>([])
   const [tags, setTags] = useState<string[]>(item?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
-  const [userSearch, setUserSearch] = useState('')
-  const [watcherSearch, setWatcherSearch] = useState('')
+  const [taskContent, setTaskContent] = useState(item?.task ?? '')
+  const [taskError, setTaskError] = useState('')
+  const [deadlineText, setDeadlineText] = useState(item?.deadline_text ?? '')
+  const [impact, setImpact] = useState(item?.impact ?? '')
+  const [dependencies, setDependencies] = useState(item?.dependencies ?? '')
+  const [strategicAlignment, setStrategicAlignment] = useState(item?.strategic_alignment ?? '')
+  const [consequencesOfDelay, setConsequencesOfDelay] = useState(item?.consequences_of_delay ?? '')
+  const [actionPlan, setActionPlan] = useState(item?.action_plan ?? '')
 
   useEffect(() => {
     if (open && item?.id) {
@@ -82,23 +86,24 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
     if (!open) {
       setSelectedAssignees([])
       setSelectedWatchers([])
-      setUserSearch('')
-      setWatcherSearch('')
       setTags(item?.tags ?? [])
+      setTaskContent(item?.task ?? '')
+      setTaskError('')
+      setDeadlineText(item?.deadline_text ?? '')
+      setImpact(item?.impact ?? '')
+      setDependencies(item?.dependencies ?? '')
+      setStrategicAlignment(item?.strategic_alignment ?? '')
+      setConsequencesOfDelay(item?.consequences_of_delay ?? '')
+      setActionPlan(item?.action_plan ?? '')
     }
   }, [open, item?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: item ? {
-      task: item.task,
       priority: item.priority as FormData['priority'],
       status: item.status as FormData['status'],
-      deadline: item.deadline ? item.deadline.split('T')[0] : '',
-      impact: item.impact ?? '',
-      dependencies: item.dependencies ?? '',
-      strategic_alignment: item.strategic_alignment ?? '',
-      consequences_of_delay: item.consequences_of_delay ?? '',
+      nearest_deadline: item.deadline ? item.deadline.split('T')[0] : '',
       estimated_time: item.estimated_time?.toString() ?? '',
       dept_id: item.dept_id ?? '',
       team_id: item.team_id ?? '',
@@ -109,17 +114,22 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
   })
 
   async function onSubmit(data: FormData) {
+    const plainTask = taskContent.replace(/<[^>]*>/g, '').trim()
+    if (!plainTask) { setTaskError('Task is required'); return }
+    setTaskError('')
     try {
       const payload = {
-        task: data.task,
+        task: taskContent,
         priority: data.priority,
         status: data.status,
-        deadline: data.deadline ? new Date(data.deadline).toISOString() : null,
-        impact: data.impact || null,
-        dependencies: data.dependencies || null,
-        strategic_alignment: data.strategic_alignment || null,
-        consequences_of_delay: data.consequences_of_delay || null,
+        deadline_text: deadlineText || null,
+        deadline: data.nearest_deadline ? new Date(data.nearest_deadline).toISOString() : null,
+        impact: impact || null,
+        dependencies: dependencies || null,
+        strategic_alignment: strategicAlignment || null,
+        consequences_of_delay: consequencesOfDelay || null,
         estimated_time: data.estimated_time ? parseFloat(data.estimated_time) : null,
+        action_plan: actionPlan || null,
         dept_id: data.dept_id || null,
         team_id: data.team_id || null,
         tags,
@@ -152,6 +162,13 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
       setSelectedAssignees([])
       setSelectedWatchers([])
       setTags([])
+      setTaskContent('')
+      setDeadlineText('')
+      setImpact('')
+      setDependencies('')
+      setStrategicAlignment('')
+      setConsequencesOfDelay('')
+      setActionPlan('')
       if (!onCreated) router.refresh()
     } catch (err) {
       toast.error((err as Error).message)
@@ -163,19 +180,6 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
     if (t && !tags.includes(t)) setTags([...tags, t])
     setTagInput('')
   }
-
-  const filteredUsers = users.filter(
-    u => !selectedAssignees.find(a => a.id === u.id) &&
-      (u.full_name.toLowerCase().includes(userSearch.toLowerCase()) ||
-       u.email.toLowerCase().includes(userSearch.toLowerCase()))
-  )
-
-  const filteredWatchers = users.filter(
-    u => !selectedWatchers.find(w => w.id === u.id) &&
-      !selectedAssignees.find(a => a.id === u.id) &&
-      (u.full_name.toLowerCase().includes(watcherSearch.toLowerCase()) ||
-       u.email.toLowerCase().includes(watcherSearch.toLowerCase()))
-  )
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -204,7 +208,8 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Task *
                   </span>
                 </label>
-                <Input placeholder="Describe the action to be taken..." error={errors.task?.message} {...register('task')} autoFocus />
+                <RichTextEditor value={taskContent} onChange={setTaskContent} placeholder="Describe the action to be taken..." />
+                {taskError && <p className="text-xs text-red-500 mt-1">{taskError}</p>}
               </div>
 
               {/* Priority / Status */}
@@ -229,26 +234,15 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                 </div>
               </div>
 
-              {/* D — Deadline / E — Estimated Time */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="bg-orange-100 text-orange-700 rounded px-1.5 py-0.5 text-xs font-bold">D</span>
-                      Deadline
-                    </span>
-                  </label>
-                  <Input type="date" {...register('deadline')} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 text-xs font-bold">E</span>
-                      Estimated Time (hours)
-                    </span>
-                  </label>
-                  <Input type="number" step="0.5" min="0" placeholder="0" {...register('estimated_time')} />
-                </div>
+              {/* D — Deadline (free text, rich) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="bg-orange-100 text-orange-700 rounded px-1.5 py-0.5 text-xs font-bold">D</span>
+                    Deadline
+                  </span>
+                </label>
+                <RichTextEditor value={deadlineText} onChange={setDeadlineText} placeholder="e.g. Frontend: 15 Jan, Backend: 1 Feb, Deployment: 15 Feb" />
               </div>
 
               {/* I — Impact */}
@@ -259,12 +253,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Impact
                   </span>
                 </label>
-                <textarea
-                  rows={2}
-                  placeholder="What impact will completing this have?"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  {...register('impact')}
-                />
+                <RichTextEditor value={impact} onChange={setImpact} placeholder="What impact will completing this have?" />
               </div>
 
               {/* D2 — Dependencies */}
@@ -275,12 +264,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Dependencies
                   </span>
                 </label>
-                <textarea
-                  rows={2}
-                  placeholder="What does this depend on? What blocks this?"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  {...register('dependencies')}
-                />
+                <RichTextEditor value={dependencies} onChange={setDependencies} placeholder="What does this depend on? What blocks this?" />
               </div>
 
               {/* S — Strategic Alignment */}
@@ -291,12 +275,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Strategic Alignment
                   </span>
                 </label>
-                <textarea
-                  rows={2}
-                  placeholder="How does this align with strategic objectives?"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  {...register('strategic_alignment')}
-                />
+                <RichTextEditor value={strategicAlignment} onChange={setStrategicAlignment} placeholder="How does this align with strategic objectives?" />
               </div>
 
               {/* C — Consequences of Delay */}
@@ -307,11 +286,39 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     Consequences of Delay
                   </span>
                 </label>
-                <textarea
-                  rows={2}
-                  placeholder="What happens if this is delayed or not done?"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  {...register('consequences_of_delay')}
+                <RichTextEditor value={consequencesOfDelay} onChange={setConsequencesOfDelay} placeholder="What happens if this is delayed or not done?" />
+              </div>
+
+              {/* E — Estimated Time */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 text-xs font-bold">E</span>
+                    Estimated Time (days)
+                  </span>
+                </label>
+                <Input type="number" step="0.5" min="0" placeholder="0" {...register('estimated_time')} />
+              </div>
+
+              {/* Nearest Deadline */}
+              <div className="border-t border-gray-100 pt-5">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="text-gray-500 text-xs">⏰</span>
+                    Nearest Deadline
+                    <span className="text-xs font-normal text-gray-400">(for reminder &amp; countdown)</span>
+                  </span>
+                </label>
+                <Input type="date" {...register('nearest_deadline')} />
+              </div>
+
+              {/* Action Plan */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Action Plan</label>
+                <RichTextEditor
+                  value={actionPlan}
+                  onChange={setActionPlan}
+                  placeholder="Outline the step-by-step action plan..."
                 />
               </div>
 
@@ -360,41 +367,14 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
               {/* Assignees */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Assignees</label>
-                {selectedAssignees.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {selectedAssignees.map(u => (
-                      <div key={u.id} className="flex items-center gap-1.5 bg-indigo-50 rounded-full pl-1 pr-2 py-0.5">
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
-                        <span className="text-xs font-medium text-indigo-700">{u.full_name.split(' ')[0]}</span>
-                        <button type="button" onClick={() => setSelectedAssignees(selectedAssignees.filter(a => a.id !== u.id))} className="text-indigo-300 hover:text-red-500 text-xs">×</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Input
-                  placeholder="Search and add assignees..."
-                  value={userSearch}
-                  onChange={e => setUserSearch(e.target.value)}
+                <AssigneePicker
+                  users={users}
+                  teams={teams}
+                  departments={departments}
+                  selected={selectedAssignees}
+                  onChange={setSelectedAssignees}
+                  pillColor="indigo"
                 />
-                {userSearch && (
-                  <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                    {filteredUsers.slice(0, 8).map(u => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { setSelectedAssignees([...selectedAssignees, u]); setUserSearch('') }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
-                      >
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 text-xs" />
-                        <span>{u.full_name}</span>
-                        <span className="text-gray-400 text-xs ml-auto">{u.email}</span>
-                      </button>
-                    ))}
-                    {filteredUsers.length === 0 && (
-                      <p className="px-3 py-2 text-sm text-gray-400">No users found</p>
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* Watchers / CC */}
@@ -403,41 +383,16 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                   <Eye className="h-3.5 w-3.5 text-gray-400" />
                   CC <span className="font-normal text-gray-400">(spectators — can track but are not responsible)</span>
                 </label>
-                {selectedWatchers.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {selectedWatchers.map(u => (
-                      <div key={u.id} className="flex items-center gap-1.5 bg-amber-50 rounded-full pl-1 pr-2 py-0.5">
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-5 h-5 text-xs" />
-                        <span className="text-xs font-medium text-amber-700">{u.full_name.split(' ')[0]}</span>
-                        <button type="button" onClick={() => setSelectedWatchers(selectedWatchers.filter(w => w.id !== u.id))} className="text-amber-300 hover:text-red-500 text-xs">×</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Input
+                <AssigneePicker
+                  users={users}
+                  teams={teams}
+                  departments={departments}
+                  selected={selectedWatchers}
+                  excluded={selectedAssignees}
+                  onChange={setSelectedWatchers}
                   placeholder="Add people to CC..."
-                  value={watcherSearch}
-                  onChange={e => setWatcherSearch(e.target.value)}
+                  pillColor="amber"
                 />
-                {watcherSearch && (
-                  <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                    {filteredWatchers.slice(0, 8).map(u => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { setSelectedWatchers([...selectedWatchers, u]); setWatcherSearch('') }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
-                      >
-                        <UserAvatar name={u.full_name} avatarUrl={u.avatar_url} size="sm" className="w-6 h-6 text-xs" />
-                        <span>{u.full_name}</span>
-                        <span className="text-gray-400 text-xs ml-auto">{u.email}</span>
-                      </button>
-                    ))}
-                    {filteredWatchers.length === 0 && (
-                      <p className="px-3 py-2 text-sm text-gray-400">No users found</p>
-                    )}
-                  </div>
-                )}
               </div>
             </form>
           </div>

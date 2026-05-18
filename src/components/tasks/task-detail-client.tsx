@@ -538,6 +538,13 @@ export function TaskDetailClient({
     router.refresh()
   }
 
+  async function handleStatusChange(newStatus: string) {
+    const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
+    if (error) { toast.error(error.message); return }
+    setTaskStatus(newStatus)
+    toast.success('Status updated')
+  }
+
   async function deleteComment(id: string) {
     const { error } = await supabase.from('task_comments').delete().eq('id', id)
     if (error) toast.error(error.message)
@@ -701,6 +708,7 @@ export function TaskDetailClient({
   const canDelete = isOwner || isDeptHeadPlus
   const isAssignee = assigneesList.some(a => a.id === currentUserId)
   const canManageAssignees = isOwner || isAssignee || isDeptHeadPlus
+  const canChangeStatus = isOwner || isAssignee || isDeptHeadPlus
 
   const doneSubs = subtasks.filter(s => s.status === 'done').length
 
@@ -797,7 +805,7 @@ export function TaskDetailClient({
               <h3 className="text-sm font-semibold text-gray-700">Details</h3>
 
               {/* Complete button */}
-              {taskStatus !== 'done' && taskStatus !== 'cancelled' && (
+              {canChangeStatus && taskStatus !== 'done' && taskStatus !== 'cancelled' && (
                 <div>
                   {confirmComplete ? (
                     <div className="flex items-center gap-2">
@@ -834,9 +842,23 @@ export function TaskDetailClient({
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500">Status</span>
-                  <Badge variant={STATUS_VARIANT[taskStatus as keyof typeof STATUS_VARIANT] ?? 'secondary'}>
-                    {STATUS_LABEL[taskStatus as keyof typeof STATUS_LABEL] ?? taskStatus}
-                  </Badge>
+                  {canChangeStatus ? (
+                    <select
+                      value={taskStatus}
+                      onChange={e => handleStatusChange(e.target.value)}
+                      className="text-xs font-medium rounded-md border border-gray-200 px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer"
+                    >
+                      <option value="todo">To Do</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="in_review">In Review</option>
+                      <option value="done">Done</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  ) : (
+                    <Badge variant={STATUS_VARIANT[taskStatus as keyof typeof STATUS_VARIANT] ?? 'secondary'}>
+                      {STATUS_LABEL[taskStatus as keyof typeof STATUS_LABEL] ?? taskStatus}
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500">Priority</span>
