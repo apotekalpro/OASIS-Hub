@@ -60,6 +60,10 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
 
   function refresh() { router.refresh() }
 
+  function handleTaskDeleted(taskId: string) {
+    setTasks(prev => prev.filter(t => t.id !== taskId))
+  }
+
   async function handleTaskCreated(taskId: string) {
     const supabase = createClient()
     type RawAssignee = { user_id: string; profiles?: { id: string; full_name: string; avatar_url: string | null } | null }
@@ -301,6 +305,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
           teams={teams}
           departments={departments}
           onRefresh={refresh}
+          onDelete={handleTaskDeleted}
         />
       ) : (
         <KanbanBoard

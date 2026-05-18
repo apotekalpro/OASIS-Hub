@@ -6,7 +6,7 @@ import { TaskCardData, PRIORITY_DOT, STATUS_LABEL, STATUS_VARIANT } from './task
 import { Badge } from '@/components/ui/badge'
 import { UserAvatar } from '@/components/ui/avatar'
 import { TaskForm } from './task-form'
-import { Calendar, ChevronUp, ChevronDown, ChevronsUpDown, CheckCircle2, X } from 'lucide-react'
+import { Calendar, ChevronUp, ChevronDown, ChevronsUpDown, CheckCircle2, X, Trash2 } from 'lucide-react'
 import { getDueStatus, cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -33,6 +33,7 @@ interface Props {
   teams: Team[]
   departments: Department[]
   onRefresh: () => void
+  onDelete?: (taskId: string) => void
 }
 
 function SortIcon({ field, active, dir }: { field: string; active: string; dir: SortDir }) {
@@ -42,11 +43,13 @@ function SortIcon({ field, active, dir }: { field: string; active: string; dir: 
     : <ChevronDown className="h-3.5 w-3.5 text-indigo-500" />
 }
 
-export function TaskList({ tasks, orgId, currentUserId, users, teams, departments, onRefresh }: Props) {
+export function TaskList({ tasks, orgId, currentUserId, users, teams, departments, onRefresh, onDelete }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('created_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [completing, setCompleting] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -61,6 +64,18 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
     else { toast.success('Task marked as complete!'); onRefresh() }
     setCompleting(null)
     setConfirmId(null)
+  }
+
+  async function handleDelete(taskId: string) {
+    setDeleting(taskId)
+    const supabase = createClient()
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+    if (error) { toast.error(error.message); setDeleting(null); return }
+    toast.success('Task deleted')
+    onDelete?.(taskId)
+    onRefresh()
+    setDeleting(null)
+    setDeleteConfirmId(null)
   }
 
   const sorted = [...tasks].sort((a, b) => {
@@ -227,6 +242,29 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
                       }
                       onCreated={onRefresh}
                     />
+                    {deleteConfirmId === task.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleDelete(task.id)}
+                          disabled={deleting === task.id}
+                          className="flex items-center gap-1 text-xs bg-red-600 text-white px-2 py-1 rounded-md hover:bg-red-700 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          {deleting === task.id ? 'Deleting…' : 'Delete'}
+                        </button>
+                        <button onClick={() => setDeleteConfirmId(null)} className="text-gray-400 hover:text-gray-600">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setDeleteConfirmId(task.id)}
+                        className="text-xs text-gray-400 hover:text-red-600 transition-colors"
+                        title="Delete task"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
