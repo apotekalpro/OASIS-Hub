@@ -234,6 +234,8 @@ export default async function AnalyticsPage({
       let taskQuery = supabase.from('tasks')
         .select('id, title, status, priority, due_date, created_at, created_by, dept_id, team_id')
         .eq('org_id', orgId)
+        .is('parent_id', null)
+        .is('kr_id', null)
         .order('created_at', { ascending: false })
 
       if (deptFilter) taskQuery = taskQuery.eq('dept_id', deptFilter)
@@ -340,8 +342,8 @@ export default async function AnalyticsPage({
       supabase.rpc('get_top_contributors', { p_org_id: orgId, p_limit: 8 }),
       supabase.rpc('get_form_stats_by_dept', { p_org_id: orgId }),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('is_active', true),
-      supabase.from('tasks').select('priority').eq('org_id', orgId).not('status', 'in', '("done","cancelled")'),
-      supabase.from('tasks').select('id, title, status, created_at').eq('org_id', orgId).order('created_at', { ascending: false }).limit(10),
+      supabase.from('tasks').select('priority').eq('org_id', orgId).not('status', 'in', '("done","cancelled")').is('parent_id', null).is('kr_id', null),
+      supabase.from('tasks').select('id, title, status, created_at').eq('org_id', orgId).is('parent_id', null).is('kr_id', null).order('created_at', { ascending: false }).limit(10),
     ])
 
     type TaskStats = { total: number; todo: number; in_progress: number; in_review: number; done: number; cancelled: number; overdue: number; urgent: number; high: number }
@@ -382,6 +384,8 @@ export default async function AnalyticsPage({
     let taskQuery = supabase.from('tasks')
       .select('id, title, status, priority, due_date, created_at, created_by')
       .eq('dept_id', deptId)
+      .is('parent_id', null)
+      .is('kr_id', null)
       .order('created_at', { ascending: false })
 
     const [tasksRes, membersRes, teamsRes] = await Promise.all([
@@ -459,7 +463,7 @@ export default async function AnalyticsPage({
     // Team stats for dept teams
     const deptTeams = (teamsRes.data ?? []) as { id: string; name: string }[]
     const teamTaskMap = await (deptTeams.length > 0
-      ? supabase.from('tasks').select('id, team_id, status, due_date').in('team_id', deptTeams.map(t => t.id))
+      ? supabase.from('tasks').select('id, team_id, status, due_date').in('team_id', deptTeams.map(t => t.id)).is('parent_id', null).is('kr_id', null)
       : Promise.resolve({ data: [] }))
     const teamTaskRows = (teamTaskMap.data ?? []) as { id: string; team_id: string; status: string; due_date: string | null }[]
     const teamStats = deptTeams.map(team => {
@@ -521,6 +525,8 @@ export default async function AnalyticsPage({
     supabase.from('tasks')
       .select('id, title, status, priority, due_date, created_at')
       .in('id', allIds)
+      .is('parent_id', null)
+      .is('kr_id', null)
       .order('created_at', { ascending: false }),
   ])
 
