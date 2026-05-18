@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
 type View = 'list' | 'kanban'
-type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
+type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null; dept_id?: string | null }
 type TeamMemberProfile = { id: string; full_name: string; email: string; avatar_url: string | null }
 type Team = { id: string; name: string; team_members?: Array<{ user_id: string; profiles?: TeamMemberProfile | null }> }
 type Department = { id: string; name: string }
@@ -41,6 +41,8 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<string[]>(['todo', 'in_progress', 'in_review'])
   const [filterPriority, setFilterPriority] = useState<string[]>([])
+  const [filterDept, setFilterDept] = useState<string[]>([])
+  const [filterUser, setFilterUser] = useState<string[]>([])
 
   // Default active view: excludes done/cancelled
   const DEFAULT_STATUS_FILTER = ['todo', 'in_progress', 'in_review']
@@ -97,6 +99,12 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
     router.refresh()
   }
 
+  const userDeptMap = useMemo(() => {
+    const m = new Map<string, string | null>()
+    users.forEach(u => m.set(u.id, u.dept_id ?? null))
+    return m
+  }, [users])
+
   const filtered = useMemo(() => {
     let result = tasks
     if (scope === 'mine') {
@@ -115,10 +123,23 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
     }
     if (filterStatus.length > 0) result = result.filter(t => filterStatus.includes(t.status))
     if (filterPriority.length > 0) result = result.filter(t => filterPriority.includes(t.priority))
+    if (filterDept.length > 0) {
+      result = result.filter(t =>
+        t.assignees?.some(a => {
+          const deptId = userDeptMap.get(a.id)
+          return deptId && filterDept.includes(deptId)
+        })
+      )
+    }
+    if (filterUser.length > 0) {
+      result = result.filter(t =>
+        t.assignees?.some(a => filterUser.includes(a.id))
+      )
+    }
     return result
-  }, [tasks, search, filterStatus, filterPriority, scope, currentUserId])
+  }, [tasks, search, filterStatus, filterPriority, filterDept, filterUser, scope, currentUserId, userDeptMap])
 
-  const activeFilters = (isDefaultFilter ? 0 : filterStatus.length) + filterPriority.length
+  const activeFilters = (isDefaultFilter ? 0 : filterStatus.length) + filterPriority.length + filterDept.length + filterUser.length
   const counts = useMemo(() => ({
     todo: tasks.filter(t => t.status === 'todo').length,
     in_progress: tasks.filter(t => t.status === 'in_progress').length,
@@ -130,6 +151,12 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
   }
   function togglePriority(p: string) {
     setFilterPriority(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
+  }
+  function toggleDept(id: string) {
+    setFilterDept(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  function toggleUser(id: string) {
+    setFilterUser(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
   return (
@@ -228,7 +255,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
 
         {activeFilters > 0 && (
           <button
-            onClick={() => { setFilterStatus(DEFAULT_STATUS_FILTER); setFilterPriority([]) }}
+            onClick={() => { setFilterStatus(DEFAULT_STATUS_FILTER); setFilterPriority([]); setFilterDept([]); setFilterUser([]) }}
             className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
           >
             <X className="h-3 w-3" /> Clear filters
@@ -292,6 +319,48 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
               ))}
             </div>
           </div>
+          {departments.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Department</p>
+              <div className="flex flex-wrap gap-2">
+                {departments.map(d => (
+                  <button
+                    key={d.id}
+                    onClick={() => toggleDept(d.id)}
+                    className={cn(
+                      'rounded-full px-3 py-1 text-xs font-medium border transition-all',
+                      filterDept.includes(d.id)
+                        ? 'bg-indigo-600 border-indigo-600 text-white'
+                        : 'border-gray-300 text-gray-600 hover:border-indigo-400'
+                    )}
+                  >
+                    {d.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {users.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Assignee</p>
+              <div className="flex flex-wrap gap-2">
+                {users.map(u => (
+                  <button
+                    key={u.id}
+                    onClick={() => toggleUser(u.id)}
+                    className={cn(
+                      'rounded-full px-3 py-1 text-xs font-medium border transition-all',
+                      filterUser.includes(u.id)
+                        ? 'bg-indigo-600 border-indigo-600 text-white'
+                        : 'border-gray-300 text-gray-600 hover:border-indigo-400'
+                    )}
+                  >
+                    {u.full_name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
