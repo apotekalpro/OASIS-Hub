@@ -154,19 +154,19 @@ export async function changePassword(newPassword: string) {
 }
 
 // ─── Toggle user active status ────────────────────────────────────────────────
-export async function toggleUserActive(userId: string, isActive: boolean) {
+export async function toggleUserActive(userId: string, isActive: boolean): Promise<{ success: true } | { success: false; error: string }> {
   const adminClient = createAdminClient()
 
   const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
     ban_duration: isActive ? 'none' : '876600h',
   })
-  if (authError) throw new Error(authError.message)
+  if (authError) return { success: false, error: authError.message }
 
   const { error: profileError } = await adminClient
     .from('profiles')
     .update({ is_active: isActive })
     .eq('id', userId)
-  if (profileError) throw new Error(profileError.message)
+  if (profileError) return { success: false, error: profileError.message }
 
   revalidatePath('/admin/users')
   return { success: true }
@@ -227,7 +227,12 @@ export async function signIn(email: string, password: string): Promise<{ success
   const supabase = await createClient()
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) return { success: false, error: error.message }
+  if (error) {
+    const msg = error.message.toLowerCase().includes('ban')
+      ? 'Your account has been deactivated. Please contact your system administrator.'
+      : error.message
+    return { success: false, error: msg }
+  }
 
   // Update last login (best-effort, don't block on failure)
   await supabase

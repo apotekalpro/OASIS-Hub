@@ -15,6 +15,8 @@ type OrgUser = PickerUser
 type Department = { id: string; name: string }
 type Team = { id: string; name: string; team_members?: Array<{ user_id: string; profiles?: OrgUser | null }> }
 
+type SubtaskDraft = { _id: string; title: string; priority: 'low' | 'medium' | 'high' }
+
 type KeyResultDraft = {
   _id: string
   title: string
@@ -24,6 +26,7 @@ type KeyResultDraft = {
   unit: string
   due_date: string
   description: string
+  subtasks: SubtaskDraft[]
 }
 
 type ExistingObjective = {
@@ -67,7 +70,12 @@ function newKrDraft(): KeyResultDraft {
     unit: '',
     due_date: '',
     description: '',
+    subtasks: [],
   }
+}
+
+function newSubtaskDraft(): SubtaskDraft {
+  return { _id: Math.random().toString(36).slice(2), title: '', priority: 'medium' }
 }
 
 export function OkrForm({ orgId, currentUserId, users, departments, teams, objective, trigger, onCreated }: Props) {
@@ -120,6 +128,7 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
               unit: kr.unit ?? '',
               due_date: kr.due_date ?? '',
               description: kr.description ?? '',
+              subtasks: [],
             })))
           }
         })
@@ -159,6 +168,21 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
     setKeyResults(prev => prev.map(kr => kr._id === id ? { ...kr, [field]: value } : kr))
   }
 
+  function addSubtask(krId: string) {
+    const st = newSubtaskDraft()
+    setKeyResults(prev => prev.map(kr => kr._id === krId ? { ...kr, subtasks: [...kr.subtasks, st] } : kr))
+  }
+
+  function removeSubtask(krId: string, stId: string) {
+    setKeyResults(prev => prev.map(kr => kr._id === krId ? { ...kr, subtasks: kr.subtasks.filter(s => s._id !== stId) } : kr))
+  }
+
+  function updateSubtask(krId: string, stId: string, field: keyof SubtaskDraft, value: string) {
+    setKeyResults(prev => prev.map(kr =>
+      kr._id === krId ? { ...kr, subtasks: kr.subtasks.map(s => s._id === stId ? { ...s, [field]: value } : s) } : kr
+    ))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim()) { toast.error('Title is required'); return }
@@ -191,6 +215,7 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
           unit: kr.unit.trim() || null,
           due_date: kr.due_date || null,
           description: kr.description || null,
+          subtasks: kr.subtasks.filter(s => s.title.trim()).map(s => ({ title: s.title.trim(), priority: s.priority })),
         })),
       }
 
@@ -447,6 +472,53 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
                                 onChange={val => updateKr(kr._id, 'description', val)}
                                 placeholder="Describe what achieving this key result means..."
                               />
+                            </div>
+
+                            {/* Subtasks */}
+                            <div className="col-span-2">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="block text-xs text-gray-500">Subtasks</label>
+                                <button
+                                  type="button"
+                                  onClick={() => addSubtask(kr._id)}
+                                  className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                                >
+                                  <Plus className="h-3 w-3" /> Add subtask
+                                </button>
+                              </div>
+                              {kr.subtasks.length === 0 ? (
+                                <p className="text-xs text-gray-400 italic">No subtasks yet. Click "Add subtask" to add tasks linked to this KR.</p>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  {kr.subtasks.map(st => (
+                                    <div key={st._id} className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={st.title}
+                                        onChange={e => updateSubtask(kr._id, st._id, 'title', e.target.value)}
+                                        placeholder="Subtask title..."
+                                        className="flex-1 h-7 rounded border border-gray-200 bg-white px-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 placeholder:text-gray-400"
+                                      />
+                                      <select
+                                        value={st.priority}
+                                        onChange={e => updateSubtask(kr._id, st._id, 'priority', e.target.value)}
+                                        className="h-7 rounded border border-gray-200 bg-white px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                      >
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                      </select>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeSubtask(kr._id, st._id)}
+                                        className="text-gray-300 hover:text-red-500 shrink-0"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
