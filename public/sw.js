@@ -6,7 +6,7 @@ self.addEventListener('install', event => {
   // Pre-cache only lightweight assets
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache =>
-      cache.addAll(['/icon-192.png', '/icon-512.png']).catch(() => {})
+      cache.addAll(['/icon-192-v2.png', '/icon-512-v2.png']).catch(() => {})
     )
   )
 })

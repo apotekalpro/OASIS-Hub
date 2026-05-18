@@ -27,13 +27,13 @@
 
 # PWA: allow icons/logo to be fetched cross-origin (manifest icon requirement)
 [[headers]]
-  for = "/icon-192.png"
+  for = "/icon-192-v2.png"
   [headers.values]
     Cache-Control = "public, max-age=86400"
     Access-Control-Allow-Origin = "*"
 
 [[headers]]
-  for = "/icon-512.png"
+  for = "/icon-512-v2.png"
   [headers.values]
     Cache-Control = "public, max-age=86400"
     Access-Control-Allow-Origin = "*"
