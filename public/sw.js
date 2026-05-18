@@ -1,4 +1,4 @@
-const CACHE_NAME = 'oasis-hub-v2'
+const CACHE_NAME = 'oasis-hub-v3'
 
 self.addEventListener('install', event => {
   // Take control immediately without waiting
