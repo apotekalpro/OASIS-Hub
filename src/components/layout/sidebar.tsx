@@ -228,7 +228,7 @@ export function Sidebar() {
       {/* ── Mobile top header ────────────────────────────────── */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-indigo-950 flex items-center justify-between px-4 shadow-md">
         <div className="flex items-center gap-2">
-          <Image src="/oasis-hub-logo.png" alt="OASIS Hub" width={44} height={44} className="h-11 w-11 object-contain" priority />
+          <Image src="/icon-192-v2.png" alt="OASIS Hub" width={44} height={44} className="h-11 w-11 object-contain" priority />
           <span className="font-bold text-white text-base leading-tight">OASIS Hub</span>
         </div>
         <div className="flex items-center gap-1">
@@ -332,7 +332,7 @@ export function Sidebar() {
           <div className="relative ml-auto w-72 max-w-[85vw] h-full flex flex-col bg-gradient-to-b from-indigo-950 via-indigo-900 to-blue-950">
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
               <div className="flex items-center gap-2">
-                <Image src="/oasis-hub-logo.png" alt="OASIS Hub" width={40} height={40} className="h-10 w-10 object-contain" />
+                <Image src="/icon-192-v2.png" alt="OASIS Hub" width={40} height={40} className="h-10 w-10 object-contain" />
                 <span className="font-bold text-white text-sm">OASIS Hub</span>
               </div>
               <button onClick={() => setDrawerOpen(false)} className="text-indigo-300 hover:text-white p-1">

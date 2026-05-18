@@ -9,8 +9,8 @@ export const metadata: Metadata = {
   title: "OASIS Hub",
   description: "Internal Team & Task Management System",
   icons: {
-    icon: "/oasis-hub-logo.png",
-    apple: "/oasis-hub-logo.png",
+    icon: "/icon-192-v2.png",
+    apple: "/icon-192-v2.png",
   },
   appleWebApp: {
     capable: true,
