@@ -7,12 +7,25 @@ import { useAuthStore } from '@/store/auth'
 import { toast } from 'sonner'
 import type { AppNotification } from '@/types/database'
 
+// Pre-warm AudioContext on first user gesture so the browser allows sound
+let audioCtx: AudioContext | null = null
+
+function ensureAudioContext() {
+  if (!audioCtx) {
+    try {
+      audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+    } catch { /* not available */ }
+  }
+  if (audioCtx?.state === 'suspended') {
+    audioCtx.resume().catch(() => {})
+  }
+}
+
 function playNotificationSound() {
   try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+    if (!audioCtx) return
+    const ctx = audioCtx
     const now = ctx.currentTime
-
-    // Two-tone chime: high note then slightly lower
     const freqs = [880, 660]
     freqs.forEach((freq, i) => {
       const osc = ctx.createOscillator()
@@ -27,15 +40,21 @@ function playNotificationSound() {
       osc.start(now + i * 0.15)
       osc.stop(now + i * 0.15 + 0.4)
     })
-  } catch {
-    // AudioContext not available (SSR or browser restriction)
-  }
+  } catch { /* ignore */ }
 }
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const profile = useAuthStore(s => s.profile)
   const { setNotifications, addNotification } = useNotificationStore()
   const initialised = useRef(false)
+
+  // Pre-warm AudioContext on first click/keydown anywhere on the page
+  useEffect(() => {
+    const warm = () => { ensureAudioContext(); document.removeEventListener('click', warm); document.removeEventListener('keydown', warm) }
+    document.addEventListener('click', warm, { once: true })
+    document.addEventListener('keydown', warm, { once: true })
+    return () => { document.removeEventListener('click', warm); document.removeEventListener('keydown', warm) }
+  }, [])
 
   useEffect(() => {
     if (!profile?.id) return
@@ -71,7 +90,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           const notification = payload.new as AppNotification
           addNotification(notification)
 
-          // Play chime + show toast
           if (initialised.current) playNotificationSound()
 
           toast(notification.title, {

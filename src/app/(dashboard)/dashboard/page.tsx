@@ -114,13 +114,14 @@ export default async function DashboardPage() {
       ? supabase.from('atem_items').select('id, task, status, priority, deadline').in('id', myAtemIds).not('status', 'eq', 'completed').order('deadline', { ascending: true, nullsFirst: false }).limit(5)
       : Promise.resolve({ data: [] }),
     myOkrIds.length > 0
-      ? supabase.from('okr_objectives').select('id, title, status, progress, end_date').in('id', myOkrIds).not('status', 'in', '("completed","cancelled")').order('end_date', { ascending: true, nullsFirst: false }).limit(5)
+      ? supabase.from('okr_objectives').select('id, title, status, progress, end_date, okr_key_results(id, status)').in('id', myOkrIds).not('status', 'in', '("completed","cancelled")').order('end_date', { ascending: true, nullsFirst: false }).limit(5)
       : Promise.resolve({ data: [] }),
   ])
 
   function stripHtml(html: string) { return html.replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim() }
   type AtemItem = { id: string; task: string; status: string; priority: string; deadline: string | null }
-  type OkrObj = { id: string; title: string; status: string; progress: number; end_date: string | null }
+  type OkrKr = { id: string; status: string }
+  type OkrObj = { id: string; title: string; status: string; progress: number; end_date: string | null; okr_key_results: OkrKr[] }
   const myAtemItems = (atemItemsRes.data ?? []) as AtemItem[]
   const myOkrObjs = (okrObjRes.data ?? []) as OkrObj[]
 
@@ -337,27 +338,34 @@ export default async function DashboardPage() {
                 <div className="px-6 py-8 text-center text-gray-500 text-sm">No active OKRs assigned.</div>
               ) : (
                 <ul className="divide-y divide-gray-100">
-                  {myOkrObjs.map(obj => (
-                    <li key={obj.id}>
-                      <Link href={`/okr/${obj.id}`} className="flex items-center gap-3 px-6 py-3 hover:bg-gray-50 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{obj.title}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="flex-1 bg-gray-200 rounded-full h-1.5">
-                              <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.round(obj.progress)}%` }} />
+                  {myOkrObjs.map(obj => {
+                    const krs = obj.okr_key_results ?? []
+                    const krDone = krs.filter(k => k.status === 'completed').length
+                    return (
+                      <li key={obj.id}>
+                        <Link href={`/okr/${obj.id}`} className="flex items-center gap-3 px-6 py-3 hover:bg-gray-50 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{obj.title}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                                <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.round(obj.progress)}%` }} />
+                              </div>
+                              <span className="text-xs text-gray-500 shrink-0">{Math.round(obj.progress)}%</span>
                             </div>
-                            <span className="text-xs text-gray-500 shrink-0">{Math.round(obj.progress)}%</span>
+                            {krs.length > 0 && (
+                              <p className="text-xs text-gray-400 mt-0.5">{krDone}/{krs.length} KRs done</p>
+                            )}
                           </div>
-                        </div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
-                          obj.status === 'on_track' ? 'bg-green-100 text-green-700' :
-                          obj.status === 'at_risk' ? 'bg-amber-100 text-amber-700' :
-                          obj.status === 'behind' ? 'bg-red-100 text-red-700' :
-                          'bg-gray-100 text-gray-600'
-                        }`}>{obj.status.replace('_', ' ')}</span>
-                      </Link>
-                    </li>
-                  ))}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                            obj.status === 'on_track' ? 'bg-green-100 text-green-700' :
+                            obj.status === 'at_risk' ? 'bg-amber-100 text-amber-700' :
+                            obj.status === 'behind' ? 'bg-red-100 text-red-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>{obj.status.replace('_', ' ')}</span>
+                        </Link>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </CardContent>

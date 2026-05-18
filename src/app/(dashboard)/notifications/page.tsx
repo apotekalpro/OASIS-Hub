@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NotificationsClient } from '@/components/notifications/notifications-client'
+import type { AppNotification } from '@/types/database'
 
 export default async function NotificationsPage() {
   const supabase = await createClient()
@@ -13,7 +14,5 @@ export default async function NotificationsPage() {
     .order('created_at', { ascending: false })
     .limit(100)
 
-  type Notif = { id: string; type: string; title: string; body: string | null; data: Record<string, unknown>; is_read: boolean; created_at: string }
-
-  return <NotificationsClient notifications={(data as Notif[]) ?? []} />
+  return <NotificationsClient notifications={(data as AppNotification[]) ?? []} />
 }
