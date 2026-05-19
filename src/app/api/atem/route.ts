@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { sendEmail } from '@/lib/email/send'
+import { atemAssignedEmail } from '@/lib/email/templates'
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? process.env.URL ?? 'https://oasishub.netlify.app'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,8 +40,9 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const profile = await admin.from('profiles').select('org_id').eq('id', user.id).single()
+  const profile = await admin.from('profiles').select('org_id, full_name').eq('id', user.id).single()
   const orgId = profile.data?.org_id
+  const actorName = profile.data?.full_name ?? 'Someone'
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 400 })
 
   const body = await req.json()
@@ -72,6 +77,21 @@ export async function POST(req: NextRequest) {
     await admin.from('atem_watchers').insert(
       watcherIds.map((uid: string) => ({ atem_id: item.id, user_id: uid }))
     )
+  }
+
+  // Fire-and-forget email to assignees (excluding creator)
+  const notifyIds = (assigneeIds as string[]).filter((uid: string) => uid !== user.id)
+  if (notifyIds.length > 0) {
+    const { data: recipients } = await admin
+      .from('profiles').select('id, full_name, email, contact_email').in('id', notifyIds)
+    const atemUrl = `${APP_URL}/atem`
+    const deadline = item.deadline
+      ? new Date(item.deadline).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })
+      : undefined
+    ;(recipients ?? []).filter(r => r.email).forEach(r => {
+      const tpl = atemAssignedEmail({ recipientName: r.full_name, atemTask: item.task, assignedBy: actorName, deadline, atemUrl })
+      sendEmail({ to: r.contact_email || r.email, subject: tpl.subject, html: tpl.html }).catch(() => {})
+    })
   }
 
   return NextResponse.json({ item }, { status: 201 })

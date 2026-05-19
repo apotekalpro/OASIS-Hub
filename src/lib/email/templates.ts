@@ -89,7 +89,68 @@ export function welcomeUserEmail(params: {
   }
 }
 
-export function formAssignedEmail(params: {
+export function okrAssignedEmail(params: {
+  recipientName: string
+  objectiveTitle: string
+  assignedBy: string
+  dueDate?: string
+  okrUrl: string
+}) {
+  return {
+    subject: `[OASIS Hub] OKR assigned to you: ${params.objectiveTitle}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#7c3aed;padding:24px;border-radius:8px 8px 0 0">
+          <h1 style="color:white;margin:0;font-size:20px">OASIS Hub — OKR Assignment</h1>
+        </div>
+        <div style="background:#f9fafb;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb">
+          <p>Hi <strong>${params.recipientName}</strong>,</p>
+          <p>You have been assigned to an OKR by <strong>${params.assignedBy}</strong>.</p>
+          <div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0">
+            <h3 style="margin:0 0 8px;color:#111827">${params.objectiveTitle}</h3>
+            ${params.dueDate ? `<p style="color:#6b7280;margin:0">Target date: ${params.dueDate}</p>` : ''}
+          </div>
+          <a href="${params.okrUrl}" style="display:inline-block;background:#7c3aed;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+            View OKR
+          </a>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">OASIS Hub — Internal Management System</p>
+        </div>
+      </div>
+    `,
+  }
+}
+
+export function atemAssignedEmail(params: {
+  recipientName: string
+  atemTask: string
+  assignedBy: string
+  deadline?: string
+  atemUrl: string
+}) {
+  return {
+    subject: `[OASIS Hub] ATEM item assigned to you: ${params.atemTask}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#0891b2;padding:24px;border-radius:8px 8px 0 0">
+          <h1 style="color:white;margin:0;font-size:20px">OASIS Hub — ATEM Assignment</h1>
+        </div>
+        <div style="background:#f9fafb;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb">
+          <p>Hi <strong>${params.recipientName}</strong>,</p>
+          <p>You have been assigned to an ATEM item by <strong>${params.assignedBy}</strong>.</p>
+          <div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0">
+            <h3 style="margin:0 0 8px;color:#111827">${params.atemTask}</h3>
+            ${params.deadline ? `<p style="color:#6b7280;margin:0">Deadline: ${params.deadline}</p>` : ''}
+          </div>
+          <a href="${params.atemUrl}" style="display:inline-block;background:#0891b2;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+            View ATEM
+          </a>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">OASIS Hub — Internal Management System</p>
+        </div>
+      </div>
+    `,
+  }
+}
+
   recipientName: string
   formTitle: string
   dueDate?: string
