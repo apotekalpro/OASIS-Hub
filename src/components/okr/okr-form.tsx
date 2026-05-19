@@ -114,7 +114,7 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
         .then(({ assignees: a = [], watchers: w = [], keyResults: krs = [] }: {
           assignees: Array<{ user_id: string; role: string }>
           watchers: Array<{ user_id: string }>
-          keyResults: Array<{ id: string; title: string; description: string | null; metric_type: string; start_value: number; target_value: number; unit: string | null; due_date: string | null }>
+          keyResults: Array<{ id: string; title: string; description: string | null; metric_type: string; start_value: number; target_value: number; unit: string | null; due_date: string | null; subtasks?: Array<{ id: string; title: string; priority: string }> }>
         }) => {
           setAssignees(users.filter(u => a.some((x: { user_id: string }) => x.user_id === u.id)))
           setWatchers(users.filter(u => w.some((x: { user_id: string }) => x.user_id === u.id)))
@@ -128,7 +128,7 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
               unit: kr.unit ?? '',
               due_date: kr.due_date ?? '',
               description: kr.description ?? '',
-              subtasks: [],
+              subtasks: (kr.subtasks ?? []).map(s => ({ _id: s.id, title: s.title, priority: s.priority as SubtaskDraft['priority'] })),
             })))
           }
         })

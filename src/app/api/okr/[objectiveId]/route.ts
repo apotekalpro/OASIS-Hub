@@ -26,11 +26,29 @@ export async function GET(
     admin.from('okr_key_results').select('*').eq('objective_id', objectiveId).order('created_at'),
   ])
 
+  // Fetch subtasks (tasks linked to each KR)
+  const krIds = (keyResultsRes.data ?? []).map(kr => kr.id)
+  const subtasksRes = krIds.length > 0
+    ? await admin.from('tasks').select('id, title, priority, kr_id').in('kr_id', krIds).order('created_at')
+    : { data: [] }
+
+  // Group subtasks by kr_id
+  const subtasksByKr: Record<string, Array<{ id: string; title: string; priority: string }>> = {}
+  for (const t of subtasksRes.data ?? []) {
+    if (!subtasksByKr[t.kr_id]) subtasksByKr[t.kr_id] = []
+    subtasksByKr[t.kr_id].push({ id: t.id, title: t.title, priority: t.priority })
+  }
+
+  const keyResultsWithSubtasks = (keyResultsRes.data ?? []).map(kr => ({
+    ...kr,
+    subtasks: subtasksByKr[kr.id] ?? [],
+  }))
+
   return NextResponse.json({
     objective: data,
     assignees: assigneesRes.data ?? [],
     watchers: watchersRes.data ?? [],
-    keyResults: keyResultsRes.data ?? [],
+    keyResults: keyResultsWithSubtasks,
   })
 }
 
@@ -77,12 +95,45 @@ export async function PATCH(
   }
 
   if (Array.isArray(keyResults)) {
-    // Replace all KRs
+    // Delete old subtask tasks linked to this objective's KRs
+    const { data: oldKrs } = await admin.from('okr_key_results').select('id').eq('objective_id', objectiveId)
+    const oldKrIds = (oldKrs ?? []).map(k => k.id)
+    if (oldKrIds.length > 0) {
+      await admin.from('tasks').delete().in('kr_id', oldKrIds)
+    }
+
+    // Replace all KRs (strip client-only fields: subtasks, _id, id)
     await admin.from('okr_key_results').delete().eq('objective_id', objectiveId)
+
     if (keyResults.length > 0) {
-      await admin.from('okr_key_results').insert(
-        keyResults.map((kr: Record<string, unknown>) => ({ ...kr, objective_id: objectiveId }))
-      )
+      const { data: insertedKrs } = await admin.from('okr_key_results').insert(
+        keyResults.map((kr: Record<string, unknown>) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { subtasks: _s, id: _id, _id: __id, ...krFields } = kr
+          return { ...krFields, objective_id: objectiveId }
+        })
+      ).select('id')
+
+      // Create subtask tasks linked to newly inserted KRs
+      const orgRes = await admin.from('okr_objectives').select('org_id, created_by').eq('id', objectiveId).single()
+      const { org_id, created_by } = orgRes.data ?? {}
+
+      for (let i = 0; i < keyResults.length; i++) {
+        const subtasks = (keyResults[i] as Record<string, unknown>).subtasks as Array<{ title: string; priority?: string }> | undefined
+        const krId = (insertedKrs ?? [])[i]?.id
+        if (krId && subtasks && subtasks.length > 0) {
+          await admin.from('tasks').insert(
+            subtasks.filter(s => s.title?.trim()).map(s => ({
+              title: s.title.trim(),
+              priority: s.priority || 'medium',
+              status: 'todo',
+              org_id,
+              created_by,
+              kr_id: krId,
+            }))
+          )
+        }
+      }
     }
   }
 
