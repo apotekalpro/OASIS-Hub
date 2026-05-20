@@ -99,7 +99,6 @@ export default async function DashboardPage() {
       if (!b.due_date) return -1
       return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
     })
-    .slice(0, 8)
 
   // Fetch subtask counts for the displayed tasks
   type SubtaskCountRow = { parent_id: string; status: string }
@@ -117,7 +116,8 @@ export default async function DashboardPage() {
   }
 
   type DashTask = { id: string; title: string; status: string; priority: string; due_date: string | null }
-  const myTasks = merged as unknown as DashTask[]
+  const allMyTasks = merged as unknown as DashTask[]
+  const myTasks = allMyTasks.slice(0, 15)
 
   const myNotifications = notifRes.data as AppNotification[] | null
 
@@ -146,7 +146,7 @@ export default async function DashboardPage() {
   const myAtemItems = (atemItemsRes.data ?? []) as AtemItem[]
   const myOkrObjs = (okrObjRes.data ?? []) as OkrObj[]
 
-  const overdueTasks = myTasks?.filter(t => t.due_date && new Date(t.due_date) < new Date()) ?? []
+  const overdueTasks = allMyTasks?.filter(t => t.due_date && new Date(t.due_date) < new Date()) ?? []
   const completionRate = 0 // calculated in analytics dashboard
 
   const PRIORITY_COLORS = {
@@ -189,7 +189,7 @@ export default async function DashboardPage() {
                 <CheckSquare className="h-5 w-5 text-indigo-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">{myTasks?.length ?? 0}</p>
+                <p className="text-2xl font-bold text-gray-900">{allMyTasks?.length ?? 0}</p>
                 <p className="text-sm text-gray-500">Active Tasks</p>
               </div>
             </div>
