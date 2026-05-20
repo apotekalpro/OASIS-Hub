@@ -130,6 +130,7 @@ export async function PATCH(
               org_id,
               created_by,
               kr_id: krId,
+              is_okr_subtask: true,
             }))
           )
         }

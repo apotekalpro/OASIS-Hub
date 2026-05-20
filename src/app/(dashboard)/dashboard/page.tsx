@@ -45,6 +45,7 @@ export default async function DashboardPage() {
       .eq('task_assignees.user_id', user.id)
       .is('parent_id', null)
       .is('kr_id', null)
+      .neq('is_okr_subtask', true)
       .not('status', 'in', '("done","cancelled")')
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(20),
@@ -55,6 +56,7 @@ export default async function DashboardPage() {
       .eq('created_by', user.id)
       .is('parent_id', null)
       .is('kr_id', null)
+      .neq('is_okr_subtask', true)
       .not('status', 'in', '("done","cancelled")')
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(20),
@@ -66,6 +68,7 @@ export default async function DashboardPage() {
           .in('id', watcherTaskIds)
           .is('parent_id', null)
           .is('kr_id', null)
+          .neq('is_okr_subtask', true)
           .not('status', 'in', '("done","cancelled")')
           .order('due_date', { ascending: true, nullsFirst: false })
           .limit(20)
