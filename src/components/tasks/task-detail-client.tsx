@@ -529,8 +529,12 @@ export function TaskDetailClient({
 
   async function handleComplete() {
     setCompleting(true)
-    const { error } = await supabase.from('tasks').update({ status: 'done' }).eq('id', task.id)
-    if (error) { toast.error(error.message); setCompleting(false); return }
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'done' }),
+    })
+    if (!res.ok) { toast.error('Failed to complete task'); setCompleting(false); return }
     setTaskStatus('done')
     setConfirmComplete(false)
     setCompleting(false)
@@ -539,8 +543,12 @@ export function TaskDetailClient({
   }
 
   async function handleStatusChange(newStatus: string) {
-    const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
-    if (error) { toast.error(error.message); return }
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    if (!res.ok) { toast.error('Failed to update status'); return }
     setTaskStatus(newStatus)
     toast.success('Status updated')
   }
@@ -625,8 +633,12 @@ export function TaskDetailClient({
 
   async function toggleSubtask(sub: Subtask) {
     const next = sub.status === 'done' ? 'todo' : 'done'
-    const { error } = await supabase.from('tasks').update({ status: next }).eq('id', sub.id)
-    if (error) toast.error(error.message)
+    const res = await fetch(`/api/tasks/${sub.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: next }),
+    })
+    if (!res.ok) toast.error('Failed to update subtask')
     else setSubtasks(prev => prev.map(s => s.id === sub.id ? { ...s, status: next } : s))
   }
 
@@ -638,7 +650,11 @@ export function TaskDetailClient({
 
   async function saveDescription(newHtml: string) {
     setTaskDescription(newHtml)
-    await supabase.from('tasks').update({ description: newHtml }).eq('id', task.id)
+    await fetch(`/api/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: newHtml }),
+    })
   }
 
   async function deleteTask() {
