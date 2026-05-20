@@ -37,7 +37,7 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
   const watcherTaskIds = ((watcherIdsRes.data ?? []) as Array<{ task_id: string }>).map(r => r.task_id)
 
-  const [assignedRes, createdRes, watchedRes, notifRes, teamsRes, orgMembersRes, myAtemRes, myOkrRes] = await Promise.all([
+  const [assignedRes, createdRes, watchedRes, assignedDoneRes, createdDoneRes, watchedDoneRes, notifRes, teamsRes, orgMembersRes, myAtemRes, myOkrRes] = await Promise.all([
     // Tasks assigned to me (exclude subtasks and OKR subtasks)
     supabase
       .from('tasks')
@@ -69,6 +69,35 @@ export default async function DashboardPage() {
           .neq('is_okr_subtask', true)
           .not('status', 'in', '("done","cancelled")')
           .order('due_date', { ascending: true, nullsFirst: false })
+      : Promise.resolve({ data: [] }),
+    // Done tasks assigned to me
+    supabase
+      .from('tasks')
+      .select('id, task_assignees!inner(user_id)')
+      .eq('task_assignees.user_id', user.id)
+      .is('parent_id', null)
+      .is('kr_id', null)
+      .neq('is_okr_subtask', true)
+      .eq('status', 'done'),
+    // Done tasks created by me
+    supabase
+      .from('tasks')
+      .select('id')
+      .eq('created_by', user.id)
+      .is('parent_id', null)
+      .is('kr_id', null)
+      .neq('is_okr_subtask', true)
+      .eq('status', 'done'),
+    // Done tasks where I'm a watcher
+    watcherTaskIds.length > 0
+      ? supabase
+          .from('tasks')
+          .select('id')
+          .in('id', watcherTaskIds)
+          .is('parent_id', null)
+          .is('kr_id', null)
+          .neq('is_okr_subtask', true)
+          .eq('status', 'done')
       : Promise.resolve({ data: [] }),
     supabase
       .from('notifications')
@@ -143,8 +172,16 @@ export default async function DashboardPage() {
   const myAtemItems = (atemItemsRes.data ?? []) as AtemItem[]
   const myOkrObjs = (okrObjRes.data ?? []) as OkrObj[]
 
+  // Completion rate: done / (active + done), excluding cancelled
+  const doneIds = new Set<string>()
+  for (const t of [...(assignedDoneRes.data ?? []), ...(createdDoneRes.data ?? []), ...(watchedDoneRes.data ?? [])]) {
+    doneIds.add((t as { id: string }).id)
+  }
+  const doneCount = doneIds.size
+  const totalCount = allMyTasks.length + doneCount
+  const completionRate = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0
+
   const overdueTasks = allMyTasks?.filter(t => t.due_date && new Date(t.due_date) < new Date()) ?? []
-  const completionRate = 0 // calculated in analytics dashboard
 
   const PRIORITY_COLORS = {
     urgent: 'destructive' as const,
