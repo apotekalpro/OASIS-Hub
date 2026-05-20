@@ -47,8 +47,7 @@ export default async function DashboardPage() {
       .is('kr_id', null)
       .neq('is_okr_subtask', true)
       .not('status', 'in', '("done","cancelled")')
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .limit(20),
+      .order('due_date', { ascending: true, nullsFirst: false }),
     // Tasks created by me, not necessarily assigned to me (exclude subtasks and OKR subtasks)
     supabase
       .from('tasks')
@@ -58,8 +57,7 @@ export default async function DashboardPage() {
       .is('kr_id', null)
       .neq('is_okr_subtask', true)
       .not('status', 'in', '("done","cancelled")')
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .limit(20),
+      .order('due_date', { ascending: true, nullsFirst: false }),
     // Tasks where I'm a CC/watcher (exclude subtasks and OKR subtasks)
     watcherTaskIds.length > 0
       ? supabase
@@ -71,7 +69,6 @@ export default async function DashboardPage() {
           .neq('is_okr_subtask', true)
           .not('status', 'in', '("done","cancelled")')
           .order('due_date', { ascending: true, nullsFirst: false })
-          .limit(20)
       : Promise.resolve({ data: [] }),
     supabase
       .from('notifications')
