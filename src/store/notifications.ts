@@ -5,17 +5,20 @@ interface NotificationState {
   notifications: AppNotification[]
   unreadCount: number
   unreadMessages: number
+  isMessagesPageMounted: boolean
   setNotifications: (notifications: AppNotification[]) => void
   addNotification: (notification: AppNotification) => void
   markRead: (id: string) => void
   markAllRead: () => void
   setUnreadMessages: (count: number) => void
+  setMessagesPageMounted: (mounted: boolean) => void
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
   unreadMessages: 0,
+  isMessagesPageMounted: false,
   setNotifications: (notifications) =>
     set({ notifications, unreadCount: notifications.filter(n => !n.is_read).length }),
   addNotification: (notification) => {
@@ -31,4 +34,5 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     set({ notifications, unreadCount: 0 })
   },
   setUnreadMessages: (count) => set({ unreadMessages: count }),
+  setMessagesPageMounted: (mounted) => set({ isMessagesPageMounted: mounted }),
 }))

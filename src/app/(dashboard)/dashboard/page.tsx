@@ -31,7 +31,13 @@ export default async function DashboardPage() {
       })()
     : supabase.from('teams').select('id, name, color, team_members!inner(user_id)').eq('team_members.user_id', user.id)
 
-  const [assignedRes, createdRes, notifRes, teamsRes, orgMembersRes, myAtemRes, myOkrRes] = await Promise.all([
+  const watcherIdsRes = await supabase
+    .from('task_watchers')
+    .select('task_id')
+    .eq('user_id', user.id)
+  const watcherTaskIds = ((watcherIdsRes.data ?? []) as Array<{ task_id: string }>).map(r => r.task_id)
+
+  const [assignedRes, createdRes, watchedRes, notifRes, teamsRes, orgMembersRes, myAtemRes, myOkrRes] = await Promise.all([
     // Tasks assigned to me (exclude subtasks and OKR subtasks)
     supabase
       .from('tasks')
@@ -39,6 +45,7 @@ export default async function DashboardPage() {
       .eq('task_assignees.user_id', user.id)
       .is('parent_id', null)
       .is('kr_id', null)
+      .neq('is_okr_subtask', true)
       .not('status', 'in', '("done","cancelled")')
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(20),
@@ -49,9 +56,23 @@ export default async function DashboardPage() {
       .eq('created_by', user.id)
       .is('parent_id', null)
       .is('kr_id', null)
+      .neq('is_okr_subtask', true)
       .not('status', 'in', '("done","cancelled")')
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(20),
+    // Tasks where I'm a CC/watcher (exclude subtasks and OKR subtasks)
+    watcherTaskIds.length > 0
+      ? supabase
+          .from('tasks')
+          .select('id, title, status, priority, due_date, created_by, task_assignees(user_id)')
+          .in('id', watcherTaskIds)
+          .is('parent_id', null)
+          .is('kr_id', null)
+          .neq('is_okr_subtask', true)
+          .not('status', 'in', '("done","cancelled")')
+          .order('due_date', { ascending: true, nullsFirst: false })
+          .limit(20)
+      : Promise.resolve({ data: [] }),
     supabase
       .from('notifications')
       .select('*')
@@ -68,9 +89,9 @@ export default async function DashboardPage() {
     supabase.from('okr_assignees').select('objective_id').eq('user_id', user.id).limit(20),
   ])
 
-  // Merge assigned + created, deduplicate by id
+  // Merge assigned + created + watched, deduplicate by id
   const seenIds = new Set<string>()
-  const merged = [...(assignedRes.data ?? []), ...(createdRes.data ?? [])]
+  const merged = [...(assignedRes.data ?? []), ...(createdRes.data ?? []), ...(watchedRes.data ?? [])]
     .filter(t => { if (seenIds.has(t.id)) return false; seenIds.add(t.id); return true })
     .sort((a, b) => {
       if (!a.due_date && !b.due_date) return 0

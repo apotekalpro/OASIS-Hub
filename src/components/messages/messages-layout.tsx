@@ -39,12 +39,20 @@ export function MessagesLayout({ channels: initialChannels, orgUsers, department
   const [activeChannelId, setActiveChannelId] = useState<string | null>(initialChannels[0]?.id ?? null)
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>(initialUnreadCounts)
   const setUnreadMessages = useNotificationStore(s => s.setUnreadMessages)
+  const setMessagesPageMounted = useNotificationStore(s => s.setMessagesPageMounted)
 
-  // Keep sidebar Messages badge in sync
+  // Tell NotificationProvider to yield badge control while this page is mounted
+  useEffect(() => {
+    setMessagesPageMounted(true)
+    return () => setMessagesPageMounted(false)
+  }, [setMessagesPageMounted])
+
+  // Keep sidebar Messages badge in sync with local unread counts.
+  // No reset on unmount — the last count persists so NotificationProvider
+  // can increment from it when the user navigates away.
   useEffect(() => {
     const total = Object.values(unreadCounts).reduce((s, n) => s + n, 0)
     setUnreadMessages(total)
-    return () => setUnreadMessages(0)
   }, [unreadCounts, setUnreadMessages])
 
   const activeChannel = channels.find(c => c.id === activeChannelId) ?? null

@@ -106,6 +106,10 @@ export async function DELETE(
   const krId = searchParams.get('id')
   if (!krId) return NextResponse.json({ error: 'KR id required' }, { status: 400 })
 
+  // Delete tasks linked to this KR before removing the KR itself.
+  // Without this, ON DELETE SET NULL would orphan them and they'd appear as regular tasks.
+  await admin.from('tasks').delete().eq('kr_id', krId)
+
   const { error } = await admin
     .from('okr_key_results')
     .delete()

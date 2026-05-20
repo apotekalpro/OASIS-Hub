@@ -680,8 +680,9 @@ export function OkrDetailClient({
           priority: form.priority || 'medium',
           due_date: form.due_date || null,
           kr_id: krId,
-          org_id: objective.id ? orgId : orgId,
+          org_id: orgId,
           status: 'todo',
+          is_okr_subtask: true,
         }),
       })
       const json = await res.json()

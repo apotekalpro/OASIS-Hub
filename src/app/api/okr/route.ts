@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
             org_id: orgId,
             created_by: user.id,
             kr_id: krId,
+            is_okr_subtask: true,
           }))
         )
       }
