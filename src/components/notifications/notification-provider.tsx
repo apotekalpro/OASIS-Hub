@@ -123,7 +123,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           })
         }
       )
-      .subscribe()
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const updated = payload.new as AppNotification
+          if (updated.is_read) {
+            useNotificationStore.getState().markRead(updated.id)
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.error('[NotificationProvider] realtime channel error — check REPLICA IDENTITY FULL on notifications table')
+        }
+      })
 
     // ── Global message badge + sound + toast ──────────────────────
     // Fetch channel memberships, cache names, and compute initial unread count.
