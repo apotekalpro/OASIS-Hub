@@ -239,5 +239,59 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, [profile?.id, setNotifications, addNotification, setUnreadMessages])
 
+  // ── Idle auto-refresh + tab-focus refresh ─────────────────────────────────
+  useEffect(() => {
+    if (!profile?.id) return
+
+    const supabase = createClient()
+    const userId = profile.id
+    const IDLE_MS = 15 * 60 * 1000 // 15 minutes
+
+    function isUserTyping() {
+      const el = document.activeElement
+      return (
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        (el instanceof HTMLElement && el.isContentEditable)
+      )
+    }
+
+    async function refreshNotifications() {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (data) setNotifications(data as AppNotification[])
+    }
+
+    // Idle timer — resets on any user activity; fires if idle for IDLE_MS
+    let idleTimer: ReturnType<typeof setTimeout> | null = null
+
+    function resetIdle() {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        if (!isUserTyping()) refreshNotifications()
+      }, IDLE_MS)
+    }
+
+    const activityEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'] as const
+    activityEvents.forEach(ev => document.addEventListener(ev, resetIdle, { passive: true }))
+    resetIdle() // start timer immediately
+
+    // Tab-focus refresh — silently re-fetch whenever user returns to this tab
+    function handleVisibility() {
+      if (!document.hidden && !isUserTyping()) refreshNotifications()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      activityEvents.forEach(ev => document.removeEventListener(ev, resetIdle))
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [profile?.id, setNotifications])
+
   return <>{children}</>
 }
