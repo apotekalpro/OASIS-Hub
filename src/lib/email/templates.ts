@@ -151,6 +151,64 @@ export function atemAssignedEmail(params: {
   }
 }
 
+export function okrMentionEmail(params: {
+  recipientName: string
+  objectiveTitle: string
+  mentionedBy: string
+  okrUrl: string
+}) {
+  return {
+    subject: `[OASIS Hub] ${params.mentionedBy} mentioned you in OKR "${params.objectiveTitle}"`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#7c3aed;padding:24px;border-radius:8px 8px 0 0">
+          <h1 style="color:white;margin:0;font-size:20px">OASIS Hub — OKR Mention</h1>
+        </div>
+        <div style="background:#f9fafb;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb">
+          <p>Hi <strong>${params.recipientName}</strong>,</p>
+          <p><strong>${params.mentionedBy}</strong> mentioned you in a comment on an OKR objective.</p>
+          <div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0">
+            <h3 style="margin:0;color:#111827">${params.objectiveTitle}</h3>
+          </div>
+          <a href="${params.okrUrl}" style="display:inline-block;background:#7c3aed;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+            View OKR
+          </a>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">OASIS Hub — Internal Management System</p>
+        </div>
+      </div>
+    `,
+  }
+}
+
+export function atemMentionEmail(params: {
+  recipientName: string
+  atemTask: string
+  mentionedBy: string
+  atemUrl: string
+}) {
+  return {
+    subject: `[OASIS Hub] ${params.mentionedBy} mentioned you in ATEM "${params.atemTask}"`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#0891b2;padding:24px;border-radius:8px 8px 0 0">
+          <h1 style="color:white;margin:0;font-size:20px">OASIS Hub — ATEM Mention</h1>
+        </div>
+        <div style="background:#f9fafb;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb">
+          <p>Hi <strong>${params.recipientName}</strong>,</p>
+          <p><strong>${params.mentionedBy}</strong> mentioned you in a comment on an ATEM item.</p>
+          <div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0">
+            <h3 style="margin:0;color:#111827">${params.atemTask}</h3>
+          </div>
+          <a href="${params.atemUrl}" style="display:inline-block;background:#0891b2;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+            View ATEM
+          </a>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">OASIS Hub — Internal Management System</p>
+        </div>
+      </div>
+    `,
+  }
+}
+
 export function formAssignedEmail(params: {
   recipientName: string
   formTitle: string

@@ -521,6 +521,7 @@ export function OkrDetailClient({
           content: commentText.trim(),
           parent_comment_id: replyTo?.id ?? null,
           attachments: [],
+          actorName: currentUserName,
         }),
       })
       const json = await res.json()
