@@ -351,9 +351,11 @@ export function OkrDetailClient({
   const [assigneeSearch, setAssigneeSearch] = useState('')
   const [addingAssignee, setAddingAssignee] = useState(false)
 
-  // KR subtasks
+  // KR subtasks — all expanded by default
   const [krSubtasks, setKrSubtasks] = useState<Record<string, SubTask[]>>({})
-  const [krSubtaskExpanded, setKrSubtaskExpanded] = useState<Record<string, boolean>>({})
+  const [krSubtaskExpanded, setKrSubtaskExpanded] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(initialKrs.map(kr => [kr.id, true]))
+  )
   const [krSubtaskAdding, setKrSubtaskAdding] = useState<Record<string, boolean>>({})
   const [krSubtaskLoading, setKrSubtaskLoading] = useState<Record<string, boolean>>({})
   const [krSubtaskForms, setKrSubtaskForms] = useState<Record<string, { title: string; priority: string; due_date: string }>>({})
@@ -483,7 +485,10 @@ export function OkrDetailClient({
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
-      setKrs(prev => [...prev, json.keyResult])
+      const newKr = json.keyResult as KeyResult
+      setKrs(prev => [...prev, newKr])
+      setKrSubtaskExpanded(prev => ({ ...prev, [newKr.id]: true }))
+      fetchKrSubtasks(newKr.id)
       setNewKrTitle('')
       setNewKrTarget('100')
       setNewKrMetric('percentage')
@@ -659,6 +664,12 @@ export function OkrDetailClient({
       setKrSubtaskLoading(prev => ({ ...prev, [krId]: false }))
     }
   }
+
+  // Auto-fetch subtasks for all KRs on mount (they're expanded by default)
+  useEffect(() => {
+    initialKrs.forEach(kr => fetchKrSubtasks(kr.id))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function toggleKrSubtaskSection(krId: string) {
     const willExpand = !krSubtaskExpanded[krId]
