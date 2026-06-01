@@ -29,7 +29,12 @@ export async function GET(_req: NextRequest) {
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const admin = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
+
+  // Parse body and verify auth in parallel
+  const [{ data: { user } }, body] = await Promise.all([
+    supabase.auth.getUser(),
+    req.json(),
+  ])
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const profile = await admin.from('profiles').select('org_id, full_name').eq('id', user.id).single()
@@ -37,7 +42,6 @@ export async function POST(req: NextRequest) {
   const actorName = profile.data?.full_name ?? 'Someone'
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 400 })
 
-  const body = await req.json()
   const { assigneeIds = [], watcherIds = [], keyResults = [], ...fields } = body
 
   const { data: obj, error } = await admin.from('okr_objectives').insert({
@@ -56,68 +60,71 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Insert key results, then create any subtasks linked to each KR
-  if (keyResults.length > 0) {
-    const { data: insertedKrs } = await admin.from('okr_key_results').insert(
-      keyResults.map((kr: Record<string, unknown>) => {
-        const { subtasks: _s, ...krFields } = kr as Record<string, unknown>
-        return { ...krFields, objective_id: obj.id }
-      })
-    ).select('id')
+  const allAssignees = assigneeIds.includes(user.id) ? assigneeIds : [user.id, ...assigneeIds]
 
-    for (let i = 0; i < keyResults.length; i++) {
-      const subtasks = ((keyResults[i] as Record<string, unknown>).subtasks as Array<{ title: string; priority?: string }>) ?? []
-      const krId = insertedKrs?.[i]?.id
-      if (krId && subtasks.length > 0) {
-        await admin.from('tasks').insert(
-          subtasks.filter(s => s.title?.trim()).map(s => ({
-            title: s.title.trim(),
-            priority: s.priority || 'medium',
-            status: 'todo',
-            org_id: orgId,
-            created_by: user.id,
-            kr_id: krId,
-            is_okr_subtask: true,
+  // Insert KRs, assignees, watchers in parallel
+  const [krResult] = await Promise.all([
+    keyResults.length > 0
+      ? admin.from('okr_key_results').insert(
+          keyResults.map((kr: Record<string, unknown>) => {
+            const { subtasks: _s, ...krFields } = kr
+            return { ...krFields, objective_id: obj.id }
+          })
+        ).select('id')
+      : Promise.resolve({ data: null }),
+    allAssignees.length > 0
+      ? admin.from('okr_assignees').insert(
+          allAssignees.map((uid: string) => ({
+            objective_id: obj.id,
+            user_id: uid,
+            role: uid === user.id && !assigneeIds.includes(user.id) ? 'owner' : 'contributor',
           }))
         )
-      }
-    }
+      : Promise.resolve(null),
+    watcherIds.length > 0
+      ? admin.from('okr_watchers').insert(
+          (watcherIds as string[]).map((uid: string) => ({ objective_id: obj.id, user_id: uid }))
+        )
+      : Promise.resolve(null),
+  ])
+
+  // Create subtasks for all KRs in parallel (no sequential loop)
+  const insertedKrs = (krResult as { data: Array<{ id: string }> | null }).data
+  if (insertedKrs && keyResults.length > 0) {
+    const subtaskInserts = keyResults.flatMap((kr: Record<string, unknown>, i: number) => {
+      const subtasks = (kr.subtasks as Array<{ title: string; priority?: string }>) ?? []
+      const krId = insertedKrs[i]?.id
+      if (!krId || subtasks.length === 0) return []
+      return [admin.from('tasks').insert(
+        subtasks.filter(s => s.title?.trim()).map(s => ({
+          title: s.title.trim(),
+          priority: s.priority || 'medium',
+          status: 'todo',
+          org_id: orgId,
+          created_by: user.id,
+          kr_id: krId,
+          is_okr_subtask: true,
+        }))
+      )]
+    })
+    if (subtaskInserts.length > 0) await Promise.all(subtaskInserts)
   }
 
-  // Insert assignees — creator is always owner
-  const allAssignees = assigneeIds.includes(user.id)
-    ? assigneeIds
-    : [user.id, ...assigneeIds]
-
-  if (allAssignees.length > 0) {
-    await admin.from('okr_assignees').insert(
-      allAssignees.map((uid: string) => ({
-        objective_id: obj.id,
-        user_id: uid,
-        role: uid === user.id && !assigneeIds.includes(user.id) ? 'owner' : 'contributor',
-      }))
-    )
-  }
-
-  if (watcherIds.length > 0) {
-    await admin.from('okr_watchers').insert(
-      watcherIds.map((uid: string) => ({ objective_id: obj.id, user_id: uid }))
-    )
-  }
-
-  // Fire-and-forget email to assignees (excluding creator)
+  // Fire-and-forget email — don't block response
   const notifyIds = (assigneeIds as string[]).filter((uid: string) => uid !== user.id)
   if (notifyIds.length > 0) {
-    const { data: recipients } = await admin
-      .from('profiles').select('id, full_name, email, contact_email').in('id', notifyIds)
-    const okrUrl = `${APP_URL}/okr/${obj.id}`
-    const dueDate = obj.end_date
-      ? new Date(obj.end_date).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })
-      : undefined
-    ;(recipients ?? []).filter(r => r.email).forEach(r => {
-      const tpl = okrAssignedEmail({ recipientName: r.full_name, objectiveTitle: obj.title, assignedBy: actorName, dueDate, okrUrl })
-      sendEmail({ to: r.contact_email || r.email, subject: tpl.subject, html: tpl.html }).catch(() => {})
-    })
+    admin.from('profiles').select('id, full_name, email, contact_email').in('id', notifyIds)
+      .then(({ data: recipients }) => {
+        const okrUrl = `${APP_URL}/okr/${obj.id}`
+        const dueDate = obj.end_date
+          ? new Date(obj.end_date).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })
+          : undefined
+        ;(recipients ?? []).filter((r: { email: string | null }) => r.email).forEach((r: { full_name: string; contact_email: string | null; email: string | null }) => {
+          const tpl = okrAssignedEmail({ recipientName: r.full_name, objectiveTitle: obj.title, assignedBy: actorName, dueDate, okrUrl })
+          sendEmail({ to: r.contact_email || r.email, subject: tpl.subject, html: tpl.html }).catch(() => {})
+        })
+      })
+      .catch(() => {})
   }
 
   return NextResponse.json({ objective: obj }, { status: 201 })
