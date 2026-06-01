@@ -99,9 +99,11 @@ export async function PATCH(
   const updateKrOps = existingKrs.map(kr => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, subtasks: _s, ...krFields } = kr
-    return admin.from('okr_key_results')
-      .update({ ...krFields })
-      .eq('id', id as string)
+    return Promise.resolve(
+      admin.from('okr_key_results')
+        .update({ ...krFields })
+        .eq('id', id as string)
+    )
   })
 
   const [newKrResult] = await Promise.all([
@@ -146,27 +148,31 @@ export async function PATCH(
     // Delete subtasks for this KR that the user removed from the form
     if (keptSubIds.length > 0) {
       subtaskOps.push(
-        admin.from('tasks').delete()
-          .eq('kr_id', kr.id as string)
-          .not('id', 'in', `(${keptSubIds.join(',')})`)
+        Promise.resolve(
+          admin.from('tasks').delete()
+            .eq('kr_id', kr.id as string)
+            .not('id', 'in', `(${keptSubIds.join(',')})`)
+        )
       )
     } else if (subs.length === 0) {
       // User cleared all subtasks from this KR
-      subtaskOps.push(admin.from('tasks').delete().eq('kr_id', kr.id as string))
+      subtaskOps.push(Promise.resolve(admin.from('tasks').delete().eq('kr_id', kr.id as string)))
     }
 
     if (brandNewSubs.length > 0) {
       subtaskOps.push(
-        admin.from('tasks').insert(
-          brandNewSubs.map(s => ({
-            title: s.title.trim(),
-            priority: s.priority || 'medium',
-            status: 'todo',
-            org_id,
-            created_by,
-            kr_id: kr.id as string,
-            is_okr_subtask: true,
-          }))
+        Promise.resolve(
+          admin.from('tasks').insert(
+            brandNewSubs.map(s => ({
+              title: s.title.trim(),
+              priority: s.priority || 'medium',
+              status: 'todo',
+              org_id,
+              created_by,
+              kr_id: kr.id as string,
+              is_okr_subtask: true,
+            }))
+          )
         )
       )
     }
@@ -179,16 +185,18 @@ export async function PATCH(
     const newSubs = (kr.subtasks ?? []).filter(s => s.title?.trim())
     if (newSubs.length > 0) {
       subtaskOps.push(
-        admin.from('tasks').insert(
-          newSubs.map(s => ({
-            title: s.title.trim(),
-            priority: s.priority || 'medium',
-            status: 'todo',
-            org_id,
-            created_by,
-            kr_id: krId,
-            is_okr_subtask: true,
-          }))
+        Promise.resolve(
+          admin.from('tasks').insert(
+            newSubs.map(s => ({
+              title: s.title.trim(),
+              priority: s.priority || 'medium',
+              status: 'todo',
+              org_id,
+              created_by,
+              kr_id: krId,
+              is_okr_subtask: true,
+            }))
+          )
         )
       )
     }
