@@ -99,8 +99,10 @@ export async function POST(req: NextRequest) {
           ? new Date(item.deadline).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })
           : undefined
         ;(recipients ?? []).filter((r: { email: string | null }) => r.email).forEach((r: { full_name: string; contact_email: string | null; email: string | null }) => {
+          const to = r.contact_email || r.email
+          if (!to) return
           const tpl = atemAssignedEmail({ recipientName: r.full_name, atemTask: item.task, assignedBy: actorName, deadline, atemUrl })
-          sendEmail({ to: r.contact_email || r.email, subject: tpl.subject, html: tpl.html }).catch(() => {})
+          sendEmail({ to, subject: tpl.subject, html: tpl.html }).catch(() => {})
         })
       })
       .catch(() => {})

@@ -120,8 +120,10 @@ export async function POST(req: NextRequest) {
           ? new Date(obj.end_date).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })
           : undefined
         ;(recipients ?? []).filter((r: { email: string | null }) => r.email).forEach((r: { full_name: string; contact_email: string | null; email: string | null }) => {
+          const to = r.contact_email || r.email
+          if (!to) return
           const tpl = okrAssignedEmail({ recipientName: r.full_name, objectiveTitle: obj.title, assignedBy: actorName, dueDate, okrUrl })
-          sendEmail({ to: r.contact_email || r.email, subject: tpl.subject, html: tpl.html }).catch(() => {})
+          sendEmail({ to, subject: tpl.subject, html: tpl.html }).catch(() => {})
         })
       })
       .catch(() => {})

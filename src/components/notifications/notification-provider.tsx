@@ -7,35 +7,52 @@ import { useAuthStore } from '@/store/auth'
 import { toast } from 'sonner'
 import type { AppNotification } from '@/types/database'
 
-// Pre-created audio elements — primed on first user gesture for reliable playback
+// Audio elements — created immediately so they preload; play() is called
+// within first user gesture to fully unlock them in strict-autoplay browsers.
 let notifAudio: HTMLAudioElement | null = null
 let msgAudio: HTMLAudioElement | null = null
-let audioUnlocked = false
+let audioReady = false
 
-function primeAudio() {
-  if (audioUnlocked) return
-  audioUnlocked = true
+function initAudio() {
+  if (audioReady || typeof window === 'undefined') return
+  audioReady = true
   try {
     notifAudio = new Audio('/sounds/notification.wav')
     msgAudio = new Audio('/sounds/message.wav')
+    notifAudio.preload = 'auto'
+    msgAudio.preload = 'auto'
     notifAudio.volume = 0.6
     msgAudio.volume = 0.45
-    // Load buffers so first playback is instant
-    notifAudio.load()
-    msgAudio.load()
   } catch { /* ignore */ }
 }
 
-function playNotificationSound() {
+function unlockAudio() {
+  // Call play() within a user gesture — Chrome/Safari require this to allow
+  // future plays outside a gesture. Pause immediately so nothing is audible.
   if (!notifAudio) return
-  notifAudio.currentTime = 0
-  notifAudio.play().catch(() => { /* autoplay blocked */ })
+  notifAudio.volume = 0
+  notifAudio.play()
+    .then(() => { notifAudio?.pause(); if (notifAudio) { notifAudio.currentTime = 0; notifAudio.volume = 0.6 } })
+    .catch(() => { if (notifAudio) notifAudio.volume = 0.6 })
+  if (msgAudio) msgAudio.load()
+}
+
+function playNotificationSound() {
+  if (!notifAudio) { initAudio() }
+  const audio = notifAudio
+  if (!audio) return
+  audio.currentTime = 0
+  audio.volume = 0.6
+  audio.play().catch(() => {})
 }
 
 function playMessageSound() {
-  if (!msgAudio) return
-  msgAudio.currentTime = 0
-  msgAudio.play().catch(() => { /* autoplay blocked */ })
+  if (!msgAudio) { initAudio() }
+  const audio = msgAudio
+  if (!audio) return
+  audio.currentTime = 0
+  audio.volume = 0.45
+  audio.play().catch(() => {})
 }
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
@@ -46,16 +63,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const msgChannelNames = useRef<Record<string, { name: string; is_direct: boolean }>>({})
   const msgChannelsLoaded = useRef(false)
 
-  // Prime audio elements on first user gesture so notification sounds work reliably
+  // Create audio elements immediately (preload), then unlock within first gesture
   useEffect(() => {
-    const warm = () => primeAudio()
-    document.addEventListener('click', warm, { once: true })
-    document.addEventListener('keydown', warm, { once: true })
-    document.addEventListener('touchstart', warm, { once: true })
+    initAudio()
+    const unlock = () => unlockAudio()
+    document.addEventListener('click', unlock, { once: true })
+    document.addEventListener('keydown', unlock, { once: true })
+    document.addEventListener('touchstart', unlock, { once: true })
     return () => {
-      document.removeEventListener('click', warm)
-      document.removeEventListener('keydown', warm)
-      document.removeEventListener('touchstart', warm)
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('keydown', unlock)
+      document.removeEventListener('touchstart', unlock)
     }
   }, [])
 
