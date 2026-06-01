@@ -57,13 +57,24 @@ export async function PATCH(
 
   const { assigneeIds, watcherIds, keyResults, ...fields } = body
 
-  // Phase 1: update objective + delete stale data in parallel.
-  // Note: deleting okr_key_results cascades to tasks (migration 040), no separate task delete needed.
+  type KRPayload = {
+    id?: string
+    subtasks?: Array<{ id?: string; title: string; priority?: string }>
+    [key: string]: unknown
+  }
+
+  // Separate existing KRs (have id) from new ones (no id)
+  const krsArray = Array.isArray(keyResults) ? (keyResults as KRPayload[]) : null
+  const existingKrs = krsArray?.filter(kr => kr.id) ?? []
+  const newKrs = krsArray?.filter(kr => !kr.id) ?? []
+  const keptKrIds = existingKrs.map(kr => kr.id as string)
+
+  // Phase 1: update objective + delete removed KRs + delete assignees/watchers
   const [updateResult, orgRes] = await Promise.all([
     Object.keys(fields).length > 0
       ? admin.from('okr_objectives').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', objectiveId)
       : Promise.resolve({ error: null }),
-    Array.isArray(keyResults)
+    krsArray
       ? admin.from('okr_objectives').select('org_id, created_by').eq('id', objectiveId).single()
       : Promise.resolve({ data: null }),
     Array.isArray(assigneeIds)
@@ -72,8 +83,11 @@ export async function PATCH(
     Array.isArray(watcherIds)
       ? admin.from('okr_watchers').delete().eq('objective_id', objectiveId)
       : Promise.resolve(null),
-    Array.isArray(keyResults)
-      ? admin.from('okr_key_results').delete().eq('objective_id', objectiveId)
+    // Delete only KRs that were removed (not in the kept list); CASCADE removes their subtasks
+    krsArray
+      ? keptKrIds.length > 0
+        ? admin.from('okr_key_results').delete().eq('objective_id', objectiveId).not('id', 'in', `(${keptKrIds.join(',')})`)
+        : admin.from('okr_key_results').delete().eq('objective_id', objectiveId)
       : Promise.resolve(null),
   ])
 
@@ -81,17 +95,26 @@ export async function PATCH(
 
   const { org_id, created_by } = (orgRes as { data: { org_id: string; created_by: string } | null }).data ?? {}
 
-  // Phase 2: insert new data in parallel
-  const [krResult] = await Promise.all([
-    Array.isArray(keyResults) && keyResults.length > 0
+  // Phase 2: update existing KRs + insert new KRs + assignees/watchers in parallel
+  const updateKrOps = existingKrs.map(kr => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, subtasks: _s, ...krFields } = kr
+    return admin.from('okr_key_results')
+      .update({ ...krFields })
+      .eq('id', id as string)
+  })
+
+  const [newKrResult] = await Promise.all([
+    newKrs.length > 0
       ? admin.from('okr_key_results').insert(
-          keyResults.map((kr: Record<string, unknown>) => {
+          newKrs.map(kr => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { subtasks: _s, id: _id, _id: __id, ...krFields } = kr
+            const { subtasks: _s, id: _id, ...krFields } = kr
             return { ...krFields, objective_id: objectiveId }
           })
         ).select('id')
       : Promise.resolve({ data: null }),
+    ...updateKrOps,
     Array.isArray(assigneeIds) && assigneeIds.length > 0
       ? admin.from('okr_assignees').insert(
           (assigneeIds as string[]).map((uid: string, idx: number) => ({
@@ -108,27 +131,70 @@ export async function PATCH(
       : Promise.resolve(null),
   ])
 
-  // Phase 3: create subtasks for all KRs in parallel (no sequential loop)
-  const insertedKrs = (krResult as { data: Array<{ id: string }> | null }).data
-  if (insertedKrs && Array.isArray(keyResults) && org_id) {
-    const subtaskInserts = keyResults.flatMap((kr: Record<string, unknown>, i: number) => {
-      const subtasks = kr.subtasks as Array<{ title: string; priority?: string }> | undefined
-      const krId = insertedKrs[i]?.id
-      if (!krId || !subtasks?.length) return []
-      return [admin.from('tasks').insert(
-        subtasks.filter(s => s.title?.trim()).map(s => ({
-          title: s.title.trim(),
-          priority: s.priority || 'medium',
-          status: 'todo',
-          org_id,
-          created_by,
-          kr_id: krId,
-          is_okr_subtask: true,
-        }))
-      )]
-    })
-    if (subtaskInserts.length > 0) await Promise.all(subtaskInserts)
+  if (!org_id) return NextResponse.json({ success: true })
+
+  // Phase 3: sync subtasks — preserve existing, add new, delete removed
+  const insertedNewKrs = (newKrResult as { data: Array<{ id: string }> | null }).data ?? []
+  const subtaskOps: Promise<unknown>[] = []
+
+  // Existing KRs: delete removed subtasks, insert new ones
+  for (const kr of existingKrs) {
+    const subs = kr.subtasks ?? []
+    const keptSubIds = subs.filter(s => s.id).map(s => s.id as string)
+    const brandNewSubs = subs.filter(s => !s.id && s.title?.trim())
+
+    // Delete subtasks for this KR that the user removed from the form
+    if (keptSubIds.length > 0) {
+      subtaskOps.push(
+        admin.from('tasks').delete()
+          .eq('kr_id', kr.id as string)
+          .not('id', 'in', `(${keptSubIds.join(',')})`)
+      )
+    } else if (subs.length === 0) {
+      // User cleared all subtasks from this KR
+      subtaskOps.push(admin.from('tasks').delete().eq('kr_id', kr.id as string))
+    }
+
+    if (brandNewSubs.length > 0) {
+      subtaskOps.push(
+        admin.from('tasks').insert(
+          brandNewSubs.map(s => ({
+            title: s.title.trim(),
+            priority: s.priority || 'medium',
+            status: 'todo',
+            org_id,
+            created_by,
+            kr_id: kr.id as string,
+            is_okr_subtask: true,
+          }))
+        )
+      )
+    }
   }
+
+  // New KRs: insert all their subtasks
+  newKrs.forEach((kr, i) => {
+    const krId = insertedNewKrs[i]?.id
+    if (!krId) return
+    const newSubs = (kr.subtasks ?? []).filter(s => s.title?.trim())
+    if (newSubs.length > 0) {
+      subtaskOps.push(
+        admin.from('tasks').insert(
+          newSubs.map(s => ({
+            title: s.title.trim(),
+            priority: s.priority || 'medium',
+            status: 'todo',
+            org_id,
+            created_by,
+            kr_id: krId,
+            is_okr_subtask: true,
+          }))
+        )
+      )
+    }
+  })
+
+  if (subtaskOps.length > 0) await Promise.all(subtaskOps)
 
   return NextResponse.json({ success: true })
 }
