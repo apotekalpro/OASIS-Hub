@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
   // Fire-and-forget email — don't block response
   const notifyIds = (assigneeIds as string[]).filter((uid: string) => uid !== user.id)
   if (notifyIds.length > 0) {
-    admin.from('profiles').select('id, full_name, email, contact_email').in('id', notifyIds)
+    Promise.resolve(admin.from('profiles').select('id, full_name, email, contact_email').in('id', notifyIds))
       .then(({ data: recipients }) => {
         const okrUrl = `${APP_URL}/okr/${obj.id}`
         const dueDate = obj.end_date
