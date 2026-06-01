@@ -13,7 +13,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!profile) redirect('/login')
   if (profile.must_change_password) redirect('/change-password')
 
-  const featurePermissions = await getCachedFeaturePermissions(profile.org_id)
+  const featurePermissions = await getCachedFeaturePermissions(profile.org_id ?? '')
 
   return (
     <ProfileProvider profile={profile} featurePermissions={featurePermissions}>
