@@ -4,33 +4,40 @@ import { NextResponse } from 'next/server'
 export async function PATCH(request: Request, { params }: { params: Promise<{ taskId: string }> }) {
   const { taskId } = await params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const [{ data: { user } }, body] = await Promise.all([
+    supabase.auth.getUser(),
+    request.json(),
+  ])
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = createAdminClient()
-  const body = await request.json()
   const { assigneeIds, watcherIds, ...taskPayload } = body
 
-  const { error } = await admin.from('tasks').update(taskPayload).eq('id', taskId)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Phase 1: update + delete old assignees/watchers in parallel
+  const [updateResult] = await Promise.all([
+    admin.from('tasks').update(taskPayload).eq('id', taskId),
+    Array.isArray(assigneeIds)
+      ? admin.from('task_assignees').delete().eq('task_id', taskId)
+      : Promise.resolve(null),
+    Array.isArray(watcherIds)
+      ? admin.from('task_watchers').delete().eq('task_id', taskId)
+      : Promise.resolve(null),
+  ])
+  if (updateResult.error) return NextResponse.json({ error: updateResult.error.message }, { status: 500 })
 
-  if (Array.isArray(assigneeIds)) {
-    await admin.from('task_assignees').delete().eq('task_id', taskId)
-    if ((assigneeIds as string[]).length > 0) {
-      await admin.from('task_assignees').insert(
-        (assigneeIds as string[]).map((uid: string) => ({ task_id: taskId, user_id: uid, assigned_by: user.id }))
-      )
-    }
-  }
-
-  if (Array.isArray(watcherIds)) {
-    await admin.from('task_watchers').delete().eq('task_id', taskId)
-    if ((watcherIds as string[]).length > 0) {
-      await admin.from('task_watchers').insert(
-        (watcherIds as string[]).map((uid: string) => ({ task_id: taskId, user_id: uid, added_by: user.id }))
-      )
-    }
-  }
+  // Phase 2: insert new assignees/watchers in parallel
+  await Promise.all([
+    Array.isArray(assigneeIds) && assigneeIds.length > 0
+      ? admin.from('task_assignees').insert(
+          (assigneeIds as string[]).map((uid: string) => ({ task_id: taskId, user_id: uid, assigned_by: user.id }))
+        )
+      : Promise.resolve(null),
+    Array.isArray(watcherIds) && watcherIds.length > 0
+      ? admin.from('task_watchers').insert(
+          (watcherIds as string[]).map((uid: string) => ({ task_id: taskId, user_id: uid, added_by: user.id }))
+        )
+      : Promise.resolve(null),
+  ])
 
   return NextResponse.json({ ok: true })
 }

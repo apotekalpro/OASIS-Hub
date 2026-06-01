@@ -6,6 +6,7 @@ import { AnalyticsDashboard } from '@/components/analytics/analytics-dashboard'
 import { InspectionAnalyticsDashboard } from '@/components/analytics/inspection-analytics-dashboard'
 import { AtemAnalyticsDashboard } from '@/components/analytics/atem-analytics-dashboard'
 import { OkrAnalyticsDashboard } from '@/components/analytics/okr-analytics-dashboard'
+import { getAuthUser, getCachedProfile } from '@/lib/auth/get-user-profile'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,22 +15,18 @@ export default async function AnalyticsPage({
 }: {
   searchParams: Promise<{ tab?: string; dept_filter?: string; user_filter?: string; outlet_filter?: string }>
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) redirect('/login')
 
-  const profileRes = await supabase
-    .from('profiles')
-    .select('org_id, role, dept_id, full_name')
-    .eq('id', user.id)
-    .single()
-
-  const profile = profileRes.data as {
-    org_id: string | null; role: UserRole; dept_id: string | null; full_name: string
-  } | null
+  const profile = await getCachedProfile(user.id)
   if (!profile) redirect('/login')
 
-  const { org_id: orgId, role, dept_id: deptId, full_name } = profile
+  const orgId = profile.org_id
+  const role = profile.role as UserRole
+  const deptId = profile.dept_id
+  const full_name = profile.full_name
+
+  const supabase = await createClient()
   const isOrgWide = hasRole(role, 'org_admin')
   const isDeptLevel = !isOrgWide && hasRole(role, 'dept_head')
 

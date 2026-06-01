@@ -1,21 +1,22 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { AtemListClient } from '@/components/atem/atem-list-client'
 import { AtemForm } from '@/components/atem/atem-form'
 import type { PickerUser } from '@/components/ui/assignee-picker'
 import type { UserRole } from '@/types/database'
+import { getAuthUser, getCachedProfile } from '@/lib/auth/get-user-profile'
 
 type PickerTeam = { id: string; name: string; team_members?: Array<{ user_id: string; profiles?: PickerUser | null }> }
 
 export const dynamic = 'force-dynamic'
 
 export default async function AtemPage() {
-  const supabase = await createClient()
   const admin = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) return null
 
-  const profileRes = await admin.from('profiles').select('org_id, full_name, role').eq('id', user.id).single()
-  const { org_id: orgId, role } = (profileRes.data ?? {}) as { org_id: string; full_name: string; role: UserRole }
+  const profile = await getCachedProfile(user.id)
+  const orgId = (profile?.org_id ?? '') as string
+  const role = (profile?.role ?? 'member') as UserRole
 
   const isAdmin = ['super_admin', 'org_admin'].includes(role)
 

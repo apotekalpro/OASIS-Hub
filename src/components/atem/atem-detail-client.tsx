@@ -606,6 +606,7 @@ export function AtemDetailClient({
         content: commentText.trim(),
         parent_comment_id: replyTo?.id ?? null,
         attachments,
+        actorName: currentUserName,
       }),
     })
 

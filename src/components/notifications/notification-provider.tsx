@@ -7,55 +7,52 @@ import { useAuthStore } from '@/store/auth'
 import { toast } from 'sonner'
 import type { AppNotification } from '@/types/database'
 
-// Single AudioContext reused across calls
-let audioCtx: AudioContext | null = null
+// Audio elements — created immediately so they preload; play() is called
+// within first user gesture to fully unlock them in strict-autoplay browsers.
+let notifAudio: HTMLAudioElement | null = null
+let msgAudio: HTMLAudioElement | null = null
+let audioReady = false
 
-function getOrCreateAudioContext(): AudioContext | null {
-  if (audioCtx && audioCtx.state !== 'closed') return audioCtx
+function initAudio() {
+  if (audioReady || typeof window === 'undefined') return
+  audioReady = true
   try {
-    audioCtx = new (window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
-  } catch {
-    return null
-  }
-  return audioCtx
-}
-
-async function playTones(freqs: number[], volume: number, noteDuration: number) {
-  try {
-    const ctx = getOrCreateAudioContext()
-    if (!ctx) return
-    if (ctx.state === 'suspended') {
-      await ctx.resume()
-    }
-    if (ctx.state !== 'running') return
-
-    const now = ctx.currentTime
-    freqs.forEach((freq, i) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.type = 'sine'
-      osc.frequency.value = freq
-      const offset = i * (noteDuration * 0.6)
-      gain.gain.setValueAtTime(0, now + offset)
-      gain.gain.linearRampToValueAtTime(volume, now + offset + 0.012)
-      gain.gain.exponentialRampToValueAtTime(0.001, now + offset + noteDuration)
-      osc.start(now + offset)
-      osc.stop(now + offset + noteDuration + 0.05)
-    })
+    notifAudio = new Audio('/sounds/notification.wav')
+    msgAudio = new Audio('/sounds/message.wav')
+    notifAudio.preload = 'auto'
+    msgAudio.preload = 'auto'
+    notifAudio.volume = 0.6
+    msgAudio.volume = 0.45
   } catch { /* ignore */ }
 }
 
-// Two-tone descending chime for system notifications
-function playNotificationSound() {
-  playTones([880, 660], 0.18, 0.35)
+function unlockAudio() {
+  // Call play() within a user gesture — Chrome/Safari require this to allow
+  // future plays outside a gesture. Pause immediately so nothing is audible.
+  if (!notifAudio) return
+  notifAudio.volume = 0
+  notifAudio.play()
+    .then(() => { notifAudio?.pause(); if (notifAudio) { notifAudio.currentTime = 0; notifAudio.volume = 0.6 } })
+    .catch(() => { if (notifAudio) notifAudio.volume = 0.6 })
+  if (msgAudio) msgAudio.load()
 }
 
-// Single soft ding for new chat messages
+function playNotificationSound() {
+  if (!notifAudio) { initAudio() }
+  const audio = notifAudio
+  if (!audio) return
+  audio.currentTime = 0
+  audio.volume = 0.6
+  audio.play().catch(() => {})
+}
+
 function playMessageSound() {
-  playTones([1047], 0.12, 0.28)
+  if (!msgAudio) { initAudio() }
+  const audio = msgAudio
+  if (!audio) return
+  audio.currentTime = 0
+  audio.volume = 0.45
+  audio.play().catch(() => {})
 }
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
@@ -66,21 +63,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const msgChannelNames = useRef<Record<string, { name: string; is_direct: boolean }>>({})
   const msgChannelsLoaded = useRef(false)
 
-  // Pre-warm AudioContext on first user gesture (click, keydown, or touch)
+  // Create audio elements immediately (preload), then unlock within first gesture
   useEffect(() => {
-    const warm = () => {
-      getOrCreateAudioContext()
-      document.removeEventListener('click', warm)
-      document.removeEventListener('keydown', warm)
-      document.removeEventListener('touchstart', warm)
-    }
-    document.addEventListener('click', warm, { once: true })
-    document.addEventListener('keydown', warm, { once: true })
-    document.addEventListener('touchstart', warm, { once: true })
+    initAudio()
+    const unlock = () => unlockAudio()
+    document.addEventListener('click', unlock, { once: true })
+    document.addEventListener('keydown', unlock, { once: true })
+    document.addEventListener('touchstart', unlock, { once: true })
     return () => {
-      document.removeEventListener('click', warm)
-      document.removeEventListener('keydown', warm)
-      document.removeEventListener('touchstart', warm)
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('keydown', unlock)
+      document.removeEventListener('touchstart', unlock)
     }
   }, [])
 

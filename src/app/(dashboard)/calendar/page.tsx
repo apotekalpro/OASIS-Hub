@@ -1,15 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { CalendarClient } from '@/components/calendar/calendar-client'
+import { getAuthUser, getCachedProfile } from '@/lib/auth/get-user-profile'
 
 export const dynamic = 'force-dynamic'
 
 export default async function CalendarPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) return null
 
-  const profileRes = await supabase.from('profiles').select('org_id, full_name').eq('id', user.id).single()
-  const orgId = (profileRes.data as { org_id: string } | null)?.org_id ?? ''
+  const profile = await getCachedProfile(user.id)
+  const orgId = profile?.org_id ?? ''
+
+  const supabase = await createClient()
 
   // Stage 1: events + user data + due-date access checks (all independent)
   const [

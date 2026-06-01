@@ -13,42 +13,31 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data, error } = await admin.from('okr_objectives')
-    .select('*, departments(name), teams(name)')
-    .eq('id', objectiveId)
-    .single()
-
-  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  const [assigneesRes, watchersRes, keyResultsRes] = await Promise.all([
+  const [objRes, assigneesRes, watchersRes, keyResultsRes] = await Promise.all([
+    admin.from('okr_objectives').select('*, departments(name), teams(name)').eq('id', objectiveId).single(),
     admin.from('okr_assignees').select('user_id, role').eq('objective_id', objectiveId),
     admin.from('okr_watchers').select('user_id').eq('objective_id', objectiveId),
     admin.from('okr_key_results').select('*').eq('objective_id', objectiveId).order('created_at'),
   ])
 
-  // Fetch subtasks (tasks linked to each KR)
+  if (objRes.error || !objRes.data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
   const krIds = (keyResultsRes.data ?? []).map(kr => kr.id)
   const subtasksRes = krIds.length > 0
     ? await admin.from('tasks').select('id, title, priority, kr_id').in('kr_id', krIds).order('created_at')
     : { data: [] }
 
-  // Group subtasks by kr_id
   const subtasksByKr: Record<string, Array<{ id: string; title: string; priority: string }>> = {}
   for (const t of subtasksRes.data ?? []) {
     if (!subtasksByKr[t.kr_id]) subtasksByKr[t.kr_id] = []
     subtasksByKr[t.kr_id].push({ id: t.id, title: t.title, priority: t.priority })
   }
 
-  const keyResultsWithSubtasks = (keyResultsRes.data ?? []).map(kr => ({
-    ...kr,
-    subtasks: subtasksByKr[kr.id] ?? [],
-  }))
-
   return NextResponse.json({
-    objective: data,
+    objective: objRes.data,
     assignees: assigneesRes.data ?? [],
     watchers: watchersRes.data ?? [],
-    keyResults: keyResultsWithSubtasks,
+    keyResults: (keyResultsRes.data ?? []).map(kr => ({ ...kr, subtasks: subtasksByKr[kr.id] ?? [] })),
   })
 }
 
@@ -59,83 +48,86 @@ export async function PATCH(
   const { objectiveId } = await params
   const supabase = await createClient()
   const admin = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
+
+  const [{ data: { user } }, body] = await Promise.all([
+    supabase.auth.getUser(),
+    req.json(),
+  ])
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json()
   const { assigneeIds, watcherIds, keyResults, ...fields } = body
 
-  if (Object.keys(fields).length > 0) {
-    const { error } = await admin.from('okr_objectives')
-      .update({ ...fields, updated_at: new Date().toISOString() })
-      .eq('id', objectiveId)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  // Phase 1: update objective + delete stale data in parallel.
+  // Note: deleting okr_key_results cascades to tasks (migration 040), no separate task delete needed.
+  const [updateResult, orgRes] = await Promise.all([
+    Object.keys(fields).length > 0
+      ? admin.from('okr_objectives').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', objectiveId)
+      : Promise.resolve({ error: null }),
+    Array.isArray(keyResults)
+      ? admin.from('okr_objectives').select('org_id, created_by').eq('id', objectiveId).single()
+      : Promise.resolve({ data: null }),
+    Array.isArray(assigneeIds)
+      ? admin.from('okr_assignees').delete().eq('objective_id', objectiveId)
+      : Promise.resolve(null),
+    Array.isArray(watcherIds)
+      ? admin.from('okr_watchers').delete().eq('objective_id', objectiveId)
+      : Promise.resolve(null),
+    Array.isArray(keyResults)
+      ? admin.from('okr_key_results').delete().eq('objective_id', objectiveId)
+      : Promise.resolve(null),
+  ])
 
-  if (Array.isArray(assigneeIds)) {
-    await admin.from('okr_assignees').delete().eq('objective_id', objectiveId)
-    if (assigneeIds.length > 0) {
-      await admin.from('okr_assignees').insert(
-        assigneeIds.map((uid: string, idx: number) => ({
-          objective_id: objectiveId,
-          user_id: uid,
-          role: idx === 0 ? 'owner' : 'contributor',
+  if (updateResult.error) return NextResponse.json({ error: updateResult.error.message }, { status: 500 })
+
+  const { org_id, created_by } = (orgRes as { data: { org_id: string; created_by: string } | null }).data ?? {}
+
+  // Phase 2: insert new data in parallel
+  const [krResult] = await Promise.all([
+    Array.isArray(keyResults) && keyResults.length > 0
+      ? admin.from('okr_key_results').insert(
+          keyResults.map((kr: Record<string, unknown>) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { subtasks: _s, id: _id, _id: __id, ...krFields } = kr
+            return { ...krFields, objective_id: objectiveId }
+          })
+        ).select('id')
+      : Promise.resolve({ data: null }),
+    Array.isArray(assigneeIds) && assigneeIds.length > 0
+      ? admin.from('okr_assignees').insert(
+          (assigneeIds as string[]).map((uid: string, idx: number) => ({
+            objective_id: objectiveId,
+            user_id: uid,
+            role: idx === 0 ? 'owner' : 'contributor',
+          }))
+        )
+      : Promise.resolve(null),
+    Array.isArray(watcherIds) && watcherIds.length > 0
+      ? admin.from('okr_watchers').insert(
+          (watcherIds as string[]).map((uid: string) => ({ objective_id: objectiveId, user_id: uid }))
+        )
+      : Promise.resolve(null),
+  ])
+
+  // Phase 3: create subtasks for all KRs in parallel (no sequential loop)
+  const insertedKrs = (krResult as { data: Array<{ id: string }> | null }).data
+  if (insertedKrs && Array.isArray(keyResults) && org_id) {
+    const subtaskInserts = keyResults.flatMap((kr: Record<string, unknown>, i: number) => {
+      const subtasks = kr.subtasks as Array<{ title: string; priority?: string }> | undefined
+      const krId = insertedKrs[i]?.id
+      if (!krId || !subtasks?.length) return []
+      return [admin.from('tasks').insert(
+        subtasks.filter(s => s.title?.trim()).map(s => ({
+          title: s.title.trim(),
+          priority: s.priority || 'medium',
+          status: 'todo',
+          org_id,
+          created_by,
+          kr_id: krId,
+          is_okr_subtask: true,
         }))
-      )
-    }
-  }
-
-  if (Array.isArray(watcherIds)) {
-    await admin.from('okr_watchers').delete().eq('objective_id', objectiveId)
-    if (watcherIds.length > 0) {
-      await admin.from('okr_watchers').insert(
-        watcherIds.map((uid: string) => ({ objective_id: objectiveId, user_id: uid }))
-      )
-    }
-  }
-
-  if (Array.isArray(keyResults)) {
-    // Delete old subtask tasks linked to this objective's KRs
-    const { data: oldKrs } = await admin.from('okr_key_results').select('id').eq('objective_id', objectiveId)
-    const oldKrIds = (oldKrs ?? []).map(k => k.id)
-    if (oldKrIds.length > 0) {
-      await admin.from('tasks').delete().in('kr_id', oldKrIds)
-    }
-
-    // Replace all KRs (strip client-only fields: subtasks, _id, id)
-    await admin.from('okr_key_results').delete().eq('objective_id', objectiveId)
-
-    if (keyResults.length > 0) {
-      const { data: insertedKrs } = await admin.from('okr_key_results').insert(
-        keyResults.map((kr: Record<string, unknown>) => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { subtasks: _s, id: _id, _id: __id, ...krFields } = kr
-          return { ...krFields, objective_id: objectiveId }
-        })
-      ).select('id')
-
-      // Create subtask tasks linked to newly inserted KRs
-      const orgRes = await admin.from('okr_objectives').select('org_id, created_by').eq('id', objectiveId).single()
-      const { org_id, created_by } = orgRes.data ?? {}
-
-      for (let i = 0; i < keyResults.length; i++) {
-        const subtasks = (keyResults[i] as Record<string, unknown>).subtasks as Array<{ title: string; priority?: string }> | undefined
-        const krId = (insertedKrs ?? [])[i]?.id
-        if (krId && subtasks && subtasks.length > 0) {
-          await admin.from('tasks').insert(
-            subtasks.filter(s => s.title?.trim()).map(s => ({
-              title: s.title.trim(),
-              priority: s.priority || 'medium',
-              status: 'todo',
-              org_id,
-              created_by,
-              kr_id: krId,
-              is_okr_subtask: true,
-            }))
-          )
-        }
-      }
-    }
+      )]
+    })
+    if (subtaskInserts.length > 0) await Promise.all(subtaskInserts)
   }
 
   return NextResponse.json({ success: true })

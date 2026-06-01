@@ -37,7 +37,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const admin = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
+
+  // Parse body and verify auth in parallel
+  const [{ data: { user } }, body] = await Promise.all([
+    supabase.auth.getUser(),
+    req.json(),
+  ])
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const profile = await admin.from('profiles').select('org_id, full_name').eq('id', user.id).single()
@@ -45,7 +50,6 @@ export async function POST(req: NextRequest) {
   const actorName = profile.data?.full_name ?? 'Someone'
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 400 })
 
-  const body = await req.json()
   const { assigneeIds = [], watcherIds = [], ...fields } = body
 
   const { data: item, error } = await admin.from('atem_items').insert({
@@ -53,6 +57,8 @@ export async function POST(req: NextRequest) {
     created_by: user.id,
     task: fields.task,
     deadline: fields.deadline || null,
+    deadline_text: fields.deadline_text || null,
+    action_plan: fields.action_plan || null,
     impact: fields.impact || null,
     dependencies: fields.dependencies || null,
     strategic_alignment: fields.strategic_alignment || null,
@@ -67,31 +73,39 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const allAssignees = assigneeIds.includes(user.id) ? assigneeIds : [user.id, ...assigneeIds]
-  if (allAssignees.length > 0) {
-    await admin.from('atem_assignees').insert(
-      allAssignees.map((uid: string) => ({ atem_id: item.id, user_id: uid, assigned_by: user.id }))
-    )
-  }
-  if (watcherIds.length > 0) {
-    await admin.from('atem_watchers').insert(
-      watcherIds.map((uid: string) => ({ atem_id: item.id, user_id: uid }))
-    )
-  }
+  const allAssignees = (assigneeIds as string[]).includes(user.id) ? assigneeIds : [user.id, ...assigneeIds]
 
-  // Fire-and-forget email to assignees (excluding creator)
+  // Insert assignees and watchers in parallel
+  await Promise.all([
+    allAssignees.length > 0
+      ? admin.from('atem_assignees').insert(
+          allAssignees.map((uid: string) => ({ atem_id: item.id, user_id: uid, assigned_by: user.id }))
+        )
+      : Promise.resolve(null),
+    (watcherIds as string[]).length > 0
+      ? admin.from('atem_watchers').insert(
+          (watcherIds as string[]).map((uid: string) => ({ atem_id: item.id, user_id: uid }))
+        )
+      : Promise.resolve(null),
+  ])
+
+  // Fire-and-forget email — don't block response
   const notifyIds = (assigneeIds as string[]).filter((uid: string) => uid !== user.id)
   if (notifyIds.length > 0) {
-    const { data: recipients } = await admin
-      .from('profiles').select('id, full_name, email, contact_email').in('id', notifyIds)
-    const atemUrl = `${APP_URL}/atem`
-    const deadline = item.deadline
-      ? new Date(item.deadline).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })
-      : undefined
-    ;(recipients ?? []).filter(r => r.email).forEach(r => {
-      const tpl = atemAssignedEmail({ recipientName: r.full_name, atemTask: item.task, assignedBy: actorName, deadline, atemUrl })
-      sendEmail({ to: r.contact_email || r.email, subject: tpl.subject, html: tpl.html }).catch(() => {})
-    })
+    Promise.resolve(admin.from('profiles').select('id, full_name, email, contact_email').in('id', notifyIds))
+      .then(({ data: recipients }) => {
+        const atemUrl = `${APP_URL}/atem`
+        const deadline = item.deadline
+          ? new Date(item.deadline).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })
+          : undefined
+        ;(recipients ?? []).filter((r: { email: string | null }) => r.email).forEach((r: { full_name: string; contact_email: string | null; email: string | null }) => {
+          const to = r.contact_email || r.email
+          if (!to) return
+          const tpl = atemAssignedEmail({ recipientName: r.full_name, atemTask: item.task, assignedBy: actorName, deadline, atemUrl })
+          sendEmail({ to, subject: tpl.subject, html: tpl.html }).catch(() => {})
+        })
+      })
+      .catch(() => {})
   }
 
   return NextResponse.json({ item }, { status: 201 })
