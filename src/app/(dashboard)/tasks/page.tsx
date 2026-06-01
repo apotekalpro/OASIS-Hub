@@ -1,26 +1,20 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { TasksClient } from '@/components/tasks/tasks-client'
 import { hasRole } from '@/lib/auth/permissions'
 import type { UserRole } from '@/types/database'
+import { getAuthUser, getCachedProfile } from '@/lib/auth/get-user-profile'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TasksPage() {
-  const supabase = await createClient()
   const admin = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) return null
 
-  const profileRes = await admin
-    .from('profiles')
-    .select('org_id, full_name, role')
-    .eq('id', user.id)
-    .single()
-
-  const profile = profileRes.data as { org_id: string | null; full_name: string; role: UserRole } | null
+  const profile = await getCachedProfile(user.id)
   const orgId = profile?.org_id ?? ''
   const isSuperAdmin = profile?.role === 'super_admin'
-  const isAdmin = hasRole(profile?.role ?? 'member', 'org_admin')
+  const isAdmin = hasRole((profile?.role ?? 'member') as UserRole, 'org_admin')
 
   // Simple task shape — no nested profiles, avoids 3-level join issues
   type RawTask = {
@@ -38,25 +32,25 @@ export default async function TasksPage() {
 
   if (isSuperAdmin || (isAdmin && orgId)) {
     // Admins: fetch tasks + supporting data all in parallel (exclude subtasks)
-    const tasksQuery = supabase.from('tasks').select(taskSelect).is('parent_id', null).is('kr_id', null).neq('is_okr_subtask', true).order('created_at', { ascending: false })
+    const tasksQuery = admin.from('tasks').select(taskSelect).is('parent_id', null).is('kr_id', null).neq('is_okr_subtask', true).order('created_at', { ascending: false })
     if (!isSuperAdmin && orgId) tasksQuery.eq('org_id', orgId)
 
     const [tasksResult, ...rest] = await Promise.all([
       tasksQuery,
-      supabase.from('profiles').select('id, full_name, email, avatar_url, dept_id, role').eq('org_id', orgId).eq('is_active', true).order('full_name'),
+      admin.from('profiles').select('id, full_name, email, avatar_url, dept_id, role').eq('org_id', orgId).eq('is_active', true).order('full_name'),
       admin.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url, dept_id, role))').eq('org_id', orgId).order('name'),
-      supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
+      admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     ])
     rawTasks = (tasksResult.data as unknown as RawTask[]) ?? [];
     [usersRes, teamsRes, deptsRes] = rest
   } else {
     // Members: fetch assignees + watchers + supporting data in parallel, then tasks
     const [assignedRes, watcherRes, ...rest] = await Promise.all([
-      supabase.from('task_assignees').select('task_id').eq('user_id', user.id),
-      supabase.from('task_watchers').select('task_id').eq('user_id', user.id),
-      supabase.from('profiles').select('id, full_name, email, avatar_url, dept_id, role').eq('org_id', orgId).eq('is_active', true).order('full_name'),
+      admin.from('task_assignees').select('task_id').eq('user_id', user.id),
+      admin.from('task_watchers').select('task_id').eq('user_id', user.id),
+      admin.from('profiles').select('id, full_name, email, avatar_url, dept_id, role').eq('org_id', orgId).eq('is_active', true).order('full_name'),
       admin.from('teams').select('id, name, team_members(user_id, profiles(id, full_name, email, avatar_url, dept_id, role))').eq('org_id', orgId).order('name'),
-      supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
+      admin.from('departments').select('id, name').eq('org_id', orgId).order('name'),
     ])
     ;[usersRes, teamsRes, deptsRes] = rest
 
@@ -67,7 +61,7 @@ export default async function TasksPage() {
     if (assignedIds.length > 0) orParts.push(`id.in.(${assignedIds.join(',')})`)
     if (watcherTaskIds.length > 0) orParts.push(`id.in.(${watcherTaskIds.join(',')})`)
 
-    const res = await supabase.from('tasks')
+    const res = await admin.from('tasks')
       .select(taskSelect)
       .is('parent_id', null)
       .is('kr_id', null)
@@ -86,7 +80,7 @@ export default async function TasksPage() {
   const taskIds = rawTasks.map(t => t.id)
   let subtaskCounts: Record<string, { total: number; done: number }> = {}
   if (taskIds.length > 0) {
-    const { data: subtaskData } = await supabase
+    const { data: subtaskData } = await admin
       .from('tasks')
       .select('parent_id, status')
       .in('parent_id', taskIds)

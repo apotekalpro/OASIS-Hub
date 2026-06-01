@@ -7,55 +7,35 @@ import { useAuthStore } from '@/store/auth'
 import { toast } from 'sonner'
 import type { AppNotification } from '@/types/database'
 
-// Single AudioContext reused across calls
-let audioCtx: AudioContext | null = null
+// Pre-created audio elements — primed on first user gesture for reliable playback
+let notifAudio: HTMLAudioElement | null = null
+let msgAudio: HTMLAudioElement | null = null
+let audioUnlocked = false
 
-function getOrCreateAudioContext(): AudioContext | null {
-  if (audioCtx && audioCtx.state !== 'closed') return audioCtx
+function primeAudio() {
+  if (audioUnlocked) return
+  audioUnlocked = true
   try {
-    audioCtx = new (window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
-  } catch {
-    return null
-  }
-  return audioCtx
-}
-
-async function playTones(freqs: number[], volume: number, noteDuration: number) {
-  try {
-    const ctx = getOrCreateAudioContext()
-    if (!ctx) return
-    if (ctx.state === 'suspended') {
-      await ctx.resume()
-    }
-    if (ctx.state !== 'running') return
-
-    const now = ctx.currentTime
-    freqs.forEach((freq, i) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.type = 'sine'
-      osc.frequency.value = freq
-      const offset = i * (noteDuration * 0.6)
-      gain.gain.setValueAtTime(0, now + offset)
-      gain.gain.linearRampToValueAtTime(volume, now + offset + 0.012)
-      gain.gain.exponentialRampToValueAtTime(0.001, now + offset + noteDuration)
-      osc.start(now + offset)
-      osc.stop(now + offset + noteDuration + 0.05)
-    })
+    notifAudio = new Audio('/sounds/notification.wav')
+    msgAudio = new Audio('/sounds/message.wav')
+    notifAudio.volume = 0.6
+    msgAudio.volume = 0.45
+    // Load buffers so first playback is instant
+    notifAudio.load()
+    msgAudio.load()
   } catch { /* ignore */ }
 }
 
-// Two-tone descending chime for system notifications
 function playNotificationSound() {
-  playTones([880, 660], 0.18, 0.35)
+  if (!notifAudio) return
+  notifAudio.currentTime = 0
+  notifAudio.play().catch(() => { /* autoplay blocked */ })
 }
 
-// Single soft ding for new chat messages
 function playMessageSound() {
-  playTones([1047], 0.12, 0.28)
+  if (!msgAudio) return
+  msgAudio.currentTime = 0
+  msgAudio.play().catch(() => { /* autoplay blocked */ })
 }
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
@@ -66,14 +46,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const msgChannelNames = useRef<Record<string, { name: string; is_direct: boolean }>>({})
   const msgChannelsLoaded = useRef(false)
 
-  // Pre-warm AudioContext on first user gesture (click, keydown, or touch)
+  // Prime audio elements on first user gesture so notification sounds work reliably
   useEffect(() => {
-    const warm = () => {
-      getOrCreateAudioContext()
-      document.removeEventListener('click', warm)
-      document.removeEventListener('keydown', warm)
-      document.removeEventListener('touchstart', warm)
-    }
+    const warm = () => primeAudio()
     document.addEventListener('click', warm, { once: true })
     document.addEventListener('keydown', warm, { once: true })
     document.addEventListener('touchstart', warm, { once: true })
