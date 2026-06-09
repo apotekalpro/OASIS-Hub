@@ -58,6 +58,35 @@ export function taskDueSoonEmail(params: {
   }
 }
 
+export function taskCompletedEmail(params: {
+  recipientName: string
+  taskTitle: string
+  completedBy: string
+  taskUrl: string
+}) {
+  return {
+    subject: `[OASIS Hub] Task completed: ${params.taskTitle}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#10b981;padding:24px;border-radius:8px 8px 0 0">
+          <h1 style="color:white;margin:0;font-size:20px">OASIS Hub</h1>
+        </div>
+        <div style="background:#f9fafb;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb">
+          <p>Hi <strong>${params.recipientName}</strong>,</p>
+          <p><strong>${params.completedBy}</strong> has marked a task as completed.</p>
+          <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:16px;margin:16px 0">
+            <h3 style="margin:0;color:#065f46">✓ ${params.taskTitle}</h3>
+          </div>
+          <a href="${params.taskUrl}" style="display:inline-block;background:#10b981;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+            View Task
+          </a>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">OASIS Hub — Internal Management System</p>
+        </div>
+      </div>
+    `,
+  }
+}
+
 export function welcomeUserEmail(params: {
   recipientName: string
   email: string

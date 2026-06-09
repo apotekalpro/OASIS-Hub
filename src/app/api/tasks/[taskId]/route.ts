@@ -1,5 +1,9 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { sendEmail } from '@/lib/email/send'
+import { taskCompletedEmail } from '@/lib/email/templates'
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? process.env.URL ?? 'https://oasishub.netlify.app'
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ taskId: string }> }) {
   const { taskId } = await params
@@ -38,6 +42,54 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
         )
       : Promise.resolve(null),
   ])
+
+  // Fire-and-forget: notify all PICs and CCs when task is marked complete
+  if (taskPayload.status === 'done') {
+    Promise.resolve(
+      Promise.all([
+        admin.from('profiles').select('full_name').eq('id', user.id).single(),
+        admin.from('tasks').select('title').eq('id', taskId).single(),
+        admin.from('task_assignees').select('user_id').eq('task_id', taskId),
+        admin.from('task_watchers').select('user_id').eq('task_id', taskId),
+      ])
+    ).then(([actorRes, taskRes, assigneesRes, watchersRes]) => {
+      const actorName = actorRes.data?.full_name ?? 'Someone'
+      const taskTitle = taskRes.data?.title ?? 'A task'
+      const taskUrl = `${APP_URL}/tasks/${taskId}`
+
+      const recipientIds = [...new Set([
+        ...((assigneesRes.data ?? []) as { user_id: string }[]).map(a => a.user_id),
+        ...((watchersRes.data ?? []) as { user_id: string }[]).map(w => w.user_id),
+      ])].filter(uid => uid !== user.id)
+
+      if (!recipientIds.length) return
+
+      // In-app notifications
+      Promise.resolve(
+        admin.from('notifications').insert(
+          recipientIds.map(uid => ({
+            user_id: uid,
+            type: 'task_completed',
+            title: `${actorName} completed: ${taskTitle}`,
+            body: null,
+            data: { task_id: taskId, url: taskUrl },
+          }))
+        )
+      ).catch(() => {})
+
+      // Email notifications
+      Promise.resolve(
+        admin.from('profiles').select('id, full_name, email, contact_email').in('id', recipientIds)
+      ).then(({ data: recipients }) => {
+        for (const r of (recipients ?? []) as { id: string; full_name: string; email: string; contact_email: string | null }[]) {
+          const to = r.contact_email || r.email
+          if (!to) continue
+          const tpl = taskCompletedEmail({ recipientName: r.full_name, taskTitle, completedBy: actorName, taskUrl })
+          sendEmail({ to, subject: tpl.subject, html: tpl.html }).catch(() => {})
+        }
+      }).catch(() => {})
+    }).catch(() => {})
+  }
 
   return NextResponse.json({ ok: true })
 }
