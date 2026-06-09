@@ -107,7 +107,7 @@ function EmojiPicker({ anchor, onPick, onClose }: {
 
 // ─── Mention textarea ─────────────────────────────────────────────────────────
 function MentionTextarea({
-  value, onChange, onKeyDown, onPaste, placeholder, users, rows = 2, textareaRef,
+  value, onChange, onKeyDown, onPaste, placeholder, users, rows = 2, textareaRef, contextUsers = [],
 }: {
   value: string
   onChange: (v: string) => void
@@ -117,6 +117,7 @@ function MentionTextarea({
   users: OrgUser[]
   rows?: number
   textareaRef?: React.RefObject<HTMLTextAreaElement | null>
+  contextUsers?: Array<{ id: string; full_name: string }>
 }) {
   const innerRef = useRef<HTMLTextAreaElement | null>(null)
   const ref = textareaRef ?? innerRef
@@ -127,6 +128,16 @@ function MentionTextarea({
   const filtered = users.filter(u =>
     u.full_name.toLowerCase().includes(mentionQuery.toLowerCase())
   ).slice(0, 6)
+
+  const showAll = contextUsers.length > 0 && 'all'.startsWith(mentionQuery.toLowerCase())
+
+  function pickAll() {
+    const before = value.slice(0, mentionStart)
+    const after = value.slice(ref.current?.selectionStart ?? value.length)
+    onChange(`${before}@all ${after}`)
+    setMentionOpen(false)
+    setTimeout(() => ref.current?.focus(), 0)
+  }
 
   function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const text = e.target.value
@@ -163,8 +174,19 @@ function MentionTextarea({
         placeholder={placeholder}
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
       />
-      {mentionOpen && filtered.length > 0 && (
+      {mentionOpen && (showAll || filtered.length > 0) && (
         <div className="absolute z-20 bottom-full mb-1 left-0 w-56 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          {showAll && (
+            <button
+              type="button"
+              onMouseDown={e => { e.preventDefault(); pickAll() }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-indigo-50 text-left bg-indigo-50/60 border-b border-indigo-100"
+            >
+              <span className="w-6 h-6 shrink-0 flex items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-bold">@</span>
+              <span className="font-medium text-indigo-700">All</span>
+              <span className="text-xs text-gray-400 ml-auto">{contextUsers.length} people</span>
+            </button>
+          )}
           {filtered.map(u => (
             <button
               key={u.id}
@@ -492,6 +514,18 @@ export function TaskDetailClient({
           user: { id: currentUserId, full_name: currentUserName, avatar_url: currentUserAvatar },
         }]
       })
+
+      // @all — notify every assignee + watcher
+      if (/\@all\b/i.test(commentText)) {
+        const allIds = [...new Set([...assigneesList, ...watchers].map(u => u.id))].filter(id => id !== currentUserId)
+        if (allIds.length > 0) {
+          fetch('/api/notifications/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'task_mention', taskId: task.id, userIds: allIds, actorName: currentUserName }),
+          }).catch(() => {})
+        }
+      }
 
       // Email @mentioned users in the comment
       const mentionPattern = /@([^@\n,]+?)(?=\s|$|[,.])/g
@@ -1153,6 +1187,7 @@ export function TaskDetailClient({
                           placeholder={replyTo ? `Reply to ${replyTo.user.full_name}… (@ to mention)` : 'Write a comment… (@ to mention, Ctrl+V to paste image)'}
                           users={users}
                           textareaRef={textareaRef}
+                          contextUsers={[...assigneesList, ...watchers]}
                         />
                         <div className="flex flex-col gap-1">
                           <Button

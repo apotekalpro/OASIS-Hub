@@ -137,16 +137,20 @@ async function sendOkrCommentNotifications({
     mentionedNames.push(m[1].trim())
   }
 
-  if (!mentionedNames.length) return
+  // @all — email every recipient
+  const hasAtAll = /@all\b/i.test(content)
+  if (!mentionedNames.length && !hasAtAll) return
 
   const { data: allProfiles } = await admin
     .from('profiles')
     .select('id, full_name, email, contact_email')
     .in('id', [...recipientIds])
 
-  const mentionedProfiles = (allProfiles ?? []).filter(p =>
-    mentionedNames.some(name => p.full_name.toLowerCase().includes(name.toLowerCase()))
-  )
+  const mentionedProfiles = hasAtAll
+    ? (allProfiles ?? []).filter(p => p.id !== commenterId)
+    : (allProfiles ?? []).filter(p =>
+        mentionedNames.some(name => p.full_name.toLowerCase().includes(name.toLowerCase()))
+      )
 
   // In-app mention notifications (separate type)
   if (mentionedProfiles.length) {
