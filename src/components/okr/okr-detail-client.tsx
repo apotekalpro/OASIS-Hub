@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Edit2, Trash2, Plus, Send, Smile, CornerDownRight,
   X, Users, Eye, Target, Calendar, Building2, Search, CheckCircle2,
-  ChevronDown, ChevronRight, Loader2, Paperclip,
+  ChevronDown, ChevronRight, Loader2, Paperclip, FileText, Download,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -200,6 +200,30 @@ function CommentItem({
               : part
           )}
         </p>
+
+        {comment.attachments.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {comment.attachments.map((att, i) =>
+              att.type === 'image' ? (
+                <a key={i} href={att.url} target="_blank" rel="noreferrer">
+                  <img src={att.url} alt={att.name} className="max-h-48 max-w-xs rounded-lg border border-gray-200 object-cover hover:opacity-90 transition-opacity" />
+                </a>
+              ) : (
+                <a
+                  key={i}
+                  href={att.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <FileText className="h-4 w-4 text-gray-400 shrink-0" />
+                  <span className="truncate max-w-[180px]">{att.name}</span>
+                  <Download className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                </a>
+              )
+            )}
+          </div>
+        )}
 
         {comment.reactions.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
