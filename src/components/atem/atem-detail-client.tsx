@@ -16,6 +16,7 @@ import {
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { toast } from 'sonner'
 import { createPortal } from 'react-dom'
+import { createClient } from '@/lib/supabase/client'
 
 type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
 type Department = { id: string; name: string }
@@ -561,12 +562,15 @@ export function AtemDetailClient({
 
   // ─── Comments ─────────────────────────────────────────────────────────────
   async function uploadFiles(files: File[], itemId: string): Promise<Attachment[]> {
-    // For now return empty — storage bucket for ATEM can be configured later
-    // Files are shown in pending state but not uploaded without a storage bucket
+    const supabase = createClient()
     const results: Attachment[] = []
     for (const file of files) {
-      // Basic data-url fallback isn't suitable for production, just skip
-      void file; void itemId
+      const ext = file.name.split('.').pop() ?? 'bin'
+      const path = `atem/${itemId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('task-attachments').upload(path, file)
+      if (error) { toast.error(`Upload failed: ${file.name}`); continue }
+      const { data: urlData } = supabase.storage.from('task-attachments').getPublicUrl(path)
+      results.push({ name: file.name, url: urlData.publicUrl, type: file.type.startsWith('image/') ? 'image' : 'file' })
     }
     return results
   }

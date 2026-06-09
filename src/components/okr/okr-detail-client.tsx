@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Edit2, Trash2, Plus, Send, Smile, CornerDownRight,
   X, Users, Eye, Target, Calendar, Building2, Search, CheckCircle2,
-  ChevronDown, ChevronRight, Loader2,
+  ChevronDown, ChevronRight, Loader2, Paperclip,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,7 @@ import { OkrForm, OKR_STATUS_VARIANT, OKR_STATUS_LABEL, krProgressPct, formatKrV
 import { formatDate, formatRelativeTime, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { createPortal } from 'react-dom'
+import { createClient } from '@/lib/supabase/client'
 
 type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
 type Department = { id: string; name: string }
@@ -239,11 +240,12 @@ function CommentItem({
 
 // ── Mention textarea ───────────────────────────────────────────────────────────
 function MentionTextarea({
-  value, onChange, onKeyDown, placeholder, users,
+  value, onChange, onKeyDown, onPaste, placeholder, users,
 }: {
   value: string
   onChange: (v: string) => void
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  onPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void
   placeholder: string
   users: OrgUser[]
 }) {
@@ -285,6 +287,7 @@ function MentionTextarea({
         value={value}
         onChange={handleInput}
         onKeyDown={onKeyDown}
+        onPaste={onPaste}
         placeholder={placeholder}
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
       />
@@ -331,6 +334,8 @@ export function OkrDetailClient({
   const [commentText, setCommentText] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const commentEndRef = useRef<HTMLDivElement>(null)
 
   // KR inline update
@@ -515,17 +520,54 @@ export function OkrDetailClient({
   }
 
   // ── Comments ─────────────────────────────────────────────────────────────────
+  async function uploadFiles(files: File[]): Promise<Array<{ name: string; url: string; type: 'image' | 'file' }>> {
+    const supabase = createClient()
+    const results: Array<{ name: string; url: string; type: 'image' | 'file' }> = []
+    for (const file of files) {
+      const ext = file.name.split('.').pop() ?? 'bin'
+      const path = `okr/${objective.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('task-attachments').upload(path, file)
+      if (error) { toast.error(`Upload failed: ${file.name}`); continue }
+      const { data: urlData } = supabase.storage.from('task-attachments').getPublicUrl(path)
+      results.push({ name: file.name, url: urlData.publicUrl, type: file.type.startsWith('image/') ? 'image' : 'file' })
+    }
+    return results
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = Array.from(e.clipboardData.items)
+    const imageItems = items.filter(item => item.type.startsWith('image/'))
+    if (imageItems.length === 0) return
+    e.preventDefault()
+    const files = imageItems.map(item => item.getAsFile()).filter(Boolean) as File[]
+    const named = files.map((f, i) => new File([f], `pasted-image-${Date.now()}-${i}.png`, { type: f.type }))
+    setPendingFiles(prev => [...prev, ...named])
+    toast.success(`${named.length} image(s) ready to attach`)
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+    setPendingFiles(prev => [...prev, ...files])
+    e.target.value = ''
+  }
+
+  function removePendingFile(index: number) {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
   async function postComment() {
-    if (!commentText.trim()) return
+    if (!commentText.trim() && pendingFiles.length === 0) return
     setSubmittingComment(true)
     try {
+      const attachments = pendingFiles.length > 0 ? await uploadFiles(pendingFiles) : []
       const res = await fetch(`/api/okr/${objective.id}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: commentText.trim(),
           parent_comment_id: replyTo?.id ?? null,
-          attachments: [],
+          attachments,
           actorName: currentUserName,
         }),
       })
@@ -545,6 +587,7 @@ export function OkrDetailClient({
         }]
       })
       setCommentText('')
+      setPendingFiles([])
       setReplyTo(null)
       setTimeout(() => commentEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
     } catch (err) {
@@ -1278,6 +1321,23 @@ export function OkrDetailClient({
 
                 {/* Comment input */}
                 <div className="pt-3 border-t border-gray-100">
+                  {pendingFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2 ml-10">
+                      {pendingFiles.map((f, i) => (
+                        <div key={i} className="flex items-center gap-1.5 bg-gray-100 rounded-lg px-2 py-1 text-xs text-gray-700 max-w-[180px]">
+                          {f.type.startsWith('image/') ? (
+                            <img src={URL.createObjectURL(f)} alt={f.name} className="h-8 w-8 object-cover rounded shrink-0" />
+                          ) : (
+                            <Paperclip className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                          )}
+                          <span className="truncate">{f.name}</span>
+                          <button onClick={() => removePendingFile(i)} className="shrink-0 text-gray-400 hover:text-red-500">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex gap-2 items-end">
                     <UserAvatar name={currentUserName} avatarUrl={currentUserAvatar} size="sm" className="w-8 h-8 shrink-0" />
                     <MentionTextarea
@@ -1286,14 +1346,19 @@ export function OkrDetailClient({
                       onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment() }
                       }}
-                      placeholder={replyTo ? `Reply to ${replyTo.user.full_name}…` : 'Write a comment… (@ to mention)'}
+                      onPaste={handlePaste}
+                      placeholder={replyTo ? `Reply to ${replyTo.user.full_name}… (@ to mention)` : 'Write a comment… (@ to mention, Ctrl+V to paste image)'}
                       users={users}
                     />
-                    <Button size="sm" onClick={postComment} loading={submittingComment} disabled={!commentText.trim()}>
+                    <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} title="Attach file" className="px-2">
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" onClick={postComment} loading={submittingComment} disabled={!commentText.trim() && pendingFiles.length === 0}>
                       <Send className="h-4 w-4" />
                     </Button>
                   </div>
-                  <p className="text-xs text-gray-400 ml-10 mt-1">Enter to send · Shift+Enter for new line · @ to mention</p>
+                  <p className="text-xs text-gray-400 ml-10 mt-1">Enter to send · Shift+Enter for new line · @ to mention · Ctrl+V to paste image</p>
+                  <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" onChange={handleFileSelect} />
                 </div>
               </div>
             </div>
