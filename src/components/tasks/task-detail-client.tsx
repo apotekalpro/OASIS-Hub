@@ -19,6 +19,7 @@ import { formatDate, formatRelativeTime, getDueStatus, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { createPortal } from 'react-dom'
 import { RichTextContent } from '@/components/ui/rich-text-editor'
+import * as Dialog from '@radix-ui/react-dialog'
 
 type Attachment = { name: string; url: string; type: 'image' | 'file' }
 type Reaction = { emoji: string; count: number; reacted: boolean }
@@ -856,31 +857,46 @@ export function TaskDetailClient({
 
               {/* Complete button */}
               {canChangeStatus && taskStatus !== 'done' && taskStatus !== 'cancelled' && (
-                <div>
-                  {confirmComplete ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleComplete}
-                        disabled={completing}
-                        className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 px-3 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        {completing ? 'Saving…' : 'Confirm Complete'}
-                      </button>
-                      <button onClick={() => setConfirmComplete(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg border border-gray-200">
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setConfirmComplete(true)}
-                      className="w-full flex items-center justify-center gap-1.5 border-2 border-green-500 text-green-600 hover:bg-green-50 text-sm font-medium py-2 px-3 rounded-lg transition-colors"
-                    >
+                <Dialog.Root open={confirmComplete} onOpenChange={setConfirmComplete}>
+                  <Dialog.Trigger asChild>
+                    <button className="w-full flex items-center justify-center gap-1.5 border-2 border-green-500 text-green-600 hover:bg-green-50 text-sm font-medium py-2 px-3 rounded-lg transition-colors">
                       <CheckCircle2 className="h-4 w-4" />
                       Mark as Complete
                     </button>
-                  )}
-                </div>
+                  </Dialog.Trigger>
+                  <Dialog.Portal>
+                    <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm" />
+                    <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 focus:outline-none">
+                      <div className="flex flex-col items-center text-center gap-4">
+                        <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-green-100">
+                          <CheckCircle2 className="h-8 w-8 text-green-600" />
+                          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-white text-xs font-bold">?</span>
+                        </div>
+                        <div>
+                          <Dialog.Title className="text-lg font-semibold text-gray-900">Mark as Complete?</Dialog.Title>
+                          <Dialog.Description className="mt-1 text-sm text-gray-500">
+                            This will mark the task as <strong>Done</strong> and notify all assignees and watchers.
+                          </Dialog.Description>
+                        </div>
+                        <div className="flex w-full gap-3 mt-2">
+                          <Dialog.Close asChild>
+                            <button className="flex-1 py-2 px-4 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                              Cancel
+                            </button>
+                          </Dialog.Close>
+                          <button
+                            onClick={handleComplete}
+                            disabled={completing}
+                            className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            {completing ? 'Saving…' : 'Yes, Complete'}
+                          </button>
+                        </div>
+                      </div>
+                    </Dialog.Content>
+                  </Dialog.Portal>
+                </Dialog.Root>
               )}
               {taskStatus === 'done' && (
                 <div className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm font-medium py-2 px-3 rounded-lg">
