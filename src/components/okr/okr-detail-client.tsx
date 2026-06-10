@@ -194,10 +194,12 @@ function CommentItem({
         </div>
 
         <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap leading-relaxed">
-          {comment.content.split(/(@\w[^@\s]*(?:\s\w+)?)/g).map((part, i) =>
+          {comment.content.split(/(https?:\/\/[^\s]+|@\w[^@\s]*(?:\s\w+)?)/g).map((part, i) =>
             part.startsWith('@')
               ? <span key={i} className="text-indigo-600 font-medium">{part}</span>
-              : part
+              : /^https?:\/\//.test(part)
+                ? <a key={i} href={part} target="_blank" rel="noreferrer" className="text-indigo-600 underline hover:text-indigo-800 break-all">{part}</a>
+                : part
           )}
         </p>
 
