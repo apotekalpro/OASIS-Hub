@@ -105,9 +105,8 @@ export function TemplateBuilder({ templateId, initialSections }: Props) {
   }
 
   async function deleteSection(sectionId: string) {
-    const supabase = createClient()
-    const { error } = await supabase.from('template_sections').delete().eq('id', sectionId)
-    if (error) { toast.error(error.message); return }
+    const res = await fetch(`/api/inspections/sections/${sectionId}`, { method: 'DELETE' })
+    if (!res.ok) { const d = await res.json(); toast.error(d.error ?? 'Failed to delete section'); return }
     setSections(prev => prev.filter(s => s.id !== sectionId))
     toast.success('Section deleted')
   }
@@ -138,9 +137,12 @@ export function TemplateBuilder({ templateId, initialSections }: Props) {
   }
 
   async function updateQuestion(sectionId: string, questionId: string, patch: Partial<Question>) {
-    const supabase = createClient()
-    const { error } = await supabase.from('template_questions').update(patch).eq('id', questionId)
-    if (error) { toast.error(error.message); return }
+    const res = await fetch(`/api/inspections/questions/${questionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    if (!res.ok) { const d = await res.json(); toast.error(d.error ?? 'Failed to save'); return }
     setSections(prev => prev.map(s =>
       s.id === sectionId
         ? { ...s, template_questions: s.template_questions.map(q => q.id === questionId ? { ...q, ...patch } : q) }
@@ -149,9 +151,8 @@ export function TemplateBuilder({ templateId, initialSections }: Props) {
   }
 
   async function deleteQuestion(sectionId: string, questionId: string) {
-    const supabase = createClient()
-    const { error } = await supabase.from('template_questions').delete().eq('id', questionId)
-    if (error) { toast.error(error.message); return }
+    const res = await fetch(`/api/inspections/questions/${questionId}`, { method: 'DELETE' })
+    if (!res.ok) { const d = await res.json(); toast.error(d.error ?? 'Failed to delete question'); return }
     setSections(prev => prev.map(s =>
       s.id === sectionId ? { ...s, template_questions: s.template_questions.filter(q => q.id !== questionId) } : s
     ))
@@ -352,6 +353,18 @@ function QuestionRow({
   onUpdate: (patch: Partial<Question>) => void
   onDelete: () => void
 }) {
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  async function saveField(patch: Partial<Question>) {
+    setSaving(true)
+    setSaved(false)
+    await onUpdate(patch)
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1500)
+  }
+
   // Local state for all text inputs — onChange updates local state instantly (no lag),
   // onBlur persists to DB. This prevents async DB re-renders from dropping keystrokes.
   const [questionText, setQuestionText] = useState(question.question_text)
@@ -363,11 +376,6 @@ function QuestionRow({
   const [numericMin, setNumericMin] = useState(question.numeric_min != null ? String(question.numeric_min) : '')
   const [numericMax, setNumericMax] = useState(question.numeric_max != null ? String(question.numeric_max) : '')
   const [numericThreshold, setNumericThreshold] = useState(question.numeric_threshold != null ? String(question.numeric_threshold) : '')
-
-  function saveOptions() {
-    const opts = optionsText.split('\n').map(s => s.trim()).filter(Boolean)
-    onUpdate({ options: opts.length > 0 ? opts : null })
-  }
 
   const needsOptions = ['multiple_choice', 'multi_select', 'checklist'].includes(question.question_type)
   const needsNumeric = question.question_type === 'numeric'
@@ -386,7 +394,7 @@ function QuestionRow({
               className="w-full text-sm font-medium text-gray-900 focus:outline-none border-b border-transparent focus:border-indigo-300 pb-0.5"
               value={questionText}
               onChange={e => setQuestionText(e.target.value)}
-              onBlur={() => { if (questionText !== question.question_text) onUpdate({ question_text: questionText }) }}
+              onBlur={() => { if (questionText !== question.question_text) saveField({ question_text: questionText }) }}
               placeholder="Question text..."
             />
           ) : (
@@ -400,6 +408,8 @@ function QuestionRow({
                 <AlertCircle className="h-3 w-3" /> Flags issue
               </span>
             )}
+            {saving && <span className="text-xs text-gray-400 animate-pulse">Saving…</span>}
+            {saved && <span className="text-xs text-green-600">Saved</span>}
           </div>
         </div>
         <button onClick={onDelete} className="text-gray-300 hover:text-red-500 transition-colors shrink-0">
@@ -416,7 +426,7 @@ function QuestionRow({
             <select
               className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               value={question.question_type}
-              onChange={e => onUpdate({ question_type: e.target.value })}
+              onChange={e => saveField({ question_type: e.target.value })}
             >
               {QUESTION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
@@ -432,7 +442,7 @@ function QuestionRow({
               className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               value={scoreWeight}
               onChange={e => setScoreWeight(e.target.value)}
-              onBlur={() => onUpdate({ score_weight: parseFloat(scoreWeight) || 1 })}
+              onBlur={() => saveField({ score_weight: parseFloat(scoreWeight) || 1 })}
             />
           </div>
 
@@ -444,7 +454,7 @@ function QuestionRow({
               placeholder="Shown beneath the question to guide the auditor"
               value={hintText}
               onChange={e => setHintText(e.target.value)}
-              onBlur={() => { if (hintText !== (question.hint_text ?? '')) onUpdate({ hint_text: hintText || null }) }}
+              onBlur={() => { if (hintText !== (question.hint_text ?? '')) saveField({ hint_text: hintText || null }) }}
             />
           </div>
 
@@ -452,7 +462,7 @@ function QuestionRow({
           {needsOptions && question.question_type === 'checklist' && (
             <ChecklistItemsEditor
               items={(question.options ?? []).length > 0 ? question.options! : ['']}
-              onSave={items => onUpdate({ options: items.filter(Boolean) })}
+              onSave={items => saveField({ options: items.filter(Boolean) })}
             />
           )}
 
@@ -464,7 +474,10 @@ function QuestionRow({
                 className="flex w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[80px]"
                 value={optionsText}
                 onChange={e => setOptionsText(e.target.value)}
-                onBlur={saveOptions}
+                onBlur={() => {
+                  const opts = optionsText.split('\n').map(s => s.trim()).filter(Boolean)
+                  saveField({ options: opts.length > 0 ? opts : null })
+                }}
                 placeholder={'Yes, all stock is rotated correctly\nPartially rotated\nNo rotation observed'}
               />
             </div>
@@ -480,7 +493,7 @@ function QuestionRow({
                   className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={numericMin}
                   onChange={e => setNumericMin(e.target.value)}
-                  onBlur={() => onUpdate({ numeric_min: numericMin ? parseFloat(numericMin) : null })}
+                  onBlur={() => saveField({ numeric_min: numericMin ? parseFloat(numericMin) : null })}
                 />
               </div>
               <div>
@@ -490,7 +503,7 @@ function QuestionRow({
                   className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={numericMax}
                   onChange={e => setNumericMax(e.target.value)}
-                  onBlur={() => onUpdate({ numeric_max: numericMax ? parseFloat(numericMax) : null })}
+                  onBlur={() => saveField({ numeric_max: numericMax ? parseFloat(numericMax) : null })}
                 />
               </div>
               <div>
@@ -500,7 +513,7 @@ function QuestionRow({
                   className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={numericThreshold}
                   onChange={e => setNumericThreshold(e.target.value)}
-                  onBlur={() => onUpdate({ numeric_threshold: numericThreshold ? parseFloat(numericThreshold) : null })}
+                  onBlur={() => saveField({ numeric_threshold: numericThreshold ? parseFloat(numericThreshold) : null })}
                 />
               </div>
             </>
@@ -512,7 +525,7 @@ function QuestionRow({
             <select
               className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               value={question.flags_issue_on ?? ''}
-              onChange={e => onUpdate({ flags_issue_on: e.target.value || null })}
+              onChange={e => saveField({ flags_issue_on: e.target.value || null })}
             >
               {FLAG_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
             </select>
@@ -524,7 +537,7 @@ function QuestionRow({
               <select
                 className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={question.issue_severity ?? 'medium'}
-                onChange={e => onUpdate({ issue_severity: e.target.value })}
+                onChange={e => saveField({ issue_severity: e.target.value })}
               >
                 {SEVERITY_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
@@ -539,7 +552,7 @@ function QuestionRow({
                 <select
                   className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={question.depends_on_question_id ?? ''}
-                  onChange={e => onUpdate({ depends_on_question_id: e.target.value || null })}
+                  onChange={e => saveField({ depends_on_question_id: e.target.value || null })}
                 >
                   <option value="">— Always show —</option>
                   {allQuestions.map(q => (
@@ -555,7 +568,7 @@ function QuestionRow({
                     placeholder='e.g. "no" or "Yes"'
                     value={dependsOnValue}
                     onChange={e => setDependsOnValue(e.target.value)}
-                    onBlur={() => { if (dependsOnValue !== (question.depends_on_value ?? '')) onUpdate({ depends_on_value: dependsOnValue || null }) }}
+                    onBlur={() => { if (dependsOnValue !== (question.depends_on_value ?? '')) saveField({ depends_on_value: dependsOnValue || null }) }}
                   />
                 </div>
               )}
@@ -570,7 +583,7 @@ function QuestionRow({
               placeholder="e.g. Check the SOP binder at the pharmacy counter"
               value={referenceNote}
               onChange={e => setReferenceNote(e.target.value)}
-              onBlur={() => { if (referenceNote !== (question.reference_note ?? '')) onUpdate({ reference_note: referenceNote || null }) }}
+              onBlur={() => { if (referenceNote !== (question.reference_note ?? '')) saveField({ reference_note: referenceNote || null }) }}
             />
           </div>
 
@@ -581,7 +594,7 @@ function QuestionRow({
                 type="checkbox"
                 className="h-4 w-4 rounded border-gray-300 text-indigo-600"
                 checked={question.is_required}
-                onChange={e => onUpdate({ is_required: e.target.checked })}
+                onChange={e => saveField({ is_required: e.target.checked })}
               />
               <span className="text-xs text-gray-600 font-medium">Required (cannot skip)</span>
             </label>
