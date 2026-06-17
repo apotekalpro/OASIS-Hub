@@ -119,6 +119,7 @@ export default async function TasksPage() {
       initialTasks={tasks}
       orgId={orgId}
       currentUserId={user.id}
+      currentUserRole={(profile?.role ?? 'member') as string}
       users={(usersRes.data as OrgUser[]) ?? []}
       teams={(teamsRes.data as unknown as Array<{ id: string; name: string; team_members?: Array<{ user_id: string; profiles?: OrgUser | null }> }>) ?? []}
       departments={(deptsRes.data as Array<{ id: string; name: string }>) ?? []}

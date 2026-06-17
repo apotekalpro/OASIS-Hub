@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { canEditDeadline } from '@/lib/auth/permissions'
+import type { UserRole } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,6 +70,31 @@ export async function PATCH(
   const existingKrs = krsArray?.filter(kr => kr.id) ?? []
   const newKrs = krsArray?.filter(kr => !kr.id) ?? []
   const keptKrIds = existingKrs.map(kr => kr.id as string)
+
+  // Deadlines (objective end_date + KR due_date) may only be changed by the owner or dept_head+
+  const krDueDateChanges = existingKrs.filter(kr => 'due_date' in kr)
+  if ('end_date' in fields || krDueDateChanges.length > 0) {
+    const [{ data: existingObjective }, { data: profile }, { data: existingKrRows }] = await Promise.all([
+      admin.from('okr_objectives').select('end_date, created_by').eq('id', objectiveId).single(),
+      admin.from('profiles').select('role').eq('id', user.id).single(),
+      krDueDateChanges.length > 0
+        ? admin.from('okr_key_results').select('id, due_date').in('id', krDueDateChanges.map(kr => kr.id as string))
+        : Promise.resolve({ data: [] as { id: string; due_date: string | null }[] }),
+    ])
+    if (existingObjective) {
+      const allowed = canEditDeadline(user.id, (profile?.role ?? 'member') as UserRole, existingObjective.created_by)
+      if (!allowed) {
+        const objDateChanged = 'end_date' in fields && (existingObjective.end_date ?? null) !== (fields.end_date ?? null)
+        const krDateChanged = krDueDateChanges.some(kr => {
+          const existing = (existingKrRows ?? []).find(r => r.id === kr.id)
+          return existing && (existing.due_date ?? null) !== (kr.due_date ?? null)
+        })
+        if (objDateChanged || krDateChanged) {
+          return NextResponse.json({ error: 'Only the objective owner or an admin can change deadlines' }, { status: 403 })
+        }
+      }
+    }
+  }
 
   // Phase 1: update objective + delete removed KRs + delete assignees/watchers
   const [updateResult, orgRes] = await Promise.all([

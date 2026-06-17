@@ -39,6 +39,7 @@ interface Props {
   tasks: TaskCardData[]
   orgId: string
   currentUserId: string
+  currentUserRole: string
   users: OrgUser[]
   teams: Team[]
   departments: Department[]

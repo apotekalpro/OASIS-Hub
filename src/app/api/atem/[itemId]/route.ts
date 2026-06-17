@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { canEditDeadline } from '@/lib/auth/permissions'
+import type { UserRole } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +39,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ it
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { assigneeIds, watcherIds, ...fields } = body
+
+  // Deadline may only be changed by the item owner or dept_head+
+  if ('deadline' in fields) {
+    const [{ data: existingItem }, { data: profile }] = await Promise.all([
+      admin.from('atem_items').select('deadline, created_by').eq('id', itemId).single(),
+      admin.from('profiles').select('role').eq('id', user.id).single(),
+    ])
+    const deadlineChanged = (existingItem?.deadline ?? null) !== (fields.deadline ?? null)
+    if (deadlineChanged && existingItem && !canEditDeadline(user.id, (profile?.role ?? 'member') as UserRole, existingItem.created_by)) {
+      return NextResponse.json({ error: 'Only the item owner or an admin can change the deadline' }, { status: 403 })
+    }
+  }
 
   // Phase 1: update + delete in parallel
   const [updateResult] = await Promise.all([

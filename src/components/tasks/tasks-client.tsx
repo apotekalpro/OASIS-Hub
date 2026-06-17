@@ -28,12 +28,13 @@ interface Props {
   initialTasks: TaskCardData[]
   orgId: string
   currentUserId: string
+  currentUserRole: string
   users: OrgUser[]
   teams: Team[]
   departments: Department[]
 }
 
-export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, departments }: Props) {
+export function TasksClient({ initialTasks, orgId, currentUserId, currentUserRole, users, teams, departments }: Props) {
   const router = useRouter()
   const [view, setView] = useState<View>('list')
   const [tasks, setTasks] = useState<TaskCardData[]>(initialTasks)
@@ -370,6 +371,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
           tasks={filtered}
           orgId={orgId}
           currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
           users={users}
           teams={teams}
           departments={departments}
@@ -381,6 +383,7 @@ export function TasksClient({ initialTasks, orgId, currentUserId, users, teams, 
           tasks={filtered}
           orgId={orgId}
           currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
           users={users}
           teams={teams}
           departments={departments}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, X, Eye, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, X, Eye, Trash2, ChevronDown, ChevronUp, Lock } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,6 +51,7 @@ interface Props {
   objective?: ExistingObjective
   trigger?: React.ReactNode
   onCreated?: () => void
+  canEditDeadline?: boolean
 }
 
 const METRIC_LABELS = {
@@ -78,7 +79,7 @@ function newSubtaskDraft(): SubtaskDraft {
   return { _id: Math.random().toString(36).slice(2), title: '', priority: 'medium' }
 }
 
-export function OkrForm({ orgId, currentUserId, users, departments, teams, objective, trigger, onCreated }: Props) {
+export function OkrForm({ orgId, currentUserId, users, departments, teams, objective, trigger, onCreated, canEditDeadline = true }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -326,8 +327,14 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
                   <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                  <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                    End Date
+                    {!canEditDeadline && <Lock className="h-3 w-3 text-gray-400" />}
+                  </label>
+                  <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} disabled={!canEditDeadline} />
+                  {!canEditDeadline && (
+                    <p className="text-xs text-gray-400 mt-1">Only the objective owner or an admin can change this date</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
@@ -462,13 +469,20 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
                               </>
                             )}
                             <div className="col-span-2">
-                              <label className="block text-xs text-gray-500 mb-1">Due Date</label>
+                              <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                                Due Date
+                                {!canEditDeadline && <Lock className="h-3 w-3 text-gray-400" />}
+                              </label>
                               <input
                                 type="date"
                                 value={kr.due_date}
                                 onChange={e => updateKr(kr._id, 'due_date', e.target.value)}
-                                className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                disabled={!canEditDeadline}
+                                className="flex h-8 w-full rounded-md border border-gray-300 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400"
                               />
+                              {!canEditDeadline && (
+                                <p className="text-xs text-gray-400 mt-1">Only the objective owner or an admin can change this date</p>
+                              )}
                             </div>
                             <div className="col-span-2">
                               <label className="block text-xs text-gray-500 mb-1">Description</label>

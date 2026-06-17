@@ -762,6 +762,7 @@ export function TaskDetailClient({
   const isAssignee = assigneesList.some(a => a.id === currentUserId)
   const canManageAssignees = isOwner || isAssignee || isDeptHeadPlus
   const canChangeStatus = isOwner || isAssignee || isDeptHeadPlus
+  const canEditDeadline = isOwner || isDeptHeadPlus
 
   const doneSubs = subtasks.filter(s => s.status === 'done').length
 
@@ -800,6 +801,7 @@ export function TaskDetailClient({
                 dept_id: task.dept_id,
                 tags: task.tags,
               }}
+              canEditDeadline={canEditDeadline}
               trigger={
                 <Button variant="outline" size="sm">
                   <Edit2 className="h-4 w-4" />

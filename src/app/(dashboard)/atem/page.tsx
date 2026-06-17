@@ -75,6 +75,7 @@ export default async function AtemPage() {
         initialItems={itemsRes.data ?? []}
         orgId={orgId}
         currentUserId={user.id}
+        currentUserRole={role}
         users={usersRes.data ?? []}
         departments={deptsRes.data ?? []}
         teams={teamsRes.data ?? []}

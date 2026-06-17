@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, X, Tag, Eye } from 'lucide-react'
+import { Plus, X, Tag, Eye, Lock } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,9 +45,10 @@ interface Props {
   defaultStatus?: string
   trigger?: React.ReactNode
   onCreated?: (taskId: string) => void
+  canEditDeadline?: boolean
 }
 
-export function TaskForm({ orgId, currentUserId, users, teams, departments, task, defaultStatus, trigger, onCreated }: Props) {
+export function TaskForm({ orgId, currentUserId, users, teams, departments, task, defaultStatus, trigger, onCreated, canEditDeadline = true }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [selectedAssignees, setSelectedAssignees] = useState<OrgUser[]>([])
@@ -231,8 +232,14 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
                   <Input type="date" {...register('start_date')} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-                  <Input type="date" {...register('due_date')} />
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                    Due Date
+                    {!canEditDeadline && <Lock className="h-3 w-3 text-gray-400" />}
+                  </label>
+                  <Input type="date" disabled={!canEditDeadline} {...register('due_date')} />
+                  {!canEditDeadline && (
+                    <p className="text-xs text-gray-400 mt-1">Only the task owner or an admin can change the due date</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Est. Hours</label>

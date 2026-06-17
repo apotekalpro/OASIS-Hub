@@ -73,6 +73,11 @@ export function canAccessAdminPanel(role: UserRole): boolean {
   return hasRole(role, 'dept_head')
 }
 
+/** Deadlines on tasks/OKRs/ATEM items may only be changed by the creator/owner or dept_head+. */
+export function canEditDeadline(userId: string, userRole: UserRole, ownerId: string): boolean {
+  return userId === ownerId || hasRole(userRole, 'dept_head')
+}
+
 export const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
   org_admin: 'Organization Admin',

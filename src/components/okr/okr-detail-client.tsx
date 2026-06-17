@@ -855,6 +855,7 @@ export function OkrDetailClient({
                   dept_id: objective.dept_id,
                   team_id: objective.team_id,
                 }}
+                canEditDeadline={isOwner || isDeptHeadPlus}
                 trigger={
                   <Button variant="outline" size="sm">
                     <Edit2 className="h-4 w-4" />

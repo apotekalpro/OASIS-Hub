@@ -2,6 +2,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { sendEmail } from '@/lib/email/send'
 import { taskCompletedEmail } from '@/lib/email/templates'
+import { canEditDeadline } from '@/lib/auth/permissions'
+import type { UserRole } from '@/types/database'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? process.env.URL ?? 'https://oasishub.netlify.app'
 
@@ -16,6 +18,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
 
   const admin = createAdminClient()
   const { assigneeIds, watcherIds, ...taskPayload } = body
+
+  // Deadline (due_date) may only be changed by the task owner or dept_head+
+  if ('due_date' in taskPayload) {
+    const [{ data: existingTask }, { data: profile }] = await Promise.all([
+      admin.from('tasks').select('due_date, created_by').eq('id', taskId).single(),
+      admin.from('profiles').select('role').eq('id', user.id).single(),
+    ])
+    const dueDateChanged = (existingTask?.due_date ?? null) !== (taskPayload.due_date ?? null)
+    if (dueDateChanged && existingTask && !canEditDeadline(user.id, (profile?.role ?? 'member') as UserRole, existingTask.created_by)) {
+      return NextResponse.json({ error: 'Only the task owner or an admin can change the due date' }, { status: 403 })
+    }
+  }
 
   // Phase 1: update + delete old assignees/watchers in parallel
   const [updateResult] = await Promise.all([

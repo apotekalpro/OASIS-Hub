@@ -14,6 +14,8 @@ import {
   FileText, Download, Paperclip,
 } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
+import { hasRole } from '@/lib/auth/permissions'
+import type { UserRole } from '@/types/database'
 import { toast } from 'sonner'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
@@ -490,6 +492,7 @@ export function AtemDetailClient({
   const isDeptHeadPlus = ['super_admin', 'org_admin', 'dept_head', 'chief', 'lead', 'area_manager', 'team_leader'].includes(currentUserRole)
   const canDelete = isOwner || isDeptHeadPlus
   const canEdit = isOwner || isDeptHeadPlus || assigneesList.some(a => a.id === currentUserId)
+  const canEditDeadline = isOwner || hasRole(currentUserRole as UserRole, 'dept_head')
 
   async function updateField(patch: Partial<AtemItem>) {
     const res = await fetch(`/api/atem/${item.id}`, {
@@ -778,6 +781,7 @@ export function AtemDetailClient({
                 departments={departments}
                 teams={teams}
                 item={itemAsExisting}
+                canEditDeadline={canEditDeadline}
                 trigger={
                   <Button variant="outline" size="sm">
                     <Edit2 className="h-4 w-4" />

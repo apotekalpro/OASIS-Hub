@@ -10,6 +10,8 @@ import { Calendar, ChevronUp, ChevronDown, ChevronsUpDown, CheckCircle2, X, Tras
 import { getDueStatus, cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { hasRole } from '@/lib/auth/permissions'
+import type { UserRole } from '@/types/database'
 
 type OrgUser = { id: string; full_name: string; email: string; avatar_url: string | null }
 type Team = { id: string; name: string }
@@ -29,6 +31,7 @@ interface Props {
   tasks: TaskCardData[]
   orgId: string
   currentUserId: string
+  currentUserRole: string
   users: OrgUser[]
   teams: Team[]
   departments: Department[]
@@ -43,7 +46,7 @@ function SortIcon({ field, active, dir }: { field: string; active: string; dir: 
     : <ChevronDown className="h-3.5 w-3.5 text-indigo-500" />
 }
 
-export function TaskList({ tasks, orgId, currentUserId, users, teams, departments, onRefresh, onDelete }: Props) {
+export function TaskList({ tasks, orgId, currentUserId, currentUserRole, users, teams, departments, onRefresh, onDelete }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('created_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [confirmId, setConfirmId] = useState<string | null>(null)
@@ -235,6 +238,7 @@ export function TaskList({ tasks, orgId, currentUserId, users, teams, department
                         priority: task.priority, status: task.status, due_date: task.due_date,
                         start_date: null, estimated_hours: null, team_id: null, dept_id: null, tags: task.tags,
                       }}
+                      canEditDeadline={task.created_by === currentUserId || hasRole(currentUserRole as UserRole, 'dept_head')}
                       trigger={
                         <button className="text-xs text-gray-500 hover:text-indigo-600 transition-colors">
                           Edit

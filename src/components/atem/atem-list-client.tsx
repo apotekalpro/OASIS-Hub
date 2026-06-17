@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input'
 import { cn, formatDate } from '@/lib/utils'
 import { Search, Filter, X, Edit2, Trash2, Clock, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
+import { hasRole } from '@/lib/auth/permissions'
+import type { UserRole } from '@/types/database'
 
 function stripHtml(html: string) {
   return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
@@ -48,6 +50,7 @@ interface Props {
   initialItems: AtemItem[]
   orgId: string
   currentUserId: string
+  currentUserRole: string
   users: OrgUser[]
   departments: Department[]
   teams: Team[]
@@ -84,7 +87,7 @@ const PRIORITY_LABEL: Record<string, string> = {
 const STATUSES = ['pending', 'in_progress', 'completed', 'blocked']
 const PRIORITIES = ['urgent', 'high', 'medium', 'low']
 
-export function AtemListClient({ initialItems, orgId, currentUserId, users, departments, teams }: Props) {
+export function AtemListClient({ initialItems, orgId, currentUserId, currentUserRole, users, departments, teams }: Props) {
   const router = useRouter()
   const [items, setItems] = useState<AtemItem[]>(initialItems)
   useEffect(() => { setItems(initialItems) }, [initialItems])
@@ -381,6 +384,7 @@ export function AtemListClient({ initialItems, orgId, currentUserId, users, depa
                           departments={departments}
                           teams={teams}
                           item={itemAsExisting}
+                          canEditDeadline={item.created_by === currentUserId || hasRole(currentUserRole as UserRole, 'dept_head')}
                           trigger={
                             <button className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors" title="Edit">
                               <Edit2 className="h-3.5 w-3.5" />

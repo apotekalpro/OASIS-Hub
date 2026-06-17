@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, X, Tag, Eye } from 'lucide-react'
+import { Plus, X, Tag, Eye, Lock } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,9 +55,10 @@ interface Props {
   item?: ExistingAtemItem
   trigger?: React.ReactNode
   onCreated?: (itemId: string) => void
+  canEditDeadline?: boolean
 }
 
-export function AtemForm({ orgId, currentUserId, users, departments, teams, item, trigger, onCreated }: Props) {
+export function AtemForm({ orgId, currentUserId, users, departments, teams, item, trigger, onCreated, canEditDeadline = true }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [selectedAssignees, setSelectedAssignees] = useState<OrgUser[]>([])
@@ -307,9 +308,13 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
                     <span className="text-gray-500 text-xs">⏰</span>
                     Nearest Deadline
                     <span className="text-xs font-normal text-gray-400">(for reminder &amp; countdown)</span>
+                    {!canEditDeadline && <Lock className="h-3 w-3 text-gray-400" />}
                   </span>
                 </label>
-                <Input type="date" {...register('nearest_deadline')} />
+                <Input type="date" disabled={!canEditDeadline} {...register('nearest_deadline')} />
+                {!canEditDeadline && (
+                  <p className="text-xs text-gray-400 mt-1">Only the item owner or an admin can change the deadline</p>
+                )}
               </div>
 
               {/* Action Plan */}
