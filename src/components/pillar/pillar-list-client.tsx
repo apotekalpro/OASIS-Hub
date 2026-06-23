@@ -7,6 +7,7 @@ import { Search, Award, Store, Calendar, Building2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { PillarGamificationBanner } from './pillar-gamification-banner'
 
 type KeyResult = {
   id: string
@@ -38,6 +39,7 @@ export type PillarAssignment = {
 interface Props {
   initialAssignments: PillarAssignment[]
   initialMonth: string
+  rewardOutletId: string | null
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -83,7 +85,7 @@ function monthOptions() {
   return opts
 }
 
-export function PillarListClient({ initialAssignments, initialMonth }: Props) {
+export function PillarListClient({ initialAssignments, initialMonth, rewardOutletId }: Props) {
   const router = useRouter()
   const [assignments, setAssignments] = useState(initialAssignments)
   useEffect(() => { setAssignments(initialAssignments) }, [initialAssignments])
@@ -112,16 +114,19 @@ export function PillarListClient({ initialAssignments, initialMonth }: Props) {
   return (
     <div className="space-y-5">
       {/* Gamification banner */}
-      <div className="rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white p-5 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <Award className="h-8 w-8 opacity-90" />
-          <div>
-            <p className="text-sm font-medium opacity-90">Monthly Pillar Progress</p>
-            <p className="text-2xl font-bold">{avgProgress}% average · {completed}/{total} completed</p>
+      {rewardOutletId ? (
+        <PillarGamificationBanner outletId={rewardOutletId} month={month} />
+      ) : (
+        <div className="rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white p-5 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Award className="h-8 w-8 opacity-90" />
+            <div>
+              <p className="text-sm font-medium opacity-90">Monthly Pillar Progress</p>
+              <p className="text-2xl font-bold">{avgProgress}% average · {completed}/{total} completed</p>
+            </div>
           </div>
         </div>
-        <p className="text-xs opacity-90 max-w-xs">Reward tracking (Incentive 1, 2 &amp; 3) lands in Phase 2 — keep completing your Pillars to maximize payout.</p>
-      </div>
+      )}
 
       {/* Month + search */}
       <div className="flex flex-col sm:flex-row gap-3">

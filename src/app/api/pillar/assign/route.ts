@@ -41,24 +41,39 @@ export async function POST(req: NextRequest) {
     months = [],
     targets = [],
     keyResults = [],
-  }: { templateId: string | null; title: string; description: string | null; months: string[]; targets: Target[]; keyResults: Record<string, unknown>[] } = body
+    incentive1Amount = 0,
+    incentive1Basis = 'per_outlet',
+  }: { templateId: string | null; title: string; description: string | null; months: string[]; targets: Target[]; keyResults: Record<string, unknown>[]; incentive1Amount?: number; incentive1Basis?: 'per_outlet' | 'per_pax' } = body
 
   if (!title || months.length === 0 || targets.length === 0) {
     return NextResponse.json({ error: 'title, months, and targets are required' }, { status: 400 })
   }
 
-  // Resolve template KR definitions (used unless caller passed explicit adhoc keyResults)
+  // Resolve template KR definitions and incentive1 (used unless caller passed explicit adhoc values)
   let krDefs = keyResults
-  if (templateId && krDefs.length === 0) {
-    const { data: tplKrs } = await admin.from('pillar_kr_templates').select('*').eq('template_id', templateId).order('position')
-    krDefs = (tplKrs ?? []).map(kr => ({
-      title: kr.title,
-      description: kr.description,
-      metric_type: kr.metric_type,
-      start_value: kr.start_value,
-      target_value: kr.target_value,
-      unit: kr.unit,
-    }))
+  let incentive1amount = incentive1Amount
+  let incentive1basis = incentive1Basis
+  if (templateId) {
+    const [{ data: tplKrs }, { data: tpl }] = await Promise.all([
+      krDefs.length === 0
+        ? admin.from('pillar_kr_templates').select('*').eq('template_id', templateId).order('position')
+        : Promise.resolve({ data: null }),
+      admin.from('pillar_templates').select('incentive1_amount, incentive1_basis').eq('id', templateId).single(),
+    ])
+    if (tplKrs) {
+      krDefs = tplKrs.map(kr => ({
+        title: kr.title,
+        description: kr.description,
+        metric_type: kr.metric_type,
+        start_value: kr.start_value,
+        target_value: kr.target_value,
+        unit: kr.unit,
+      }))
+    }
+    if (tpl) {
+      incentive1amount = tpl.incentive1_amount
+      incentive1basis = tpl.incentive1_basis
+    }
   }
 
   // Look up outlet metadata (dept_id, area_manager_id) for outlet targets
@@ -92,6 +107,8 @@ export async function POST(req: NextRequest) {
         dept_id: outlet?.dept_id ?? (t.userId ? userById.get(t.userId)?.dept_id ?? null : null),
         area_manager_id: outlet?.area_manager_id ?? null,
         assigned_by: user.id,
+        incentive1_amount: incentive1amount,
+        incentive1_basis: incentive1basis,
       })
     }
   }

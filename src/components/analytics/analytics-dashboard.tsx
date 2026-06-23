@@ -75,6 +75,7 @@ export function AnalyticsDashboard({ taskStats, trend, teamStats, contributors, 
           <a href="/analytics?tab=atem" className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">ATEM</a>
           <a href="/analytics?tab=okr" className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">OKR</a>
           <a href="/analytics?tab=inspections" className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Inspections</a>
+          <a href="/analytics?tab=pillar" className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Pillar</a>
         </div>
       </div>
 

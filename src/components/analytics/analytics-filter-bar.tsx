@@ -64,7 +64,7 @@ export function AnalyticsFilterBar({ departments, users, outlets, tab }: Props) 
         </select>
       )}
 
-      {tab === 'inspections' && outlets.length > 0 && (
+      {(tab === 'inspections' || tab === 'pillar') && outlets.length > 0 && (
         <select
           value={currentOutlet}
           onChange={e => update('outlet_filter', e.target.value)}

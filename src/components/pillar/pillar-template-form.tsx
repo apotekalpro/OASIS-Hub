@@ -25,6 +25,8 @@ type ExistingTemplate = {
   title: string
   description: string | null
   dept_id: string | null
+  incentive1_amount?: number
+  incentive1_basis?: 'per_outlet' | 'per_pax'
   pillar_kr_templates: KRTemplate[]
 }
 
@@ -44,6 +46,8 @@ export function PillarTemplateForm({ departments, template, trigger, onSaved }: 
   const [description, setDescription] = useState(template?.description ?? '')
   const [deptId, setDeptId] = useState(template?.dept_id ?? '')
   const [krs, setKrs] = useState<KRTemplate[]>(template?.pillar_kr_templates ?? [])
+  const [incentive1Amount, setIncentive1Amount] = useState(template?.incentive1_amount ?? 0)
+  const [incentive1Basis, setIncentive1Basis] = useState<'per_outlet' | 'per_pax'>(template?.incentive1_basis ?? 'per_outlet')
   const [saving, setSaving] = useState(false)
 
   function addKr() {
@@ -69,6 +73,8 @@ export function PillarTemplateForm({ departments, template, trigger, onSaved }: 
       description: description.trim() || null,
       dept_id: deptId || null,
       keyResults: krs.filter(kr => kr.title.trim()),
+      incentive1_amount: Number(incentive1Amount) || 0,
+      incentive1_basis: incentive1Basis,
     }
     const res = template
       ? await fetch(`/api/pillar/templates/${template.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -119,6 +125,26 @@ export function PillarTemplateForm({ departments, template, trigger, onSaved }: 
                 <option value="">No department</option>
                 {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1.5 block">Incentive 1 (paid when this Pillar is completed)</label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  type="number"
+                  value={incentive1Amount}
+                  onChange={e => setIncentive1Amount(Number(e.target.value))}
+                  placeholder="Amount (Rp)"
+                />
+                <select
+                  value={incentive1Basis}
+                  onChange={e => setIncentive1Basis(e.target.value as 'per_outlet' | 'per_pax')}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                >
+                  <option value="per_outlet">Flat per outlet</option>
+                  <option value="per_pax">Per staff (x headcount)</option>
+                </select>
+              </div>
             </div>
 
             <div className="space-y-2">

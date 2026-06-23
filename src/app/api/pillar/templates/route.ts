@@ -51,6 +51,8 @@ export async function POST(req: NextRequest) {
     description: fields.description || null,
     dept_id: fields.dept_id || null,
     is_active: fields.is_active ?? true,
+    incentive1_amount: fields.incentive1_amount ?? 0,
+    incentive1_basis: fields.incentive1_basis ?? 'per_outlet',
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

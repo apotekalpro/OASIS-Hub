@@ -40,6 +40,8 @@ export function PillarAssignModal({ templateId, defaultTitle = '', outlets, user
   const [description, setDescription] = useState('')
   const [targets, setTargets] = useState<PillarTarget[]>([])
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
+  const [incentive1Amount, setIncentive1Amount] = useState(0)
+  const [incentive1Basis, setIncentive1Basis] = useState<'per_outlet' | 'per_pax'>('per_outlet')
   const [saving, setSaving] = useState(false)
   const months = useMemo(() => nextMonths(), [])
 
@@ -62,6 +64,7 @@ export function PillarAssignModal({ templateId, defaultTitle = '', outlets, user
         description: description.trim() || null,
         months: selectedMonths,
         targets: targets.map(t => 'outlet' in t ? { scopeType: t.scopeType, outletId: t.outlet.id } : { scopeType: t.scopeType, userId: t.user.id }),
+        ...(templateId ? {} : { incentive1Amount: Number(incentive1Amount) || 0, incentive1Basis }),
       }),
     })
     setSaving(false)
@@ -105,6 +108,25 @@ export function PillarAssignModal({ templateId, defaultTitle = '', outlets, user
                     rows={2}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                   />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1.5 block">Incentive 1 (paid when completed)</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="number"
+                      value={incentive1Amount}
+                      onChange={e => setIncentive1Amount(Number(e.target.value))}
+                      placeholder="Amount (Rp)"
+                    />
+                    <select
+                      value={incentive1Basis}
+                      onChange={e => setIncentive1Basis(e.target.value as 'per_outlet' | 'per_pax')}
+                      className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    >
+                      <option value="per_outlet">Flat per outlet</option>
+                      <option value="per_pax">Per staff (x headcount)</option>
+                    </select>
+                  </div>
                 </div>
               </>
             )}

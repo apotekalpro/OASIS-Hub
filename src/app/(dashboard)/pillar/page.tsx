@@ -48,13 +48,25 @@ export default async function PillarPage({ searchParams }: { searchParams: Promi
 
   const { data: assignments } = await query
 
+  // Resolve the outlet this user reports rewards for (used by the gamification banner)
+  let rewardOutletId: string | null = profileOutletId
+  if (!rewardOutletId) {
+    if (role === 'area_manager') {
+      const { data: amOutlet } = await admin.from('outlets').select('id').eq('area_manager_id', user.id).order('name').limit(1).maybeSingle()
+      rewardOutletId = amOutlet?.id ?? null
+    } else {
+      const { data: staffOutlet } = await admin.from('outlet_staff').select('outlet_id').eq('user_id', user.id).limit(1).maybeSingle()
+      rewardOutletId = staffOutlet?.outlet_id ?? null
+    }
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Alpro Pillar</h1>
         <p className="text-gray-500 text-sm mt-0.5">Your assigned Pillars, Key Results, and progress for the month</p>
       </div>
-      <PillarListClient initialAssignments={assignments ?? []} initialMonth={month} />
+      <PillarListClient initialAssignments={assignments ?? []} initialMonth={month} rewardOutletId={rewardOutletId} />
     </div>
   )
 }

@@ -51,6 +51,7 @@ const TAB_LINKS = [
   { href: '?tab=atem', label: 'ATEM' },
   { href: '?tab=okr', label: 'OKR' },
   { href: '?tab=inspections', label: 'Inspections' },
+  { href: '?tab=pillar', label: 'Pillar' },
 ]
 
 export function AtemAnalyticsDashboard({ stats, deptBreakdown, items, scopeLabel, filterOptions }: Props) {

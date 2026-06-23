@@ -6,6 +6,7 @@ import { AnalyticsDashboard } from '@/components/analytics/analytics-dashboard'
 import { InspectionAnalyticsDashboard } from '@/components/analytics/inspection-analytics-dashboard'
 import { AtemAnalyticsDashboard } from '@/components/analytics/atem-analytics-dashboard'
 import { OkrAnalyticsDashboard } from '@/components/analytics/okr-analytics-dashboard'
+import { PillarAnalyticsDashboard } from '@/components/analytics/pillar-analytics-dashboard'
 import { getAuthUser, getCachedProfile } from '@/lib/auth/get-user-profile'
 
 export const dynamic = 'force-dynamic'
@@ -166,6 +167,54 @@ export default async function AnalyticsPage({
         stats={okrStats}
         deptBreakdown={deptBreakdown}
         scopeLabel={isOrgWide ? 'Organisation-wide' : 'Your OKRs'}
+        filterOptions={filterOptions}
+      />
+    )
+  }
+
+  // ── Pillar tab ────────────────────────────────────────────────────────────
+  if (tab === 'pillar' && orgId) {
+    let pillarQuery = supabase.from('pillar_assignments')
+      .select('id, status, progress, dept_id, departments(name), outlet_id, assigned_to, created_at')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+
+    if (deptFilter) pillarQuery = pillarQuery.eq('dept_id', deptFilter)
+    if (userFilter) pillarQuery = pillarQuery.eq('assigned_to', userFilter)
+    if (outletFilter) pillarQuery = pillarQuery.eq('outlet_id', outletFilter)
+
+    const pillarRes = await pillarQuery
+    type PillarRow = { id: string; status: string; progress: number; dept_id: string | null; departments?: { name: string } | { name: string }[] | null; outlet_id: string | null; assigned_to: string | null; created_at: string }
+    const pillars = (pillarRes.data ?? []) as unknown as PillarRow[]
+
+    const pillarStats = {
+      total: pillars.length,
+      not_started: pillars.filter(p => p.status === 'not_started').length,
+      in_progress: pillars.filter(p => p.status === 'in_progress').length,
+      at_risk: pillars.filter(p => p.status === 'at_risk').length,
+      completed: pillars.filter(p => p.status === 'completed').length,
+      cancelled: pillars.filter(p => p.status === 'cancelled').length,
+      avg_progress: pillars.length > 0 ? Math.round(pillars.reduce((s, p) => s + Number(p.progress), 0) / pillars.length) : 0,
+    }
+    const deptBreakdown = Object.values(
+      pillars.reduce<Record<string, { name: string; total: number; completed: number; avg_progress: number; items: number }>>((acc, p) => {
+        const key = p.dept_id ?? 'none'
+        const depts = p.departments
+        const name = (Array.isArray(depts) ? depts[0]?.name : depts?.name) ?? 'No Department'
+        if (!acc[key]) acc[key] = { name, total: 0, completed: 0, avg_progress: 0, items: 0 }
+        acc[key].total++
+        acc[key].items++
+        acc[key].avg_progress = (acc[key].avg_progress * (acc[key].items - 1) + Number(p.progress)) / acc[key].items
+        if (p.status === 'completed') acc[key].completed++
+        return acc
+      }, {})
+    ).map(d => ({ ...d, avg_progress: Math.round(d.avg_progress) }))
+
+    return (
+      <PillarAnalyticsDashboard
+        stats={pillarStats}
+        deptBreakdown={deptBreakdown}
+        scopeLabel={isOrgWide ? 'Organisation-wide' : 'Your Pillars'}
         filterOptions={filterOptions}
       />
     )
