@@ -149,6 +149,39 @@ export function okrAssignedEmail(params: {
   }
 }
 
+export function pillarAssignedEmail(params: {
+  recipientName: string
+  pillarTitle: string
+  assignedBy: string
+  outletName?: string
+  month?: string
+  pillarUrl: string
+}) {
+  return {
+    subject: `[OASIS Hub] Pillar assigned: ${params.pillarTitle}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#ea580c;padding:24px;border-radius:8px 8px 0 0">
+          <h1 style="color:white;margin:0;font-size:20px">OASIS Hub — Alpro Pillar Assignment</h1>
+        </div>
+        <div style="background:#f9fafb;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb">
+          <p>Hi <strong>${params.recipientName}</strong>,</p>
+          <p>You have been assigned a Pillar by <strong>${params.assignedBy}</strong>.</p>
+          <div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0">
+            <h3 style="margin:0 0 8px;color:#111827">${params.pillarTitle}</h3>
+            ${params.outletName ? `<p style="color:#6b7280;margin:0">Outlet: ${params.outletName}</p>` : ''}
+            ${params.month ? `<p style="color:#6b7280;margin:0">Month: ${params.month}</p>` : ''}
+          </div>
+          <a href="${params.pillarUrl}" style="display:inline-block;background:#ea580c;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+            View Pillar
+          </a>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">OASIS Hub — Internal Management System</p>
+        </div>
+      </div>
+    `,
+  }
+}
+
 export function atemAssignedEmail(params: {
   recipientName: string
   atemTask: string

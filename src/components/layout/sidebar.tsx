@@ -7,7 +7,7 @@ import {
   LayoutDashboard, CheckSquare, MessageSquare, FileText,
   Calendar, FolderOpen, Bell, Settings, Users, Building2,
   LogOut, Shield, BookUser, BarChart3, ClipboardCheck, MapPin,
-  CalendarDays, Menu, X, KeyRound, Target, Zap,
+  CalendarDays, Menu, X, KeyRound, Target, Zap, Award,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/ui/avatar'
@@ -27,6 +27,7 @@ const NAV_ITEMS = [
   { href: '/tasks', icon: CheckSquare, label: 'Tasks' },
   { href: '/atem', icon: Zap, label: 'ATEM' },
   { href: '/okr', icon: Target, label: 'OKR' },
+  { href: '/pillar', icon: Award, label: 'Alpro Pillar' },
   { href: '/messages', icon: MessageSquare, label: 'Messages' },
   { href: '/teams', icon: Shield, label: 'Teams' },
   { href: '/directory', icon: BookUser, label: 'Directory' },
@@ -51,6 +52,7 @@ const ADMIN_NAV_ITEMS = [
   { href: '/admin/outlets', icon: MapPin, label: 'Outlets', feature: 'outlets' as FeatureName },
   { href: '/admin/inspection-templates', icon: ClipboardCheck, label: 'Checklists', feature: 'checklists' as FeatureName },
   { href: '/admin/inspection-schedules', icon: CalendarDays, label: 'Schedules', feature: 'schedules' as FeatureName },
+  { href: '/admin/pillar-templates', icon: Award, label: 'Pillar Templates', feature: 'pillar' as FeatureName },
   { href: '/admin/analytics', icon: BarChart3, label: 'Analytics', feature: 'analytics' as FeatureName },
   { href: '/admin/roles', icon: KeyRound, label: 'Roles', minRole: 'org_admin' as UserRole },
   { href: '/admin/settings', icon: Settings, label: 'Settings', minRole: 'org_admin' as UserRole },

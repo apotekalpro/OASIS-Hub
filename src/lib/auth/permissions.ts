@@ -106,7 +106,7 @@ export const ROLE_COLORS: Record<string, string> = {
   outlet: 'bg-orange-100 text-orange-800',
 }
 
-export type FeatureName = 'teams' | 'outlets' | 'checklists' | 'schedules' | 'analytics'
+export type FeatureName = 'teams' | 'outlets' | 'checklists' | 'schedules' | 'analytics' | 'pillar'
 
 export const FEATURE_DEFINITIONS: { feature: FeatureName; label: string; description: string; defaultMin: UserRole; locked?: boolean }[] = [
   { feature: 'analytics', label: 'Analytics', description: 'View analytics dashboards', defaultMin: 'team_leader' },
@@ -114,7 +114,13 @@ export const FEATURE_DEFINITIONS: { feature: FeatureName; label: string; descrip
   { feature: 'outlets', label: 'Outlets', description: 'Manage outlet locations', defaultMin: 'dept_head' },
   { feature: 'checklists', label: 'Checklists', description: 'Manage inspection templates', defaultMin: 'dept_head' },
   { feature: 'schedules', label: 'Schedules', description: 'Manage inspection schedules', defaultMin: 'area_manager' },
+  { feature: 'pillar', label: 'Alpro Pillar', description: 'Create and manage Pillar templates', defaultMin: 'dept_head' },
 ]
+
+/** Pillar templates may be built/assigned only by dept_head+. */
+export function canManagePillarTemplates(role: UserRole): boolean {
+  return hasRole(role, 'dept_head')
+}
 
 export type FeaturePermissions = Partial<Record<FeatureName, UserRole>>
 
