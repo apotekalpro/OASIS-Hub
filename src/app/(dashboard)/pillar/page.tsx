@@ -52,7 +52,7 @@ export default async function PillarPage({ searchParams }: { searchParams: Promi
   let rewardOutletId: string | null = profileOutletId
   if (!rewardOutletId) {
     if (role === 'area_manager') {
-      const { data: amOutlet } = await admin.from('outlets').select('id').eq('area_manager_id', user.id).order('name').limit(1).maybeSingle()
+      const { data: amOutlet } = await admin.from('outlets').select('id').eq('area_manager_id', user.id).ilike('name', '%Apotek Alpro%').order('name').limit(1).maybeSingle()
       rewardOutletId = amOutlet?.id ?? null
     } else {
       const { data: staffOutlet } = await admin.from('outlet_staff').select('outlet_id').eq('user_id', user.id).limit(1).maybeSingle()

@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
     const code = cols[COL.code]?.trim() ?? ''
     const name = cols[COL.name]?.trim() ?? ''
     if (!code && !name) { skipped.push(i + 2); break } // blank row = end of data section
-    if (!name) { skipped.push(i + 2); continue }
+    if (!name || !name.toLowerCase().includes('apotek alpro')) { skipped.push(i + 2); continue }
 
     rows.push({
       org_id: orgId,

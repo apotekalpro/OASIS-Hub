@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   if (!month) return NextResponse.json({ error: 'month required' }, { status: 400 })
 
   const [outletsRes, assignmentsRes, targetsRes, inputsRes, matrixRes, staffRes] = await Promise.all([
-    admin.from('outlets').select('id, name, code, category, area_manager_id, profiles:area_manager_id(full_name)').eq('org_id', orgId).order('name'),
+    admin.from('outlets').select('id, name, code, category, area_manager_id, profiles:area_manager_id(full_name)').eq('org_id', orgId).ilike('name', '%Apotek Alpro%').order('name'),
     admin.from('pillar_assignments').select('outlet_id, title, status, progress, incentive1_amount, incentive1_basis').eq('org_id', orgId).eq('month', month).not('outlet_id', 'is', null),
     admin.from('pillar_targets').select('outlet_id, t1, t2, t3, category').eq('org_id', orgId).eq('month', month),
     admin.from('pillar_monthly_inputs').select('outlet_id, revenue, focus_product_pct').eq('org_id', orgId).eq('month', month),

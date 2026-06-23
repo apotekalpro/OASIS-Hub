@@ -24,6 +24,7 @@ export default async function InspectionsPage() {
     .select('id, name, code, city, state, status')
     .eq('org_id', orgId)
     .eq('status', 'active')
+    .ilike('name', '%Apotek Alpro%')
     .order('name')
 
   if (isOutletUser) {

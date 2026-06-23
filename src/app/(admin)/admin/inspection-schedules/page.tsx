@@ -41,7 +41,7 @@ export default async function InspectionSchedulesPage() {
     schedulesQ = schedulesQ.in('outlet_id', amOutletIds)
   }
 
-  let outletsQ = admin.from('outlets').select('id, name, code').eq('org_id', orgId).eq('status', 'active').order('name')
+  let outletsQ = admin.from('outlets').select('id, name, code').eq('org_id', orgId).eq('status', 'active').ilike('name', '%Apotek Alpro%').order('name')
   // Area managers can only create schedules for their own outlets
   if (isAreaManager && amOutletIds.length > 0) {
     outletsQ = outletsQ.in('id', amOutletIds)

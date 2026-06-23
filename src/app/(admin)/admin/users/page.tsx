@@ -16,7 +16,7 @@ export default async function UsersPage() {
 
   let profilesQuery = adminSupabase.from('profiles').select('*').order('created_at', { ascending: false })
   let deptsQuery = adminSupabase.from('departments').select('id, name, org_id').order('name')
-  let outletsQuery = adminSupabase.from('outlets').select('id, name, code').eq('status', 'active').order('name')
+  let outletsQuery = adminSupabase.from('outlets').select('id, name, code').eq('status', 'active').ilike('name', '%Apotek Alpro%').order('name')
   if (orgId) {
     profilesQuery = profilesQuery.eq('org_id', orgId)
     deptsQuery = deptsQuery.eq('org_id', orgId)

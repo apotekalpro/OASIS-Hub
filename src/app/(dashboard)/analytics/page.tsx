@@ -47,7 +47,7 @@ export default async function AnalyticsPage({
     const [deptsRes, usersRes, outletsRes] = await Promise.all([
       supabase.from('departments').select('id, name').eq('org_id', orgId).order('name'),
       supabase.from('profiles').select('id, full_name').eq('org_id', orgId).eq('is_active', true).order('full_name'),
-      supabase.from('outlets').select('id, name, code').eq('org_id', orgId).order('name'),
+      supabase.from('outlets').select('id, name, code').eq('org_id', orgId).ilike('name', '%Apotek Alpro%').order('name'),
     ])
     filterDepts = (deptsRes.data ?? []) as FilterDept[]
     filterUsers = (usersRes.data ?? []) as FilterUser[]

@@ -19,6 +19,7 @@ export default async function OutletsPage() {
   const outletsQuery = supabase
     .from('outlets')
     .select(`*, profiles!outlets_area_manager_id_fkey(id, full_name, avatar_url), departments(name)`)
+    .ilike('name', '%Apotek Alpro%')
     .order('name')
   if (!isSuperAdmin && orgId) outletsQuery.eq('org_id', orgId)
 

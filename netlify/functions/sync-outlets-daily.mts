@@ -74,7 +74,7 @@ export default async function handler() {
       const cols = parseCsvLine(line)
       const code = cols[COL.code]?.trim() ?? ''
       const name = cols[COL.name]?.trim() ?? ''
-      if (!name) continue
+      if (!name || !name.toLowerCase().includes('apotek alpro')) continue
       rows.push({
         org_id: org.id,
         code: code || name,
