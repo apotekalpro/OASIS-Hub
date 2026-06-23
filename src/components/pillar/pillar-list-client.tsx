@@ -3,10 +3,11 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Award, Store, Calendar, Building2 } from 'lucide-react'
+import { Search, Award, Store, Calendar, Building2, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { PillarGamificationBanner } from './pillar-gamification-banner'
 
 type KeyResult = {
@@ -40,6 +41,7 @@ interface Props {
   initialAssignments: PillarAssignment[]
   initialMonth: string
   rewardOutletIds: string[]
+  canDelete?: boolean
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -85,7 +87,7 @@ function monthOptions() {
   return opts
 }
 
-export function PillarListClient({ initialAssignments, initialMonth, rewardOutletIds }: Props) {
+export function PillarListClient({ initialAssignments, initialMonth, rewardOutletIds, canDelete = false }: Props) {
   const router = useRouter()
   const [assignments, setAssignments] = useState(initialAssignments)
   useEffect(() => { setAssignments(initialAssignments) }, [initialAssignments])
@@ -95,6 +97,20 @@ export function PillarListClient({ initialAssignments, initialMonth, rewardOutle
   function changeMonth(m: string) {
     setMonth(m)
     router.push(`/pillar?month=${m}`)
+  }
+
+  async function deleteAssignment(e: React.MouseEvent, id: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!confirm('Delete this assigned Pillar? This cannot be undone.')) return
+    const res = await fetch(`/api/pillar/assignments/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setAssignments(prev => prev.filter(a => a.id !== id))
+      toast.success('Pillar deleted')
+      router.refresh()
+    } else {
+      toast.error('Failed to delete Pillar')
+    }
   }
 
   const filtered = useMemo(() => {
@@ -170,6 +186,16 @@ export function PillarListClient({ initialAssignments, initialMonth, rewardOutle
                       {a.title}
                     </h3>
                   </div>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={e => deleteAssignment(e, a.id)}
+                      className="shrink-0 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete assigned Pillar"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
 
                 <div>

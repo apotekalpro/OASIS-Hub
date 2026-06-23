@@ -58,6 +58,7 @@ interface Props {
   currentUserName: string
   currentUserAvatar: string | null
   currentUserRole: string
+  canDelete?: boolean
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -83,7 +84,7 @@ function getProgressColor(pct: number) {
 }
 
 export function PillarDetailClient({
-  assignment, initialKeyResults, initialSubtasks, initialComments, currentUserName, currentUserAvatar,
+  assignment, initialKeyResults, initialSubtasks, initialComments, currentUserName, currentUserAvatar, canDelete = false,
 }: Props) {
   const router = useRouter()
   const [keyResults, setKeyResults] = useState(initialKeyResults)
@@ -92,6 +93,21 @@ export function PillarDetailClient({
   const [newSubtask, setNewSubtask] = useState('')
   const [newComment, setNewComment] = useState('')
   const [posting, setPosting] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function deleteAssignment() {
+    if (!confirm('Delete this assigned Pillar? This cannot be undone.')) return
+    setDeleting(true)
+    const res = await fetch(`/api/pillar/assignments/${assignment.id}`, { method: 'DELETE' })
+    setDeleting(false)
+    if (res.ok) {
+      toast.success('Pillar deleted')
+      router.push('/pillar')
+      router.refresh()
+    } else {
+      toast.error('Failed to delete Pillar')
+    }
+  }
 
   async function updateKrValue(krId: string, value: number) {
     setKeyResults(prev => prev.map(kr => kr.id === krId ? { ...kr, current_value: value } : kr))
@@ -160,9 +176,16 @@ export function PillarDetailClient({
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <Link href="/pillar" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700">
-        <ArrowLeft className="h-4 w-4" /> Back to Pillars
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link href="/pillar" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700">
+          <ArrowLeft className="h-4 w-4" /> Back to Pillars
+        </Link>
+        {canDelete && (
+          <Button type="button" variant="outline" onClick={deleteAssignment} disabled={deleting} className="text-red-500 hover:text-red-600 border-red-200 hover:bg-red-50">
+            <Trash2 className="h-4 w-4" /> Delete Pillar
+          </Button>
+        )}
+      </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">

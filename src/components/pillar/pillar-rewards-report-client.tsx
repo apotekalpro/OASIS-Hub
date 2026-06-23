@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Download } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Download, Search, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 
 type ReportRow = {
@@ -39,12 +40,17 @@ function formatIDR(n: number) {
   return n.toLocaleString('id-ID')
 }
 
+type SortKey = keyof Pick<ReportRow, 'outletName' | 'areaManagerName' | 'category' | 'avgProgress' | 'revenue' | 'focusProductPct' | 'incentive1Achieved' | 'incentive2Achieved' | 'incentive3Achieved' | 'totalAchieved'>
+
 export function PillarRewardsReportClient() {
   const months = monthOptions()
   const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`
   const [month, setMonth] = useState(currentMonth)
   const [rows, setRows] = useState<ReportRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('totalAchieved')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   useEffect(() => {
     setLoading(true)
@@ -53,6 +59,54 @@ export function PillarRewardsReportClient() {
       .then(d => setRows(d.rows ?? []))
       .finally(() => setLoading(false))
   }, [month])
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('desc')
+    }
+  }
+
+  function SortHeader({ label, sortKeyVal, align = 'right' }: { label: string; sortKeyVal: SortKey; align?: 'left' | 'right' }) {
+    const active = sortKey === sortKeyVal
+    return (
+      <th
+        className={`px-3 py-2 cursor-pointer select-none hover:text-gray-700 ${align === 'right' ? 'text-right' : 'text-left'}`}
+        onClick={() => toggleSort(sortKeyVal)}
+      >
+        <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'flex-row-reverse' : ''}`}>
+          {label}
+          {active ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}
+        </span>
+      </th>
+    )
+  }
+
+  const filteredSorted = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const filtered = q
+      ? rows.filter(r =>
+          r.outletName.toLowerCase().includes(q) ||
+          (r.outletCode ?? '').toLowerCase().includes(q) ||
+          (r.areaManagerName ?? '').toLowerCase().includes(q) ||
+          (r.category ?? '').toLowerCase().includes(q)
+        )
+      : rows
+    const sorted = [...filtered].sort((a, b) => {
+      const av = a[sortKey]
+      const bv = b[sortKey]
+      let cmp: number
+      if (typeof av === 'string' || typeof bv === 'string') {
+        cmp = String(av ?? '').localeCompare(String(bv ?? ''))
+      } else {
+        cmp = (Number(av) || 0) - (Number(bv) || 0)
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return sorted
+  }, [rows, search, sortKey, sortDir])
 
   const totals = rows.reduce((acc, r) => ({
     incentive1: acc.incentive1 + r.incentive1Achieved,
@@ -81,13 +135,19 @@ export function PillarRewardsReportClient() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <select
-          value={month}
-          onChange={e => setMonth(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
-        >
-          {months.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={month}
+            onChange={e => setMonth(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            {months.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input placeholder="Search outlet, code, area manager, category..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 w-64" />
+          </div>
+        </div>
         <Button variant="outline" onClick={exportCSV} disabled={rows.length === 0}>
           <Download className="h-4 w-4" /> Export CSV
         </Button>
@@ -104,25 +164,25 @@ export function PillarRewardsReportClient() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
             <tr>
-              <th className="px-3 py-2 text-left">Outlet</th>
-              <th className="px-3 py-2 text-left">Area Manager</th>
-              <th className="px-3 py-2 text-left">Category</th>
+              <SortHeader label="Outlet" sortKeyVal="outletName" align="left" />
+              <SortHeader label="Area Manager" sortKeyVal="areaManagerName" align="left" />
+              <SortHeader label="Category" sortKeyVal="category" align="left" />
               <th className="px-3 py-2 text-right">Pillars</th>
-              <th className="px-3 py-2 text-right">Avg %</th>
-              <th className="px-3 py-2 text-right">Revenue</th>
-              <th className="px-3 py-2 text-right">Focus %</th>
-              <th className="px-3 py-2 text-right">Inc 1</th>
-              <th className="px-3 py-2 text-right">Inc 2</th>
-              <th className="px-3 py-2 text-right">Inc 3</th>
-              <th className="px-3 py-2 text-right">Total</th>
+              <SortHeader label="Avg %" sortKeyVal="avgProgress" />
+              <SortHeader label="Revenue" sortKeyVal="revenue" />
+              <SortHeader label="Focus %" sortKeyVal="focusProductPct" />
+              <SortHeader label="Inc 1" sortKeyVal="incentive1Achieved" />
+              <SortHeader label="Inc 2" sortKeyVal="incentive2Achieved" />
+              <SortHeader label="Inc 3" sortKeyVal="incentive3Achieved" />
+              <SortHeader label="Total" sortKeyVal="totalAchieved" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">Loading…</td></tr>
-            ) : rows.length === 0 ? (
+            ) : filteredSorted.length === 0 ? (
               <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">No outlets found</td></tr>
-            ) : rows.map(r => (
+            ) : filteredSorted.map(r => (
               <tr key={r.outletId} className="hover:bg-gray-50">
                 <td className="px-3 py-2"><p className="font-medium text-gray-900">{r.outletName}</p><p className="text-xs text-gray-400">{r.outletCode}</p></td>
                 <td className="px-3 py-2 text-gray-600">{r.areaManagerName ?? '—'}</td>

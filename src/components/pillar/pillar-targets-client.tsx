@@ -238,7 +238,10 @@ export function PillarTargetsClient() {
             <p className="flex items-center gap-1.5 text-sm text-green-600"><CheckCircle2 className="h-4 w-4" /> Uploaded {uploadResult} target rows</p>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-3">
+            {rows.length > 0 && selectedMonths.length === 0 && (
+              <p className="text-xs text-amber-600">Select at least one month above to enable upload</p>
+            )}
             <Button onClick={handleUpload} loading={uploading} disabled={rows.length === 0 || selectedMonths.length === 0}>
               Upload {rows.length > 0 ? `${rows.length} Outlet${rows.length > 1 ? 's' : ''}` : ''}
             </Button>

@@ -47,9 +47,44 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
   const [draftRevenue, setDraftRevenue] = useState('0')
   const [draftFocus, setDraftFocus] = useState('0')
   const [saving, setSaving] = useState(false)
+  const [editingOutletId, setEditingOutletId] = useState<string | null>(null)
+  const [rowDraftRevenue, setRowDraftRevenue] = useState('0')
+  const [rowDraftFocus, setRowDraftFocus] = useState('0')
+  const [rowSaving, setRowSaving] = useState(false)
 
   const isSingleOutlet = outletIds.length === 1
   const outletId = outletIds[0]
+
+  function startEditRow(r: OutletRewardData) {
+    setEditingOutletId(r.outletId)
+    setRowDraftRevenue(String(r.revenue))
+    setRowDraftFocus(String(r.focusProductPct))
+  }
+
+  async function saveRow() {
+    if (!editingOutletId) return
+    setRowSaving(true)
+    const res = await fetch('/api/pillar/monthly-inputs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outletId: editingOutletId, month, revenue: Number(rowDraftRevenue) || 0, focusProductPct: Number(rowDraftFocus) || 0 }),
+    })
+    setRowSaving(false)
+    if (res.ok) {
+      toast.success('Monthly figures saved')
+      const refreshed = await fetch(`/api/pillar/rewards?outletId=${editingOutletId}&month=${month}`).then(r => r.json())
+      setRows(prev => prev.map(r => r.outletId === editingOutletId ? {
+        ...r,
+        breakdown: refreshed.breakdown ?? null,
+        revenue: refreshed.monthlyInput?.revenue ?? 0,
+        focusProductPct: refreshed.monthlyInput?.focus_product_pct ?? 0,
+      } : r))
+      setEditingOutletId(null)
+    } else {
+      const { error } = await res.json().catch(() => ({ error: 'Failed to save' }))
+      toast.error(error ?? 'Failed to save')
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -179,9 +214,23 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
       {!isSingleOutlet && rows.length > 0 && (
         <div className="pt-2 border-t border-white/20 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
           {rows.map(r => (
-            <div key={r.outletId} className="text-xs bg-black/10 rounded-md px-2.5 py-1.5 flex items-center justify-between gap-2">
-              <span className="opacity-90 truncate">{r.outletName ?? 'Outlet'}</span>
-              <span className="font-semibold">{formatIDR(r.breakdown?.total.achieved ?? 0)}</span>
+            <div key={r.outletId} className="text-xs bg-black/10 rounded-md px-2.5 py-1.5 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="opacity-90 truncate">{r.outletName ?? 'Outlet'}</span>
+                <span className="font-semibold">{formatIDR(r.breakdown?.total.achieved ?? 0)}</span>
+              </div>
+              {editingOutletId === r.outletId ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <input type="number" value={rowDraftRevenue} onChange={e => setRowDraftRevenue(e.target.value)} placeholder="Revenue" className="w-24 rounded-md px-1.5 py-1 text-gray-900 text-xs" />
+                  <input type="number" value={rowDraftFocus} onChange={e => setRowDraftFocus(e.target.value)} placeholder="Focus %" className="w-16 rounded-md px-1.5 py-1 text-gray-900 text-xs" />
+                  <button type="button" onClick={saveRow} disabled={rowSaving} className="flex items-center bg-white/20 hover:bg-white/30 rounded-md px-1.5 py-1"><Check className="h-3 w-3" /></button>
+                  <button type="button" onClick={() => setEditingOutletId(null)} className="flex items-center bg-white/10 hover:bg-white/20 rounded-md px-1.5 py-1"><X className="h-3 w-3" /></button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => startEditRow(r)} className="flex items-center gap-1 opacity-90 hover:opacity-100 self-start">
+                  <Pencil className="h-2.5 w-2.5" /> Revenue Rp {r.revenue.toLocaleString('id-ID')} · Focus {r.focusProductPct}%
+                </button>
+              )}
             </div>
           ))}
         </div>

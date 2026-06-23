@@ -20,7 +20,7 @@ export default async function PillarTemplatesPage() {
   if (!canManagePillarTemplates(role, featurePermissions)) redirect('/dashboard')
 
   const [templatesRes, outletsRes, usersRes, amRes, deptsRes] = await Promise.all([
-    admin.from('pillar_templates').select('*, departments(name), pillar_kr_templates(*)').eq('org_id', orgId).order('created_at', { ascending: false }),
+    admin.from('pillar_templates').select('*, departments(name), pillar_kr_templates(*), pillar_subtask_templates(*)').eq('org_id', orgId).order('created_at', { ascending: false }),
     admin.from('outlets').select('id, name, code, dept_id, area_manager_id').eq('org_id', orgId).ilike('name', '%Apotek Alpro%').order('name'),
     admin.from('profiles').select('id, full_name, email, avatar_url, dept_id, role').eq('org_id', orgId).eq('is_active', true).order('full_name'),
     admin.from('profiles').select('id, full_name, email, avatar_url').eq('org_id', orgId).eq('role', 'area_manager').eq('is_active', true).order('full_name'),

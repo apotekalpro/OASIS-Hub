@@ -11,6 +11,7 @@ import { PillarAssignModal } from './pillar-assign-modal'
 import type { PickerOutlet, PickerPerson } from '@/components/ui/pillar-target-picker'
 
 type KRTemplate = { id: string; title: string; metric_type: string; start_value: number; target_value: number; unit: string | null }
+type SubtaskTemplate = { id: string; title: string }
 type Department = { id: string; name: string }
 
 type Template = {
@@ -21,6 +22,7 @@ type Template = {
   is_active: boolean
   departments: { name: string } | null
   pillar_kr_templates: KRTemplate[]
+  pillar_subtask_templates: SubtaskTemplate[]
 }
 
 interface Props {
