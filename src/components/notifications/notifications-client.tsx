@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Bell, CheckCheck, CheckSquare, MessageSquare, ClipboardList, Calendar, AtSign, AlertCircle } from 'lucide-react'
+import { Bell, CheckCheck, CheckSquare, MessageSquare, ClipboardList, Calendar, AtSign, AlertCircle, Award } from 'lucide-react'
 import { formatRelativeTime, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useNotificationStore } from '@/store/notifications'
@@ -21,6 +21,9 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   form_submitted:  <ClipboardList className="h-4 w-4 text-blue-500" />,
   event_invite:    <Calendar className="h-4 w-4 text-pink-500" />,
   reminder:        <Bell className="h-4 w-4 text-gray-500" />,
+  pillar_assigned: <Award className="h-4 w-4 text-orange-500" />,
+  pillar_commented: <MessageSquare className="h-4 w-4 text-orange-500" />,
+  pillar_mention:  <AtSign className="h-4 w-4 text-orange-500" />,
 }
 
 function getLink(n: AppNotification): string | null {
@@ -30,6 +33,8 @@ function getLink(n: AppNotification): string | null {
   if (d?.form_id) return `/forms/${d.form_id}`
   if (d?.channel_id) return `/messages`
   if (d?.event_id) return `/calendar`
+  if (d?.assignment_id) return `/pillar/${d.assignment_id}`
+  if (n.type.startsWith('pillar_')) return `/pillar`
   return null
 }
 

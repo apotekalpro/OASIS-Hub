@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
-import { getAuthUser, getCachedProfile } from '@/lib/auth/get-user-profile'
+import { getAuthUser, getCachedProfile, getCachedFeaturePermissions } from '@/lib/auth/get-user-profile'
 import { canManagePillarTemplates } from '@/lib/auth/permissions'
 import { PillarTemplatesClient } from '@/components/pillar/pillar-templates-client'
 import type { UserRole } from '@/types/database'
@@ -15,8 +15,9 @@ export default async function PillarTemplatesPage() {
   const profile = await getCachedProfile(user.id)
   const orgId = (profile?.org_id ?? '') as string
   const role = (profile?.role ?? 'member') as UserRole
+  const featurePermissions = await getCachedFeaturePermissions(orgId)
 
-  if (!canManagePillarTemplates(role)) redirect('/dashboard')
+  if (!canManagePillarTemplates(role, featurePermissions)) redirect('/dashboard')
 
   const [templatesRes, outletsRes, usersRes, amRes, deptsRes] = await Promise.all([
     admin.from('pillar_templates').select('*, departments(name), pillar_kr_templates(*)').eq('org_id', orgId).order('created_at', { ascending: false }),

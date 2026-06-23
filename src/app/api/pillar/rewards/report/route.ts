@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { canManagePillarTemplates } from '@/lib/auth/permissions'
+import { getCachedFeaturePermissions } from '@/lib/auth/get-user-profile'
 import { calcRewardBreakdown, type RewardAssignmentInput } from '@/lib/pillar/rewards'
 import type { UserRole } from '@/types/database'
 
@@ -16,7 +17,8 @@ export async function GET(req: NextRequest) {
   const orgId = profile.data?.org_id
   const role = profile.data?.role as UserRole | undefined
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 400 })
-  if (!role || !canManagePillarTemplates(role)) {
+  const featurePermissions = await getCachedFeaturePermissions(orgId)
+  if (!role || !canManagePillarTemplates(role, featurePermissions)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

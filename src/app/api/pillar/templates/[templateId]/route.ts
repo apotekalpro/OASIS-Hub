@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { canManagePillarTemplates } from '@/lib/auth/permissions'
+import { getCachedFeaturePermissions } from '@/lib/auth/get-user-profile'
 import type { UserRole } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
@@ -38,9 +39,10 @@ export async function PATCH(
   ])
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const profile = await admin.from('profiles').select('role').eq('id', user.id).single()
+  const profile = await admin.from('profiles').select('org_id, role').eq('id', user.id).single()
   const role = profile.data?.role as UserRole | undefined
-  if (!role || !canManagePillarTemplates(role)) {
+  const featurePermissions = await getCachedFeaturePermissions(profile.data?.org_id ?? '')
+  if (!role || !canManagePillarTemplates(role, featurePermissions)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -89,9 +91,10 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const profile = await admin.from('profiles').select('role').eq('id', user.id).single()
+  const profile = await admin.from('profiles').select('org_id, role').eq('id', user.id).single()
   const role = profile.data?.role as UserRole | undefined
-  if (!role || !canManagePillarTemplates(role)) {
+  const featurePermissions = await getCachedFeaturePermissions(profile.data?.org_id ?? '')
+  if (!role || !canManagePillarTemplates(role, featurePermissions)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

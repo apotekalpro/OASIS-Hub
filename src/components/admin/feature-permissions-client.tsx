@@ -6,7 +6,7 @@ import { FEATURE_DEFINITIONS, ROLE_LABELS, type FeatureName, type FeaturePermiss
 import { toast } from 'sonner'
 import type { UserRole } from '@/types/database'
 
-const CONFIGURABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'lead', 'team_leader', 'auditor', 'member']
+const CONFIGURABLE_ROLES: UserRole[] = ['org_admin', 'dept_head', 'chief', 'area_manager', 'lead', 'team_leader', 'auditor', 'member']
 
 export function FeaturePermissionsClient({
   orgId,

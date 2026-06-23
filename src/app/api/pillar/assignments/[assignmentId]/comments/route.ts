@@ -5,6 +5,16 @@ export const dynamic = 'force-dynamic'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? process.env.URL ?? 'https://oasishub.netlify.app'
 
+// Pillar comments are plain text only — no attachments, pasted images, or hyperlinks.
+function sanitizeComment(raw: string): string {
+  return raw
+    .replace(/<[^>]*>/g, ' ')                          // strip any HTML/markup
+    .replace(/\bhttps?:\/\/\S+/gi, '[link removed]')    // strip hyperlinks
+    .replace(/\bwww\.\S+/gi, '[link removed]')
+    .replace(/[ \t]+/g, ' ')
+    .trim()
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ assignmentId: string }> }
@@ -37,21 +47,23 @@ export async function POST(
     return NextResponse.json({ success: true })
   }
 
+  const content = sanitizeComment(String(body.content ?? ''))
+  if (!content) return NextResponse.json({ error: 'Comment cannot be empty' }, { status: 400 })
+
   const { data: comment, error } = await admin
     .from('pillar_comments')
     .insert({
       assignment_id: assignmentId,
       user_id: user.id,
-      content: body.content,
+      content,
       parent_comment_id: body.parent_comment_id || null,
-      attachments: body.attachments || [],
     })
     .select('*, profiles!pillar_comments_user_id_fkey(id, full_name, avatar_url)')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  notifyPillarComment({ admin, assignmentId, commenterId: user.id, content: body.content ?? '', actorName: body.actorName ?? 'Someone' }).catch(console.error)
+  notifyPillarComment({ admin, assignmentId, commenterId: user.id, content, actorName: body.actorName ?? 'Someone' }).catch(console.error)
 
   return NextResponse.json({ comment }, { status: 201 })
 }

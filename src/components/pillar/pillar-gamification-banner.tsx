@@ -105,16 +105,16 @@ export function PillarGamificationBanner({ outletId, month }: Props) {
 
         {!editing ? (
           <button type="button" onClick={() => setEditing(true)} className="ml-auto flex items-center gap-1 bg-white/15 hover:bg-white/25 rounded-md px-2.5 py-1.5 transition-colors">
-            <Pencil className="h-3 w-3" /> Revenue Rp {revenue.toLocaleString('id-ID')} · Focus {focusProductPct}%
+            <Pencil className="h-3 w-3" /> Revenue Up to Date Rp {revenue.toLocaleString('id-ID')} · Focus Product % Up to Date {focusProductPct}%
           </button>
         ) : (
           <div className="ml-auto flex items-center gap-2 flex-wrap">
             <label className="flex items-center gap-1.5">
-              Revenue (Rp)
+              Revenue Up to Date (Rp)
               <input type="number" value={draftRevenue} onChange={e => setDraftRevenue(e.target.value)} className="w-32 rounded-md px-2 py-1 text-gray-900 text-xs" />
             </label>
             <label className="flex items-center gap-1.5">
-              Focus Product %
+              Focus Product % Up to Date
               <input type="number" value={draftFocus} onChange={e => setDraftFocus(e.target.value)} className="w-20 rounded-md px-2 py-1 text-gray-900 text-xs" />
             </label>
             <button type="button" onClick={save} disabled={saving} className="flex items-center gap-1 bg-white/20 hover:bg-white/30 rounded-md px-2 py-1.5"><Check className="h-3.5 w-3.5" /></button>

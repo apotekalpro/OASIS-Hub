@@ -1,4 +1,4 @@
-import { getAuthUser, getCachedProfile } from '@/lib/auth/get-user-profile'
+import { getAuthUser, getCachedProfile, getCachedFeaturePermissions } from '@/lib/auth/get-user-profile'
 import { canManagePillarTemplates } from '@/lib/auth/permissions'
 import { PillarTargetsClient } from '@/components/pillar/pillar-targets-client'
 import type { UserRole } from '@/types/database'
@@ -12,8 +12,9 @@ export default async function PillarTargetsPage() {
 
   const profile = await getCachedProfile(user.id)
   const role = (profile?.role ?? 'member') as UserRole
+  const featurePermissions = await getCachedFeaturePermissions(profile?.org_id ?? '')
 
-  if (!canManagePillarTemplates(role)) redirect('/dashboard')
+  if (!canManagePillarTemplates(role, featurePermissions)) redirect('/dashboard')
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { canManagePillarTemplates } from '@/lib/auth/permissions'
+import { getCachedFeaturePermissions } from '@/lib/auth/get-user-profile'
+import { canManagePillarTemplates, type FeaturePermissions } from '@/lib/auth/permissions'
 import type { UserRole } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
 
-async function canReportForOutlet(admin: ReturnType<typeof createAdminClient>, userId: string, role: UserRole, outletId: string) {
-  if (canManagePillarTemplates(role)) return true
+async function canReportForOutlet(admin: ReturnType<typeof createAdminClient>, userId: string, role: UserRole, outletId: string, featurePermissions: FeaturePermissions) {
+  if (canManagePillarTemplates(role, featurePermissions)) return true
   const { data: outlet } = await admin.from('outlets').select('area_manager_id').eq('id', outletId).single()
   if (outlet?.area_manager_id === userId) return true
   const { data: profile } = await admin.from('profiles').select('outlet_id').eq('id', userId).single()
@@ -48,7 +49,8 @@ export async function POST(req: NextRequest) {
   const { outletId, month, revenue = 0, focusProductPct = 0 }: { outletId: string; month: string; revenue: number; focusProductPct: number } = body
   if (!outletId || !month) return NextResponse.json({ error: 'outletId and month required' }, { status: 400 })
 
-  if (!(await canReportForOutlet(admin, user.id, role, outletId))) {
+  const featurePermissions = await getCachedFeaturePermissions(orgId)
+  if (!(await canReportForOutlet(admin, user.id, role, outletId, featurePermissions))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

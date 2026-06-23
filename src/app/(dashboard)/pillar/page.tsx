@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { PillarListClient } from '@/components/pillar/pillar-list-client'
 import { canManagePillarTemplates } from '@/lib/auth/permissions'
 import type { UserRole } from '@/types/database'
-import { getAuthUser, getCachedProfile } from '@/lib/auth/get-user-profile'
+import { getAuthUser, getCachedProfile, getCachedFeaturePermissions } from '@/lib/auth/get-user-profile'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +30,8 @@ export default async function PillarPage({ searchParams }: { searchParams: Promi
     .eq('month', month)
     .order('created_at', { ascending: false })
 
-  const isAdmin = canManagePillarTemplates(role)
+  const featurePermissions = await getCachedFeaturePermissions(orgId)
+  const isAdmin = canManagePillarTemplates(role, featurePermissions)
   if (!isAdmin) {
     if (role === 'area_manager') {
       query = query.or(`assigned_to.eq.${user.id},area_manager_id.eq.${user.id}`)

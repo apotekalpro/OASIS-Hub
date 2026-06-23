@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { canManagePillarTemplates } from '@/lib/auth/permissions'
+import { getCachedFeaturePermissions } from '@/lib/auth/get-user-profile'
 import { sendEmail } from '@/lib/email/send'
 import { pillarAssignedEmail } from '@/lib/email/templates'
 import type { UserRole } from '@/types/database'
@@ -30,7 +31,8 @@ export async function POST(req: NextRequest) {
   const role = profile.data?.role as UserRole | undefined
   const actorName = profile.data?.full_name ?? 'Someone'
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 400 })
-  if (!role || !canManagePillarTemplates(role)) {
+  const featurePermissions = await getCachedFeaturePermissions(orgId)
+  if (!role || !canManagePillarTemplates(role, featurePermissions)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -122,12 +124,23 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Fire-and-forget notification emails to outlet managers / individually assigned users
+  // Fire-and-forget in-app notifications + emails to individually assigned users
   if (inserted && inserted.length > 0) {
     const notifyUserIds = Array.from(new Set(inserted.filter(a => a.assigned_to).map(a => a.assigned_to as string)))
     if (notifyUserIds.length > 0) {
       Promise.resolve().then(async () => {
         const monthLabel = months[0] ? new Date(months[0] + 'T00:00:00').toLocaleDateString('en-MY', { month: 'long', year: 'numeric' }) : undefined
+
+        await admin.from('notifications').insert(
+          notifyUserIds.map(uid => ({
+            user_id: uid,
+            type: 'pillar_assigned',
+            title: `${actorName} assigned you a Pillar: ${title}`,
+            body: monthLabel ? `For ${monthLabel}` : null,
+            data: { url: `${APP_URL}/pillar` },
+          }))
+        ).then(({ error }) => { if (error) console.error(error) })
+
         for (const uid of notifyUserIds) {
           const r = userById.get(uid)
           const to = r?.contact_email || r?.email

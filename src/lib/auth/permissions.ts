@@ -117,12 +117,12 @@ export const FEATURE_DEFINITIONS: { feature: FeatureName; label: string; descrip
   { feature: 'pillar', label: 'Alpro Pillar', description: 'Create and manage Pillar templates', defaultMin: 'dept_head' },
 ]
 
-/** Pillar templates may be built/assigned only by dept_head+. */
-export function canManagePillarTemplates(role: UserRole): boolean {
-  return hasRole(role, 'dept_head')
-}
-
 export type FeaturePermissions = Partial<Record<FeatureName, UserRole>>
+
+/** Pillar templates may be built/assigned by whoever the org configures for the 'pillar' feature (default dept_head+). */
+export function canManagePillarTemplates(role: UserRole, permissions: FeaturePermissions = {}): boolean {
+  return canAccessFeature(role, 'pillar', permissions)
+}
 
 export function canAccessFeature(
   userRole: UserRole,

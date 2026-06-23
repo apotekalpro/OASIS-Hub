@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { canManagePillarTemplates } from '@/lib/auth/permissions'
+import { getCachedFeaturePermissions } from '@/lib/auth/get-user-profile'
 import type { UserRole } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
@@ -24,7 +25,8 @@ export async function GET(req: NextRequest) {
 
   if (month) query = query.eq('month', month)
 
-  const isAdmin = canManagePillarTemplates(role)
+  const featurePermissions = await getCachedFeaturePermissions(orgId)
+  const isAdmin = canManagePillarTemplates(role, featurePermissions)
   if (!isAdmin) {
     if (role === 'area_manager') {
       query = query.or(`assigned_to.eq.${user.id},area_manager_id.eq.${user.id}`)
