@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   if (!outletId || !month) return NextResponse.json({ error: 'outletId and month required' }, { status: 400 })
 
   const [outletRes, assignmentsRes, headcountRes, targetRes, inputRes] = await Promise.all([
-    admin.from('outlets').select('id, org_id, category').eq('id', outletId).single(),
+    admin.from('outlets').select('id, org_id, category, name').eq('id', outletId).single(),
     admin.from('pillar_assignments').select('status, incentive1_amount, incentive1_basis').eq('outlet_id', outletId).eq('month', month),
     admin.from('outlet_staff').select('user_id', { count: 'exact', head: true }).eq('outlet_id', outletId),
     admin.from('pillar_targets').select('t1, t2, t3, category').eq('outlet_id', outletId).eq('month', month).maybeSingle(),
@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     breakdown,
+    outletName: outletRes.data?.name ?? null,
     headcount,
     category: category ?? null,
     monthlyInput: inputRes.data ?? null,

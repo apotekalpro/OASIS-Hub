@@ -49,16 +49,17 @@ export default async function PillarPage({ searchParams }: { searchParams: Promi
 
   const { data: assignments } = await query
 
-  // Resolve the outlet this user reports rewards for (used by the gamification banner)
-  let rewardOutletId: string | null = profileOutletId
-  if (!rewardOutletId) {
-    if (role === 'area_manager') {
-      const { data: amOutlet } = await admin.from('outlets').select('id').eq('area_manager_id', user.id).ilike('name', '%Apotek Alpro%').order('name').limit(1).maybeSingle()
-      rewardOutletId = amOutlet?.id ?? null
-    } else {
-      const { data: staffOutlet } = await admin.from('outlet_staff').select('outlet_id').eq('user_id', user.id).limit(1).maybeSingle()
-      rewardOutletId = staffOutlet?.outlet_id ?? null
-    }
+  // Resolve the outlet(s) this user reports rewards for (used by the gamification banner).
+  // Area managers see rewards aggregated across every outlet they manage.
+  let rewardOutletIds: string[] = []
+  if (role === 'area_manager') {
+    const { data: amOutlets } = await admin.from('outlets').select('id').eq('area_manager_id', user.id).ilike('name', '%Apotek Alpro%').order('name')
+    rewardOutletIds = (amOutlets ?? []).map(o => o.id)
+  } else if (profileOutletId) {
+    rewardOutletIds = [profileOutletId]
+  } else {
+    const { data: staffOutlet } = await admin.from('outlet_staff').select('outlet_id').eq('user_id', user.id).limit(1).maybeSingle()
+    if (staffOutlet?.outlet_id) rewardOutletIds = [staffOutlet.outlet_id]
   }
 
   return (
@@ -67,7 +68,7 @@ export default async function PillarPage({ searchParams }: { searchParams: Promi
         <h1 className="text-2xl font-bold text-gray-900">Alpro Pillar</h1>
         <p className="text-gray-500 text-sm mt-0.5">Your assigned Pillars, Key Results, and progress for the month</p>
       </div>
-      <PillarListClient initialAssignments={assignments ?? []} initialMonth={month} rewardOutletId={rewardOutletId} />
+      <PillarListClient initialAssignments={assignments ?? []} initialMonth={month} rewardOutletIds={rewardOutletIds} />
     </div>
   )
 }

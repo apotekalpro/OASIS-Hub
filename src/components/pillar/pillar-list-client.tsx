@@ -39,7 +39,7 @@ export type PillarAssignment = {
 interface Props {
   initialAssignments: PillarAssignment[]
   initialMonth: string
-  rewardOutletId: string | null
+  rewardOutletIds: string[]
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -85,7 +85,7 @@ function monthOptions() {
   return opts
 }
 
-export function PillarListClient({ initialAssignments, initialMonth, rewardOutletId }: Props) {
+export function PillarListClient({ initialAssignments, initialMonth, rewardOutletIds }: Props) {
   const router = useRouter()
   const [assignments, setAssignments] = useState(initialAssignments)
   useEffect(() => { setAssignments(initialAssignments) }, [initialAssignments])
@@ -114,8 +114,8 @@ export function PillarListClient({ initialAssignments, initialMonth, rewardOutle
   return (
     <div className="space-y-5">
       {/* Gamification banner */}
-      {rewardOutletId ? (
-        <PillarGamificationBanner outletId={rewardOutletId} month={month} />
+      {rewardOutletIds.length > 0 ? (
+        <PillarGamificationBanner outletIds={rewardOutletIds} month={month} />
       ) : (
         <div className="rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white p-5 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
