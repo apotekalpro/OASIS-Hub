@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X } from 'lucide-react'
+import { X, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PillarTargetPicker, type PillarTarget, type PickerOutlet, type PickerPerson } from '@/components/ui/pillar-target-picker'
@@ -42,11 +42,24 @@ export function PillarAssignModal({ templateId, defaultTitle = '', outlets, user
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [incentive1Amount, setIncentive1Amount] = useState(0)
   const [incentive1Basis, setIncentive1Basis] = useState<'per_outlet' | 'per_pax'>('per_outlet')
+  const [subtasks, setSubtasks] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const months = useMemo(() => nextMonths(), [])
 
   function toggleMonth(m: string) {
     setSelectedMonths(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
+  }
+
+  function addSubtask() {
+    setSubtasks(prev => [...prev, ''])
+  }
+
+  function updateSubtask(i: number, title: string) {
+    setSubtasks(prev => prev.map((s, idx) => idx === i ? title : s))
+  }
+
+  function removeSubtask(i: number) {
+    setSubtasks(prev => prev.filter((_, idx) => idx !== i))
   }
 
   async function handleSubmit() {
@@ -64,7 +77,11 @@ export function PillarAssignModal({ templateId, defaultTitle = '', outlets, user
         description: description.trim() || null,
         months: selectedMonths,
         targets: targets.map(t => 'outlet' in t ? { scopeType: t.scopeType, outletId: t.outlet.id } : { scopeType: t.scopeType, userId: t.user.id }),
-        ...(templateId ? {} : { incentive1Amount: Number(incentive1Amount) || 0, incentive1Basis }),
+        ...(templateId ? {} : {
+          incentive1Amount: Number(incentive1Amount) || 0,
+          incentive1Basis,
+          subtasks: subtasks.filter(s => s.trim()).map(title => ({ title: title.trim() })),
+        }),
       }),
     })
     setSaving(false)
@@ -127,6 +144,25 @@ export function PillarAssignModal({ templateId, defaultTitle = '', outlets, user
                       <option value="per_pax">Per staff (x headcount)</option>
                     </select>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-gray-500">Subtasks</label>
+                    <button type="button" onClick={addSubtask} className="text-xs text-orange-600 hover:text-orange-700 flex items-center gap-1">
+                      <Plus className="h-3.5 w-3.5" /> Add Subtask
+                    </button>
+                  </div>
+                  {subtasks.map((st, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        value={st}
+                        onChange={e => updateSubtask(i, e.target.value)}
+                        placeholder="Subtask title"
+                        className="flex-1"
+                      />
+                      <button type="button" onClick={() => removeSubtask(i)} className="text-gray-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  ))}
                 </div>
               </>
             )}

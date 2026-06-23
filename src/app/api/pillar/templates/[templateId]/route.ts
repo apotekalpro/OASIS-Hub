@@ -17,7 +17,7 @@ export async function GET(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data, error } = await admin.from('pillar_templates')
-    .select('*, departments(name), pillar_kr_templates(*)')
+    .select('*, departments(name), pillar_kr_templates(*), pillar_subtask_templates(*)')
     .eq('id', templateId)
     .single()
 
@@ -46,12 +46,18 @@ export async function PATCH(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { keyResults, ...fields } = body
+  const { keyResults, subtasks, ...fields } = body
   type KRPayload = { id?: string; [key: string]: unknown }
+  type SubtaskPayload = { id?: string; title: string }
   const krsArray = Array.isArray(keyResults) ? (keyResults as KRPayload[]) : null
   const existingKrs = krsArray?.filter(kr => kr.id) ?? []
   const newKrs = krsArray?.filter(kr => !kr.id) ?? []
   const keptKrIds = existingKrs.map(kr => kr.id as string)
+
+  const subtasksArray = Array.isArray(subtasks) ? (subtasks as SubtaskPayload[]) : null
+  const existingSubtasks = subtasksArray?.filter(st => st.id) ?? []
+  const newSubtasks = subtasksArray?.filter(st => !st.id) ?? []
+  const keptSubtaskIds = existingSubtasks.map(st => st.id as string)
 
   const [updateResult] = await Promise.all([
     Object.keys(fields).length > 0
@@ -61,6 +67,11 @@ export async function PATCH(
       ? keptKrIds.length > 0
         ? admin.from('pillar_kr_templates').delete().eq('template_id', templateId).not('id', 'in', `(${keptKrIds.join(',')})`)
         : admin.from('pillar_kr_templates').delete().eq('template_id', templateId)
+      : Promise.resolve(null),
+    subtasksArray
+      ? keptSubtaskIds.length > 0
+        ? admin.from('pillar_subtask_templates').delete().eq('template_id', templateId).not('id', 'in', `(${keptSubtaskIds.join(',')})`)
+        : admin.from('pillar_subtask_templates').delete().eq('template_id', templateId)
       : Promise.resolve(null),
   ])
 
@@ -74,6 +85,15 @@ export async function PATCH(
     newKrs.length > 0
       ? admin.from('pillar_kr_templates').insert(
           newKrs.map((kr, i) => ({ ...kr, template_id: templateId, position: existingKrs.length + i }))
+        )
+      : Promise.resolve(null),
+    ...existingSubtasks.map(st => {
+      const { id, ...stFields } = st
+      return admin.from('pillar_subtask_templates').update(stFields).eq('id', id as string)
+    }),
+    newSubtasks.length > 0
+      ? admin.from('pillar_subtask_templates').insert(
+          newSubtasks.map((st, i) => ({ title: st.title, template_id: templateId, position: existingSubtasks.length + i }))
         )
       : Promise.resolve(null),
   ])

@@ -43,22 +43,27 @@ export async function POST(req: NextRequest) {
     months = [],
     targets = [],
     keyResults = [],
+    subtasks = [],
     incentive1Amount = 0,
     incentive1Basis = 'per_outlet',
-  }: { templateId: string | null; title: string; description: string | null; months: string[]; targets: Target[]; keyResults: Record<string, unknown>[]; incentive1Amount?: number; incentive1Basis?: 'per_outlet' | 'per_pax' } = body
+  }: { templateId: string | null; title: string; description: string | null; months: string[]; targets: Target[]; keyResults: Record<string, unknown>[]; subtasks?: { title: string }[]; incentive1Amount?: number; incentive1Basis?: 'per_outlet' | 'per_pax' } = body
 
   if (!title || months.length === 0 || targets.length === 0) {
     return NextResponse.json({ error: 'title, months, and targets are required' }, { status: 400 })
   }
 
-  // Resolve template KR definitions and incentive1 (used unless caller passed explicit adhoc values)
+  // Resolve template KR/subtask definitions and incentive1 (used unless caller passed explicit adhoc values)
   let krDefs = keyResults
+  let subtaskDefs = subtasks
   let incentive1amount = incentive1Amount
   let incentive1basis = incentive1Basis
   if (templateId) {
-    const [{ data: tplKrs }, { data: tpl }] = await Promise.all([
+    const [{ data: tplKrs }, { data: tplSubtasks }, { data: tpl }] = await Promise.all([
       krDefs.length === 0
         ? admin.from('pillar_kr_templates').select('*').eq('template_id', templateId).order('position')
+        : Promise.resolve({ data: null }),
+      subtaskDefs.length === 0
+        ? admin.from('pillar_subtask_templates').select('*').eq('template_id', templateId).order('position')
         : Promise.resolve({ data: null }),
       admin.from('pillar_templates').select('incentive1_amount, incentive1_basis').eq('id', templateId).single(),
     ])
@@ -71,6 +76,9 @@ export async function POST(req: NextRequest) {
         target_value: kr.target_value,
         unit: kr.unit,
       }))
+    }
+    if (tplSubtasks) {
+      subtaskDefs = tplSubtasks.map(st => ({ title: st.title }))
     }
     if (tpl) {
       incentive1amount = tpl.incentive1_amount
@@ -121,6 +129,17 @@ export async function POST(req: NextRequest) {
   if (krDefs.length > 0 && inserted && inserted.length > 0) {
     await admin.from('pillar_assignment_krs').insert(
       inserted.flatMap(a => krDefs.map(kr => ({ ...kr, assignment_id: a.id })))
+    )
+  }
+
+  if (subtaskDefs.length > 0 && inserted && inserted.length > 0) {
+    await admin.from('pillar_subtasks').insert(
+      inserted.flatMap(a => subtaskDefs.map((st, i) => ({
+        assignment_id: a.id,
+        title: st.title,
+        position: i,
+        created_by: user.id,
+      })))
     )
   }
 

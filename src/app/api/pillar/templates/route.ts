@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest) {
   if (!orgId) return NextResponse.json({ templates: [] })
 
   const { data, error } = await admin.from('pillar_templates')
-    .select('*, departments(name), pillar_kr_templates(id, title, description, metric_type, start_value, target_value, unit, position)')
+    .select('*, departments(name), pillar_kr_templates(id, title, description, metric_type, start_value, target_value, unit, position), pillar_subtask_templates(id, title, position)')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false })
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { keyResults = [], ...fields } = body
+  const { keyResults = [], subtasks = [], ...fields } = body
 
   const { data: tpl, error } = await admin.from('pillar_templates').insert({
     org_id: orgId,
@@ -69,6 +69,16 @@ export async function POST(req: NextRequest) {
         start_value: kr.start_value ?? 0,
         target_value: kr.target_value ?? 100,
         unit: kr.unit || null,
+        position: i,
+      }))
+    )
+  }
+
+  if (subtasks.length > 0) {
+    await admin.from('pillar_subtask_templates').insert(
+      subtasks.map((st: Record<string, unknown>, i: number) => ({
+        template_id: tpl.id,
+        title: st.title,
         position: i,
       }))
     )

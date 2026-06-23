@@ -20,6 +20,11 @@ type KRTemplate = {
   unit?: string | null
 }
 
+type SubtaskTemplate = {
+  id?: string
+  title: string
+}
+
 type ExistingTemplate = {
   id: string
   title: string
@@ -28,6 +33,7 @@ type ExistingTemplate = {
   incentive1_amount?: number
   incentive1_basis?: 'per_outlet' | 'per_pax'
   pillar_kr_templates: KRTemplate[]
+  pillar_subtask_templates?: SubtaskTemplate[]
 }
 
 interface Props {
@@ -46,6 +52,7 @@ export function PillarTemplateForm({ departments, template, trigger, onSaved }: 
   const [description, setDescription] = useState(template?.description ?? '')
   const [deptId, setDeptId] = useState(template?.dept_id ?? '')
   const [krs, setKrs] = useState<KRTemplate[]>(template?.pillar_kr_templates ?? [])
+  const [subtasks, setSubtasks] = useState<SubtaskTemplate[]>(template?.pillar_subtask_templates ?? [])
   const [incentive1Amount, setIncentive1Amount] = useState(template?.incentive1_amount ?? 0)
   const [incentive1Basis, setIncentive1Basis] = useState<'per_outlet' | 'per_pax'>(template?.incentive1_basis ?? 'per_outlet')
   const [saving, setSaving] = useState(false)
@@ -62,6 +69,18 @@ export function PillarTemplateForm({ departments, template, trigger, onSaved }: 
     setKrs(prev => prev.filter((_, idx) => idx !== i))
   }
 
+  function addSubtask() {
+    setSubtasks(prev => [...prev, { title: '' }])
+  }
+
+  function updateSubtask(i: number, title: string) {
+    setSubtasks(prev => prev.map((st, idx) => idx === i ? { ...st, title } : st))
+  }
+
+  function removeSubtask(i: number) {
+    setSubtasks(prev => prev.filter((_, idx) => idx !== i))
+  }
+
   async function handleSubmit() {
     if (!title.trim()) {
       toast.error('Title is required')
@@ -73,6 +92,7 @@ export function PillarTemplateForm({ departments, template, trigger, onSaved }: 
       description: description.trim() || null,
       dept_id: deptId || null,
       keyResults: krs.filter(kr => kr.title.trim()),
+      subtasks: subtasks.filter(st => st.title.trim()),
       incentive1_amount: Number(incentive1Amount) || 0,
       incentive1_basis: incentive1Basis,
     }
@@ -175,6 +195,27 @@ export function PillarTemplateForm({ departments, template, trigger, onSaved }: 
                 </div>
               ))}
               {krs.length === 0 && <p className="text-xs text-gray-400">No key results yet — add at least one to track progress.</p>}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-gray-500">Subtasks</label>
+                <button type="button" onClick={addSubtask} className="text-xs text-orange-600 hover:text-orange-700 flex items-center gap-1">
+                  <Plus className="h-3.5 w-3.5" /> Add Subtask
+                </button>
+              </div>
+              {subtasks.map((st, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    value={st.title}
+                    onChange={e => updateSubtask(i, e.target.value)}
+                    placeholder="Subtask title"
+                    className="flex-1"
+                  />
+                  <button type="button" onClick={() => removeSubtask(i)} className="text-gray-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              ))}
+              {subtasks.length === 0 && <p className="text-xs text-gray-400">No subtasks yet — these will be seeded onto every assignment created from this template.</p>}
             </div>
           </div>
 
