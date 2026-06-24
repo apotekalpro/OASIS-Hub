@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Store, Globe2, MapPin, Building2, Shield, User, ChevronDown } from 'lucide-react'
+import { Store, Globe2, MapPin, Building2, Shield, User, ChevronDown, Check } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/avatar'
 
@@ -69,21 +69,26 @@ export function PillarTargetPicker({
 
   const selectedKeys = new Set(selected.map(targetKey))
 
-  function addTargets(toAdd: PillarTarget[]) {
+  function addTargets(toAdd: PillarTarget[], keepSearch = false) {
     const newOnes = toAdd.filter(t => !selectedKeys.has(targetKey(t)))
     if (newOnes.length > 0) onChange([...selected, ...newOnes])
-    setSearch('')
+    if (!keepSearch) setSearch('')
   }
 
   function remove(key: string) {
     onChange(selected.filter(t => targetKey(t) !== key))
   }
 
+  function toggleOutlet(o: PickerOutlet) {
+    const key = `outlet:${o.id}`
+    if (selectedKeys.has(key)) remove(key)
+    else addTargets([{ scopeType: 'outlet', outlet: o }], true)
+  }
+
   // ── Outlet mode ──────────────────────────────────────────────────────────
   const filteredOutlets = outlets.filter(o =>
-    !selectedKeys.has(`outlet:${o.id}`) &&
-    (o.name.toLowerCase().includes(search.toLowerCase()) ||
-     (o.code ?? '').toLowerCase().includes(search.toLowerCase()))
+    o.name.toLowerCase().includes(search.toLowerCase()) ||
+    (o.code ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
   // ── Area Manager mode ───────────────────────────────────────────────────
@@ -197,18 +202,24 @@ export function PillarTargetPicker({
             <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto z-10 relative">
               {mode === 'outlet' && (
                 <>
-                  {filteredOutlets.slice(0, 8).map(o => (
-                    <button
-                      key={o.id}
-                      type="button"
-                      onClick={() => addTargets([{ scopeType: 'outlet', outlet: o }])}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
-                    >
-                      <Store className="h-4 w-4 text-orange-400 shrink-0" />
-                      <span>{o.name}</span>
-                      {o.code && <span className="text-gray-400 text-xs ml-auto">{o.code}</span>}
-                    </button>
-                  ))}
+                  {filteredOutlets.slice(0, 50).map(o => {
+                    const checked = selectedKeys.has(`outlet:${o.id}`)
+                    return (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => toggleOutlet(o)}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 text-left"
+                      >
+                        <span className={`flex items-center justify-center h-4 w-4 rounded border shrink-0 ${checked ? 'bg-orange-500 border-orange-500' : 'border-gray-300'}`}>
+                          {checked && <Check className="h-3 w-3 text-white" />}
+                        </span>
+                        <Store className="h-4 w-4 text-orange-400 shrink-0" />
+                        <span>{o.name}</span>
+                        {o.code && <span className="text-gray-400 text-xs ml-auto">{o.code}</span>}
+                      </button>
+                    )
+                  })}
                   {filteredOutlets.length === 0 && (
                     <p className="px-3 py-2 text-sm text-gray-400">No outlets found</p>
                   )}
