@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { calcIncentive1, calcRewardBreakdown } from '@/lib/pillar/rewards'
+import { normalizeOutletCode } from '@/lib/pillar/outlet-code'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,15 +26,20 @@ export async function GET(req: NextRequest) {
   if (!orgId) return NextResponse.json({ error: 'Outlet not found' }, { status: 404 })
 
   // outlet_id on pillar_targets can be null when the uploaded CSV's outlet code didn't
-  // exactly match outlets.code at upload time — fall back to matching by code/org/month.
-  let targetRes = await admin.from('pillar_targets').select('t1, t2, t3, category')
+  // exactly match outlets.code at upload time (e.g. CSV "JKJPDA1" vs stored "0033-JKJPDA1") —
+  // fall back to a normalized code comparison within the same org/month.
+  let targetRow: { t1: number; t2: number; t3: number; category: string } | null = null
+  const directRes = await admin.from('pillar_targets').select('t1, t2, t3, category')
     .eq('outlet_id', outletId).eq('month', month).maybeSingle()
-  if (!targetRes.data && outletRes.data?.code) {
-    targetRes = await admin.from('pillar_targets').select('t1, t2, t3, category')
-      .eq('org_id', orgId).eq('month', month).ilike('outlet_code', outletRes.data.code.trim()).maybeSingle()
+  targetRow = directRes.data ?? null
+  if (!targetRow && outletRes.data?.code) {
+    const normalizedOutletCode = normalizeOutletCode(outletRes.data.code)
+    const candidatesRes = await admin.from('pillar_targets').select('t1, t2, t3, category, outlet_code')
+      .eq('org_id', orgId).eq('month', month)
+    targetRow = (candidatesRes.data ?? []).find(t => normalizeOutletCode(t.outlet_code) === normalizedOutletCode) ?? null
   }
 
-  const category = targetRes.data?.category ?? outletRes.data?.category?.toLowerCase()
+  const category = targetRow?.category ?? outletRes.data?.category?.toLowerCase()
   const matrixRes = category
     ? await admin.from('pillar_reward_tiers').select('t1_reward, t2_reward, t3_reward').eq('org_id', orgId).eq('category', category).maybeSingle()
     : { data: null }
@@ -44,7 +50,7 @@ export async function GET(req: NextRequest) {
     headcount,
     revenue: inputRes.data?.revenue ?? 0,
     focusProductPct: inputRes.data?.focus_product_pct ?? 0,
-    targets: targetRes.data ? { t1: targetRes.data.t1, t2: targetRes.data.t2, t3: targetRes.data.t3 } : null,
+    targets: targetRow ? { t1: targetRow.t1, t2: targetRow.t2, t3: targetRow.t3 } : null,
     matrix: matrixRes.data ?? null,
   })
 
@@ -62,7 +68,7 @@ export async function GET(req: NextRequest) {
     headcount,
     category: category ?? null,
     monthlyInput: inputRes.data ?? null,
-    target: targetRes.data ?? null,
+    target: targetRow ?? null,
     incentive1Basis,
     incentive1ByBasis: { perPax: incentive1PerPax.achieved, perOutlet: incentive1PerOutlet.achieved },
   })
