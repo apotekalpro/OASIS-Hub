@@ -1061,7 +1061,7 @@ export function OkrDetailClient({
                             {canManage && (
                               <button
                                 onClick={() => deleteKr(kr.id)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500 shrink-0"
+                                className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500 shrink-0"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -1158,7 +1158,7 @@ export function OkrDetailClient({
                               ) : (
                                 <button
                                   onClick={() => setKrEditing(prev => ({ ...prev, [kr.id]: String(kr.current_value) }))}
-                                  className="text-xs text-indigo-600 hover:text-indigo-800 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                                  className="text-xs text-indigo-600 hover:text-indigo-800 font-medium opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                                 >
                                   Update progress
                                 </button>
@@ -1232,7 +1232,7 @@ export function OkrDetailClient({
                                       )}
                                       <Link
                                         href={`/tasks/${task.id}`}
-                                        className="opacity-0 group-hover/task:opacity-100 transition-opacity text-gray-300 hover:text-indigo-500 shrink-0"
+                                        className="opacity-100 sm:opacity-0 sm:group-hover/task:opacity-100 transition-opacity text-gray-300 hover:text-indigo-500 shrink-0"
                                         title="Open task"
                                       >
                                         <ChevronRight className="h-3.5 w-3.5" />
@@ -1537,7 +1537,7 @@ export function OkrDetailClient({
                     {canManage && assignees.length > 1 && (
                       <button
                         onClick={() => removeAssignee(a.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500 shrink-0"
+                        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500 shrink-0"
                         title="Remove"
                       >
                         <X className="h-3.5 w-3.5" />
