@@ -17,7 +17,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = createAdminClient()
-  const { assigneeIds, watcherIds, ...taskPayload } = body
+  const { assigneeIds, watcherIds, subtasks, ...taskPayload } = body
 
   // Deadline (due_date) may only be changed by the task owner or dept_head+
   if ('due_date' in taskPayload) {
@@ -42,6 +42,35 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
       : Promise.resolve(null),
   ])
   if (updateResult.error) return NextResponse.json({ error: updateResult.error.message }, { status: 500 })
+
+  if (Array.isArray(subtasks)) {
+    const incoming = (subtasks as { id?: string; title: string }[])
+      .map(s => ({ id: s.id, title: s.title.trim() }))
+      .filter(s => s.title)
+    const { data: existing } = await admin.from('tasks').select('id, title').eq('parent_id', taskId)
+    const existingIds = new Set((existing ?? []).map(s => s.id))
+    const incomingIds = new Set(incoming.filter(s => s.id).map(s => s.id))
+
+    const toDelete = (existing ?? []).filter(s => !incomingIds.has(s.id)).map(s => s.id)
+    const toInsert = incoming.filter(s => !s.id)
+    const toUpdate = incoming.filter(s => s.id && existingIds.has(s.id))
+
+    await Promise.all([
+      toDelete.length > 0 ? admin.from('tasks').delete().in('id', toDelete) : Promise.resolve(null),
+      toInsert.length > 0 ? admin.from('tasks').insert(
+        toInsert.map(s => ({
+          org_id: taskPayload.org_id,
+          parent_id: taskId,
+          title: s.title,
+          status: 'todo',
+          priority: 'medium',
+          created_by: user.id,
+          tags: [],
+        }))
+      ) : Promise.resolve(null),
+      ...toUpdate.map(s => admin.from('tasks').update({ title: s.title }).eq('id', s.id)),
+    ])
+  }
 
   // Phase 2: insert new assignees/watchers in parallel
   await Promise.all([

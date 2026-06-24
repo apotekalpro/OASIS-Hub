@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient()
   const body = await request.json()
-  const { assigneeIds = [], watcherIds = [], notifyUserIds = [], actorName = '', ...taskPayload } = body
+  const { assigneeIds = [], watcherIds = [], notifyUserIds = [], actorName = '', subtasks = [], ...taskPayload } = body
 
   const { data: created, error } = await admin
     .from('tasks')
@@ -42,6 +42,23 @@ export async function POST(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const taskId = (created as { id: string }).id
+
+  const subtaskTitles = (subtasks as string[]).map(t => t.trim()).filter(Boolean)
+  if (subtaskTitles.length > 0) {
+    const { error: subtaskErr } = await admin.from('tasks').insert(
+      subtaskTitles.map(title => ({
+        org_id: taskPayload.org_id,
+        parent_id: taskId,
+        title,
+        status: 'todo',
+        priority: 'medium',
+        created_by: user.id,
+        tags: [],
+      }))
+    )
+    if (subtaskErr) return NextResponse.json({ error: subtaskErr.message }, { status: 500 })
+  }
+
 
   // Insert assignees — default to creator if none provided
   const assignees = (assigneeIds as string[]).length > 0

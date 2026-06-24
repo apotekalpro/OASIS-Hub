@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, X, Tag, Eye, Lock } from 'lucide-react'
+import { Plus, X, Tag, Eye, Lock, Trash2 } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
+type SubtaskDraft = { id?: string; title: string }
 type OrgUser = PickerUser
 type Team = { id: string; name: string; team_members?: Array<{ user_id: string; profiles?: OrgUser | null }> }
 type Department = { id: string; name: string }
@@ -56,7 +57,9 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
   const [description, setDescription] = useState<string>(task?.description ?? '')
   const [tags, setTags] = useState<string[]>(task?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
-  // Load existing assignees + watchers when editing
+  const [subtasks, setSubtasks] = useState<SubtaskDraft[]>([])
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
+  // Load existing assignees + watchers + subtasks when editing
   useEffect(() => {
     if (open && task?.id) {
       fetch(`/api/tasks/${task.id}/members`)
@@ -66,13 +69,34 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
           setSelectedCC(users.filter(u => watcherIds.includes(u.id)))
         })
         .catch(() => {})
+      fetch(`/api/tasks/${task.id}/subtasks`)
+        .then(r => r.ok ? r.json() : { subtasks: [] })
+        .then(({ subtasks: existing = [] }: { subtasks: SubtaskDraft[] }) => setSubtasks(existing))
+        .catch(() => {})
     }
     if (!open) {
       setSelectedCC([])
       setSelectedAssignees([])
       setDescription(task?.description ?? '')
+      setSubtasks([])
+      setNewSubtaskTitle('')
     }
   }, [open, task?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function addSubtaskDraft() {
+    const title = newSubtaskTitle.trim()
+    if (!title) return
+    setSubtasks(prev => [...prev, { title }])
+    setNewSubtaskTitle('')
+  }
+
+  function updateSubtaskDraft(i: number, title: string) {
+    setSubtasks(prev => prev.map((s, idx) => idx === i ? { ...s, title } : s))
+  }
+
+  function removeSubtaskDraft(i: number) {
+    setSubtasks(prev => prev.filter((_, idx) => idx !== i))
+  }
 
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -114,6 +138,7 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
             ...payload,
             assigneeIds: selectedAssignees.map(u => u.id),
             watcherIds: selectedCC.map(u => u.id),
+            subtasks: subtasks.filter(s => s.title.trim()),
           }),
         })
         if (!res.ok) throw new Error((await res.json()).error)
@@ -132,6 +157,7 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
             watcherIds: selectedCC.map(u => u.id),
             notifyUserIds,
             actorName: creatorProfile?.full_name ?? 'Someone',
+            subtasks: subtasks.filter(s => s.title.trim()).map(s => s.title.trim()),
           }),
         })
         const resData = await res.json()
@@ -147,6 +173,7 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
       setSelectedAssignees([])
       setSelectedCC([])
       setTags([])
+      setSubtasks([])
       if (!onCreated) router.refresh()
     } catch (err) {
       toast.error((err as Error).message)
@@ -268,6 +295,41 @@ export function TaskForm({ orgId, currentUserId, users, teams, departments, task
                     className="flex-1"
                   />
                   <Button type="button" variant="outline" size="sm" onClick={addTag}>Add</Button>
+                </div>
+              </div>
+
+              {/* Subtasks */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Subtasks</label>
+                <div className="space-y-2 mb-2">
+                  {subtasks.map((st, i) => (
+                    <div key={st.id ?? `new-${i}`} className="flex items-center gap-2">
+                      <Input
+                        value={st.title}
+                        onChange={e => updateSubtaskDraft(i, e.target.value)}
+                        placeholder="Subtask title"
+                        className="flex-1"
+                      />
+                      <button type="button" onClick={() => removeSubtaskDraft(i)} className="text-gray-300 hover:text-red-500 shrink-0">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {subtasks.length === 0 && (
+                    <p className="text-sm text-gray-400">No subtasks yet</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Add subtask..."
+                    value={newSubtaskTitle}
+                    onChange={e => setNewSubtaskTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSubtaskDraft() } }}
+                    className="flex-1"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addSubtaskDraft}>
+                    <Plus className="h-4 w-4" /> Add
+                  </Button>
                 </div>
               </div>
 
