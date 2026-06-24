@@ -204,8 +204,10 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
                 Focus Product % Up to Date
                 <input type="number" value={draftFocus} onChange={e => setDraftFocus(e.target.value)} className="w-20 rounded-md px-2 py-1 text-gray-900 text-xs" />
               </label>
-              <button type="button" onClick={save} disabled={saving} className="flex items-center gap-1 bg-white/20 hover:bg-white/30 rounded-md px-2 py-1.5"><Check className="h-3.5 w-3.5" /></button>
-              <button type="button" onClick={() => setEditing(false)} className="flex items-center gap-1 bg-white/10 hover:bg-white/20 rounded-md px-2 py-1.5"><X className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={save} disabled={saving} className="flex items-center gap-1 bg-white/20 hover:bg-white/30 disabled:opacity-70 rounded-md px-2 py-1.5">
+                {saving ? <span className="animate-pulse">Saving…</span> : <><Check className="h-3.5 w-3.5" /> Save</>}
+              </button>
+              <button type="button" onClick={() => setEditing(false)} disabled={saving} className="flex items-center gap-1 bg-white/10 hover:bg-white/20 disabled:opacity-50 rounded-md px-2 py-1.5"><X className="h-3.5 w-3.5" /></button>
             </div>
           )
         )}
@@ -223,8 +225,10 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <input type="number" value={rowDraftRevenue} onChange={e => setRowDraftRevenue(e.target.value)} placeholder="Revenue" className="w-24 rounded-md px-1.5 py-1 text-gray-900 text-xs" />
                   <input type="number" value={rowDraftFocus} onChange={e => setRowDraftFocus(e.target.value)} placeholder="Focus %" className="w-16 rounded-md px-1.5 py-1 text-gray-900 text-xs" />
-                  <button type="button" onClick={saveRow} disabled={rowSaving} className="flex items-center bg-white/20 hover:bg-white/30 rounded-md px-1.5 py-1"><Check className="h-3 w-3" /></button>
-                  <button type="button" onClick={() => setEditingOutletId(null)} className="flex items-center bg-white/10 hover:bg-white/20 rounded-md px-1.5 py-1"><X className="h-3 w-3" /></button>
+                  <button type="button" onClick={saveRow} disabled={rowSaving} className="flex items-center gap-1 bg-white/20 hover:bg-white/30 disabled:opacity-70 rounded-md px-1.5 py-1">
+                    {rowSaving ? <span className="animate-pulse">Saving…</span> : <Check className="h-3 w-3" />}
+                  </button>
+                  <button type="button" onClick={() => setEditingOutletId(null)} disabled={rowSaving} className="flex items-center bg-white/10 hover:bg-white/20 disabled:opacity-50 rounded-md px-1.5 py-1"><X className="h-3 w-3" /></button>
                 </div>
               ) : (
                 <button type="button" onClick={() => startEditRow(r)} className="flex items-center gap-1 opacity-90 hover:opacity-100 self-start">
