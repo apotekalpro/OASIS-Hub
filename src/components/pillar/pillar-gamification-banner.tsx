@@ -16,6 +16,13 @@ type OutletRewardData = {
   breakdown: RewardBreakdown | null
   revenue: number
   focusProductPct: number
+  incentive1Basis: 'per_outlet' | 'per_pax' | null
+}
+
+function basisLabel(basis: 'per_outlet' | 'per_pax' | null) {
+  if (basis === 'per_pax') return 'Per Alproean'
+  if (basis === 'per_outlet') return 'Per Outlet'
+  return null
 }
 
 function formatIDR(n: number) {
@@ -78,6 +85,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
         breakdown: refreshed.breakdown ?? null,
         revenue: refreshed.monthlyInput?.revenue ?? 0,
         focusProductPct: refreshed.monthlyInput?.focus_product_pct ?? 0,
+        incentive1Basis: refreshed.incentive1Basis ?? null,
       } : r))
       setEditingOutletId(null)
     } else {
@@ -99,8 +107,9 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
             breakdown: data.breakdown ?? null,
             revenue: data.monthlyInput?.revenue ?? 0,
             focusProductPct: data.monthlyInput?.focus_product_pct ?? 0,
+            incentive1Basis: data.incentive1Basis ?? null,
           }))
-          .catch(() => ({ outletId: id, outletName: null, breakdown: null, revenue: 0, focusProductPct: 0 }))
+          .catch(() => ({ outletId: id, outletName: null, breakdown: null, revenue: 0, focusProductPct: 0, incentive1Basis: null }))
       )
     ).then(results => {
       if (!active) return
@@ -132,6 +141,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
         breakdown: refreshed.breakdown ?? null,
         revenue: refreshed.monthlyInput?.revenue ?? 0,
         focusProductPct: refreshed.monthlyInput?.focus_product_pct ?? 0,
+        incentive1Basis: refreshed.incentive1Basis ?? null,
       }])
     } else {
       const { error } = await res.json().catch(() => ({ error: 'Failed to save' }))
@@ -150,6 +160,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
   const gap = Math.max(0, potential - achieved)
   const focusGapPct = Math.max(0, FOCUS_PRODUCT_THRESHOLD_PCT - avgFocusProductPct)
   const pctOfPotentialLost = potential > 0 ? Math.round((gap / potential) * 100) : 0
+  const overallBasis = rows.find(r => r.incentive1Basis)?.incentive1Basis ?? null
 
   return (
     <div className="rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white p-5 space-y-4">
@@ -185,7 +196,10 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
       )}
 
       <div className="flex items-center gap-4 text-xs flex-wrap pt-2 border-t border-white/20">
-        <span className="opacity-90">Incentive 1: <span className="font-semibold">{formatIDR(breakdown.incentive1.achieved)}</span></span>
+        <span className="opacity-90">
+          Incentive 1: <span className="font-semibold">{formatIDR(breakdown.incentive1.achieved)}</span>
+          {basisLabel(overallBasis) && <span className="opacity-75"> ({basisLabel(overallBasis)})</span>}
+        </span>
         <span className="opacity-90">Incentive 2: <span className="font-semibold">{formatIDR(breakdown.incentive2.achieved)}</span></span>
         <span className="opacity-90">Incentive 3: <span className="font-semibold">{formatIDR(breakdown.incentive3.achieved)}</span></span>
 
