@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { Upload, Download, Save, CheckCircle2 } from 'lucide-react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import { Upload, Download, Save, CheckCircle2, XCircle, Search, ArrowUp, ArrowDown, ArrowUpDown, Pencil, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { parseCSV } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -17,10 +18,24 @@ type Tier = {
   t3_reward: number
 }
 
+type TargetRow = {
+  id: string
+  outlet_id: string | null
+  outlet_code: string
+  outlet_name: string | null
+  category: string
+  month: string
+  t1: number
+  t2: number
+  t3: number
+}
+
 const CATEGORY_ORDER = ['bronze', 'silver', 'gold', 'platinum', 'titanium']
 const CATEGORY_LABEL: Record<string, string> = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold', platinum: 'Platinum', titanium: 'Titanium' }
 
 type ParsedRow = { outletCode: string; outletName: string; category: string; t1: number; t2: number; t3: number }
+
+type SortKey = 'outlet_code' | 'outlet_name' | 'category' | 'month' | 't1' | 't2' | 't3'
 
 function nextMonths(count = 12) {
   const opts: { value: string; label: string }[] = []
@@ -42,8 +57,18 @@ export function PillarTargetsClient() {
   const [fileName, setFileName] = useState('')
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
-  const [uploadResult, setUploadResult] = useState<number | null>(null)
+  const [uploadResult, setUploadResult] = useState<{ success: number; failed: number; unmatched: string[] } | null>(null)
   const months = nextMonths()
+
+  const [targets, setTargets] = useState<TargetRow[]>([])
+  const [loadingTargets, setLoadingTargets] = useState(false)
+  const [targetSearch, setTargetSearch] = useState('')
+  const [targetMonthFilter, setTargetMonthFilter] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('outlet_code')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<{ category: string; t1: string; t2: string; t3: string }>({ category: 'bronze', t1: '0', t2: '0', t3: '0' })
+  const [rowSaving, setRowSaving] = useState(false)
 
   useEffect(() => {
     fetch('/api/pillar/reward-tiers').then(r => r.json()).then(d => {
@@ -51,6 +76,14 @@ export function PillarTargetsClient() {
       setTiers(sorted)
     })
   }, [])
+
+  function loadTargets() {
+    setLoadingTargets(true)
+    const url = targetMonthFilter ? `/api/pillar/targets?month=${targetMonthFilter}` : '/api/pillar/targets'
+    fetch(url).then(r => r.json()).then(d => setTargets(d.targets ?? [])).finally(() => setLoadingTargets(false))
+  }
+
+  useEffect(() => { loadTargets() }, [targetMonthFilter])
 
   function updateTier(id: string, patch: Partial<Tier>) {
     setTiers(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t))
@@ -123,12 +156,74 @@ export function PillarTargetsClient() {
     })
     setUploading(false)
     if (res.ok) {
-      const { count } = await res.json()
-      setUploadResult(count)
-      toast.success(`Uploaded ${count} target rows`)
+      const { successCount, failedCount, unmatchedCodes } = await res.json()
+      setUploadResult({ success: successCount ?? 0, failed: failedCount ?? 0, unmatched: unmatchedCodes ?? [] })
+      if (failedCount > 0) toast.error(`Uploaded ${successCount} rows, ${failedCount} outlet code(s) not recognized`)
+      else toast.success(`Uploaded ${successCount} target rows`)
+      loadTargets()
     } else {
       const { error } = await res.json().catch(() => ({ error: 'Upload failed' }))
       toast.error(error ?? 'Upload failed')
+    }
+  }
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
+  function SortHeader({ label, sortKeyVal, align = 'left' }: { label: string; sortKeyVal: SortKey; align?: 'left' | 'right' }) {
+    const active = sortKey === sortKeyVal
+    return (
+      <th className={`px-3 py-2 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+        <button type="button" onClick={() => toggleSort(sortKeyVal)} className={`flex items-center gap-1 ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-orange-600' : 'text-gray-500'} hover:text-orange-600`}>
+          {label}
+          {active ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-50" />}
+        </button>
+      </th>
+    )
+  }
+
+  const filteredSortedTargets = useMemo(() => {
+    const q = targetSearch.trim().toLowerCase()
+    let list = targets
+    if (q) {
+      list = list.filter(t =>
+        t.outlet_code.toLowerCase().includes(q) ||
+        (t.outlet_name ?? '').toLowerCase().includes(q) ||
+        t.category.toLowerCase().includes(q)
+      )
+    }
+    const sorted = [...list].sort((a, b) => {
+      const av = a[sortKey]
+      const bv = b[sortKey]
+      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av ?? '').localeCompare(String(bv ?? ''))
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return sorted
+  }, [targets, targetSearch, sortKey, sortDir])
+
+  function startEdit(t: TargetRow) {
+    setEditingId(t.id)
+    setEditDraft({ category: t.category, t1: String(t.t1), t2: String(t.t2), t3: String(t.t3) })
+  }
+
+  async function saveEdit() {
+    if (!editingId) return
+    setRowSaving(true)
+    const res = await fetch(`/api/pillar/targets/${editingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category: editDraft.category, t1: Number(editDraft.t1) || 0, t2: Number(editDraft.t2) || 0, t3: Number(editDraft.t3) || 0 }),
+    })
+    setRowSaving(false)
+    if (res.ok) {
+      const { target } = await res.json()
+      setTargets(prev => prev.map(t => t.id === editingId ? target : t))
+      setEditingId(null)
+      toast.success('Target updated')
+    } else {
+      toast.error('Failed to update target')
     }
   }
 
@@ -235,7 +330,19 @@ export function PillarTargetsClient() {
           )}
 
           {uploadResult !== null && (
-            <p className="flex items-center gap-1.5 text-sm text-green-600"><CheckCircle2 className="h-4 w-4" /> Uploaded {uploadResult} target rows</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-4 text-sm">
+                <p className="flex items-center gap-1.5 text-green-600"><CheckCircle2 className="h-4 w-4" /> {uploadResult.success} succeeded</p>
+                {uploadResult.failed > 0 && (
+                  <p className="flex items-center gap-1.5 text-red-600"><XCircle className="h-4 w-4" /> {uploadResult.failed} failed</p>
+                )}
+              </div>
+              {uploadResult.unmatched.length > 0 && (
+                <p className="text-xs text-red-500">
+                  Outlet code(s) not found, saved without a linked outlet: {uploadResult.unmatched.join(', ')}
+                </p>
+              )}
+            </div>
           )}
 
           <div className="flex items-center justify-end gap-3">
@@ -245,6 +352,95 @@ export function PillarTargetsClient() {
             <Button onClick={handleUpload} loading={uploading} disabled={rows.length === 0 || selectedMonths.length === 0}>
               Upload {rows.length > 0 ? `${rows.length} Outlet${rows.length > 1 ? 's' : ''}` : ''}
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Uploaded Targets</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input placeholder="Search by code, name, category..." value={targetSearch} onChange={e => setTargetSearch(e.target.value)} className="pl-9" />
+            </div>
+            <select
+              value={targetMonthFilter}
+              onChange={e => setTargetMonthFilter(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              <option value="">All months</option>
+              {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+
+          <div className="border border-gray-200 rounded-lg overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs uppercase tracking-wide">
+                <tr>
+                  <SortHeader label="Code" sortKeyVal="outlet_code" />
+                  <SortHeader label="Name" sortKeyVal="outlet_name" />
+                  <SortHeader label="Category" sortKeyVal="category" />
+                  <SortHeader label="Month" sortKeyVal="month" />
+                  <SortHeader label="L1" sortKeyVal="t1" align="right" />
+                  <SortHeader label="L2" sortKeyVal="t2" align="right" />
+                  <SortHeader label="L3" sortKeyVal="t3" align="right" />
+                  <th className="px-3 py-2 text-right">Linked</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredSortedTargets.map(t => {
+                  const editing = editingId === t.id
+                  return (
+                    <tr key={t.id} className={editing ? 'bg-orange-50/40' : ''}>
+                      <td className="px-3 py-2 font-mono text-xs text-gray-500">{t.outlet_code}</td>
+                      <td className="px-3 py-2 text-gray-800">{t.outlet_name || '—'}</td>
+                      <td className="px-3 py-2">
+                        {editing ? (
+                          <select value={editDraft.category} onChange={e => setEditDraft(d => ({ ...d, category: e.target.value }))} className="border border-gray-200 rounded px-1.5 py-1 text-xs capitalize">
+                            {CATEGORY_ORDER.map(c => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
+                          </select>
+                        ) : (
+                          <span className="capitalize text-gray-600">{t.category}</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-gray-500 text-xs">{new Date(t.month + 'T00:00:00').toLocaleDateString('en-MY', { month: 'short', year: 'numeric' })}</td>
+                      <td className="px-3 py-2 text-right">
+                        {editing ? <input type="number" value={editDraft.t1} onChange={e => setEditDraft(d => ({ ...d, t1: e.target.value }))} className="w-24 text-right border border-gray-200 rounded px-1.5 py-1 text-xs" /> : t.t1.toLocaleString('id-ID')}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {editing ? <input type="number" value={editDraft.t2} onChange={e => setEditDraft(d => ({ ...d, t2: e.target.value }))} className="w-24 text-right border border-gray-200 rounded px-1.5 py-1 text-xs" /> : t.t2.toLocaleString('id-ID')}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {editing ? <input type="number" value={editDraft.t3} onChange={e => setEditDraft(d => ({ ...d, t3: e.target.value }))} className="w-24 text-right border border-gray-200 rounded px-1.5 py-1 text-xs" /> : t.t3.toLocaleString('id-ID')}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {t.outlet_id ? <CheckCircle2 className="h-4 w-4 text-green-500 inline" /> : <XCircle className="h-4 w-4 text-red-400 inline" />}
+                      </td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        {editing ? (
+                          <div className="flex items-center gap-1 justify-end">
+                            <button type="button" onClick={saveEdit} disabled={rowSaving} className="text-green-600 hover:text-green-700 disabled:opacity-50">
+                              {rowSaving ? <span className="text-xs animate-pulse">Saving…</span> : <Check className="h-4 w-4" />}
+                            </button>
+                            <button type="button" onClick={() => setEditingId(null)} disabled={rowSaving} className="text-gray-400 hover:text-gray-600 disabled:opacity-50"><X className="h-4 w-4" /></button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => startEdit(t)} className="text-gray-400 hover:text-orange-600"><Pencil className="h-3.5 w-3.5" /></button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {!loadingTargets && filteredSortedTargets.length === 0 && (
+                  <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400 text-sm">No targets found</td></tr>
+                )}
+                {loadingTargets && (
+                  <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400 text-sm">Loading…</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>

@@ -76,5 +76,15 @@ export async function POST(req: NextRequest) {
     .select()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ targets: data ?? [], count: data?.length ?? 0 }, { status: 201 })
+
+  const unmatchedCodes = Array.from(new Set(rows.filter(r => r.outletCode && !outletByCode.has(r.outletCode)).map(r => r.outletCode)))
+  const failedCount = unmatchedCodes.length * months.length
+
+  return NextResponse.json({
+    targets: data ?? [],
+    count: data?.length ?? 0,
+    successCount: data?.length ?? 0,
+    failedCount,
+    unmatchedCodes,
+  }, { status: 201 })
 }

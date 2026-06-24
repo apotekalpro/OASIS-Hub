@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { calcRewardBreakdown } from '@/lib/pillar/rewards'
+import { calcIncentive1, calcRewardBreakdown } from '@/lib/pillar/rewards'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,6 +53,9 @@ export async function GET(req: NextRequest) {
     ? 'per_pax'
     : assignmentRows.length > 0 ? 'per_outlet' : null
 
+  const incentive1PerPax = calcIncentive1(assignmentRows.filter(a => a.incentive1_basis === 'per_pax'), headcount)
+  const incentive1PerOutlet = calcIncentive1(assignmentRows.filter(a => a.incentive1_basis !== 'per_pax'), headcount)
+
   return NextResponse.json({
     breakdown,
     outletName: outletRes.data?.name ?? null,
@@ -61,5 +64,6 @@ export async function GET(req: NextRequest) {
     monthlyInput: inputRes.data ?? null,
     target: targetRes.data ?? null,
     incentive1Basis,
+    incentive1ByBasis: { perPax: incentive1PerPax.achieved, perOutlet: incentive1PerOutlet.achieved },
   })
 }

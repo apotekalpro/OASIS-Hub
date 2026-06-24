@@ -17,12 +17,30 @@ type OutletRewardData = {
   revenue: number
   focusProductPct: number
   incentive1Basis: 'per_outlet' | 'per_pax' | null
+  incentive1ByBasis: { perPax: number; perOutlet: number }
+  target: { t1: number; t2: number; t3: number } | null
 }
 
 function basisLabel(basis: 'per_outlet' | 'per_pax' | null) {
   if (basis === 'per_pax') return 'Per Alproean'
   if (basis === 'per_outlet') return 'Per Outlet'
   return null
+}
+
+function TargetLine({ target }: { target: { t1: number; t2: number; t3: number } | null }) {
+  const missing = !target || (target.t1 === 0 && target.t2 === 0 && target.t3 === 0)
+  if (missing) {
+    return (
+      <span className="flex items-center gap-1 text-amber-100">
+        <AlertTriangle className="h-3 w-3 shrink-0" /> L1/L2/L3 target not captured — check upload
+      </span>
+    )
+  }
+  return (
+    <span className="opacity-90">
+      L1 {formatIDR(target.t1)} · L2 {formatIDR(target.t2)} · L3 {formatIDR(target.t3)}
+    </span>
+  )
 }
 
 function formatIDR(n: number) {
@@ -86,6 +104,8 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
         revenue: refreshed.monthlyInput?.revenue ?? 0,
         focusProductPct: refreshed.monthlyInput?.focus_product_pct ?? 0,
         incentive1Basis: refreshed.incentive1Basis ?? null,
+        incentive1ByBasis: refreshed.incentive1ByBasis ?? { perPax: 0, perOutlet: 0 },
+        target: refreshed.target ?? null,
       } : r))
       setEditingOutletId(null)
     } else {
@@ -108,8 +128,10 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
             revenue: data.monthlyInput?.revenue ?? 0,
             focusProductPct: data.monthlyInput?.focus_product_pct ?? 0,
             incentive1Basis: data.incentive1Basis ?? null,
+            incentive1ByBasis: data.incentive1ByBasis ?? { perPax: 0, perOutlet: 0 },
+            target: data.target ?? null,
           }))
-          .catch(() => ({ outletId: id, outletName: null, breakdown: null, revenue: 0, focusProductPct: 0, incentive1Basis: null }))
+          .catch(() => ({ outletId: id, outletName: null, breakdown: null, revenue: 0, focusProductPct: 0, incentive1Basis: null, incentive1ByBasis: { perPax: 0, perOutlet: 0 }, target: null }))
       )
     ).then(results => {
       if (!active) return
@@ -142,6 +164,8 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
         revenue: refreshed.monthlyInput?.revenue ?? 0,
         focusProductPct: refreshed.monthlyInput?.focus_product_pct ?? 0,
         incentive1Basis: refreshed.incentive1Basis ?? null,
+        incentive1ByBasis: refreshed.incentive1ByBasis ?? { perPax: 0, perOutlet: 0 },
+        target: refreshed.target ?? null,
       }])
     } else {
       const { error } = await res.json().catch(() => ({ error: 'Failed to save' }))
@@ -161,6 +185,9 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
   const focusGapPct = Math.max(0, FOCUS_PRODUCT_THRESHOLD_PCT - avgFocusProductPct)
   const pctOfPotentialLost = potential > 0 ? Math.round((gap / potential) * 100) : 0
   const overallBasis = rows.find(r => r.incentive1Basis)?.incentive1Basis ?? null
+  const perPaxTotal = rows.reduce((s, r) => s + (r.incentive1ByBasis?.perPax ?? 0), 0)
+  const perOutletTotal = rows.reduce((s, r) => s + (r.incentive1ByBasis?.perOutlet ?? 0), 0)
+  const mixedBasis = perPaxTotal > 0 && perOutletTotal > 0
 
   return (
     <div className="rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white p-5 space-y-4">
@@ -171,7 +198,15 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
             <p className="text-sm font-medium opacity-90">
               Monthly Accumulated Reward{!isSingleOutlet && rows.length > 0 ? ` · ${rows.length} outlets combined` : ''}
             </p>
-            <p className="text-2xl font-bold">{formatIDR(achieved)}</p>
+            <p className="text-2xl font-bold">
+              {formatIDR(achieved)}
+              {!mixedBasis && basisLabel(overallBasis) && <span className="text-sm font-normal opacity-75"> ({basisLabel(overallBasis)})</span>}
+            </p>
+            {mixedBasis && (
+              <p className="text-xs opacity-90 mt-0.5">
+                Per Alproean: <span className="font-semibold">{formatIDR(perPaxTotal)}</span> · Per Outlet: <span className="font-semibold">{formatIDR(perOutletTotal)}</span>
+              </p>
+            )}
           </div>
         </div>
         <div className="text-right">
@@ -202,6 +237,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
         </span>
         <span className="opacity-90">Incentive 2: <span className="font-semibold">{formatIDR(breakdown.incentive2.achieved)}</span></span>
         <span className="opacity-90">Incentive 3: <span className="font-semibold">{formatIDR(breakdown.incentive3.achieved)}</span></span>
+        {isSingleOutlet && <TargetLine target={rows[0]?.target ?? null} />}
 
         {isSingleOutlet && (
           !editing ? (
@@ -249,6 +285,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
                   <Pencil className="h-2.5 w-2.5" /> Revenue Rp {r.revenue.toLocaleString('id-ID')} · Focus {r.focusProductPct}%
                 </button>
               )}
+              <TargetLine target={r.target} />
             </div>
           ))}
         </div>
