@@ -96,3 +96,18 @@ export const REWARD_CATEGORIES: RewardCategory[] = ['bronze', 'silver', 'gold', 
 export function monthToDate(month: string) {
   return `${month.slice(0, 7)}-01`
 }
+
+/**
+ * Linearly extrapolate a month-to-date revenue figure to a full-month forecast,
+ * e.g. Rp 200jt as of day 20 of a 30-day month -> (200jt / 20) * 30.
+ * Returns the input revenue unchanged if no as-of date is available.
+ */
+export function forecastRevenue(revenue: number, asOfDate: string | null | undefined): number {
+  if (!asOfDate) return revenue
+  const date = new Date(asOfDate)
+  if (Number.isNaN(date.getTime())) return revenue
+  const dayOfMonth = date.getDate()
+  if (dayOfMonth <= 0) return revenue
+  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+  return (revenue / dayOfMonth) * daysInMonth
+}

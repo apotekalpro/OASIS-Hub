@@ -15,10 +15,23 @@ type OutletRewardData = {
   outletName: string | null
   breakdown: RewardBreakdown | null
   revenue: number
+  forecastedRevenue: number
+  asOfDate: string | null
   focusProductPct: number
   incentive1Basis: 'per_outlet' | 'per_pax' | null
   incentive1ByBasis: { perPax: number; perOutlet: number }
   target: { t1: number; t2: number; t3: number } | null
+}
+
+const EMPTY_BASIS = { perPax: 0, perOutlet: 0 }
+
+function ForecastLine({ revenue, forecastedRevenue, asOfDate }: { revenue: number; forecastedRevenue: number; asOfDate: string | null }) {
+  if (!asOfDate || Math.round(forecastedRevenue) === Math.round(revenue)) return null
+  return (
+    <span className="opacity-90">
+      Forecasted Revenue (EOM): <span className="font-semibold">{formatIDR(forecastedRevenue)}</span>
+    </span>
+  )
 }
 
 function basisLabel(basis: 'per_outlet' | 'per_pax' | null) {
@@ -71,10 +84,12 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
   const [editing, setEditing] = useState(false)
   const [draftRevenue, setDraftRevenue] = useState('0')
   const [draftFocus, setDraftFocus] = useState('0')
+  const [draftAsOfDate, setDraftAsOfDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [editingOutletId, setEditingOutletId] = useState<string | null>(null)
   const [rowDraftRevenue, setRowDraftRevenue] = useState('0')
   const [rowDraftFocus, setRowDraftFocus] = useState('0')
+  const [rowDraftAsOfDate, setRowDraftAsOfDate] = useState('')
   const [rowSaving, setRowSaving] = useState(false)
 
   const isSingleOutlet = outletIds.length === 1
@@ -84,6 +99,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
     setEditingOutletId(r.outletId)
     setRowDraftRevenue(String(r.revenue))
     setRowDraftFocus(String(r.focusProductPct))
+    setRowDraftAsOfDate(r.asOfDate ?? '')
   }
 
   async function saveRow() {
@@ -92,7 +108,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
     const res = await fetch('/api/pillar/monthly-inputs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ outletId: editingOutletId, month, revenue: Number(rowDraftRevenue) || 0, focusProductPct: Number(rowDraftFocus) || 0 }),
+      body: JSON.stringify({ outletId: editingOutletId, month, revenue: Number(rowDraftRevenue) || 0, focusProductPct: Number(rowDraftFocus) || 0, asOfDate: rowDraftAsOfDate || null }),
     })
     setRowSaving(false)
     if (res.ok) {
@@ -102,9 +118,11 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
         ...r,
         breakdown: refreshed.breakdown ?? null,
         revenue: refreshed.monthlyInput?.revenue ?? 0,
+        forecastedRevenue: refreshed.forecastedRevenue ?? refreshed.monthlyInput?.revenue ?? 0,
+        asOfDate: refreshed.monthlyInput?.as_of_date ?? null,
         focusProductPct: refreshed.monthlyInput?.focus_product_pct ?? 0,
         incentive1Basis: refreshed.incentive1Basis ?? null,
-        incentive1ByBasis: refreshed.incentive1ByBasis ?? { perPax: 0, perOutlet: 0 },
+        incentive1ByBasis: refreshed.incentive1ByBasis ?? EMPTY_BASIS,
         target: refreshed.target ?? null,
       } : r))
       setEditingOutletId(null)
@@ -126,12 +144,14 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
             outletName: data.outletName ?? null,
             breakdown: data.breakdown ?? null,
             revenue: data.monthlyInput?.revenue ?? 0,
+            forecastedRevenue: data.forecastedRevenue ?? data.monthlyInput?.revenue ?? 0,
+            asOfDate: data.monthlyInput?.as_of_date ?? null,
             focusProductPct: data.monthlyInput?.focus_product_pct ?? 0,
             incentive1Basis: data.incentive1Basis ?? null,
-            incentive1ByBasis: data.incentive1ByBasis ?? { perPax: 0, perOutlet: 0 },
+            incentive1ByBasis: data.incentive1ByBasis ?? EMPTY_BASIS,
             target: data.target ?? null,
           }))
-          .catch(() => ({ outletId: id, outletName: null, breakdown: null, revenue: 0, focusProductPct: 0, incentive1Basis: null, incentive1ByBasis: { perPax: 0, perOutlet: 0 }, target: null }))
+          .catch(() => ({ outletId: id, outletName: null, breakdown: null, revenue: 0, forecastedRevenue: 0, asOfDate: null, focusProductPct: 0, incentive1Basis: null, incentive1ByBasis: EMPTY_BASIS, target: null }))
       )
     ).then(results => {
       if (!active) return
@@ -139,6 +159,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
       if (results.length === 1) {
         setDraftRevenue(String(results[0].revenue))
         setDraftFocus(String(results[0].focusProductPct))
+        setDraftAsOfDate(results[0].asOfDate ?? '')
       }
     }).finally(() => active && setLoading(false))
     return () => { active = false }
@@ -150,7 +171,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
     const res = await fetch('/api/pillar/monthly-inputs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ outletId, month, revenue: Number(draftRevenue) || 0, focusProductPct: Number(draftFocus) || 0 }),
+      body: JSON.stringify({ outletId, month, revenue: Number(draftRevenue) || 0, focusProductPct: Number(draftFocus) || 0, asOfDate: draftAsOfDate || null }),
     })
     setSaving(false)
     if (res.ok) {
@@ -162,9 +183,11 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
         outletName: rows[0]?.outletName ?? null,
         breakdown: refreshed.breakdown ?? null,
         revenue: refreshed.monthlyInput?.revenue ?? 0,
+        forecastedRevenue: refreshed.forecastedRevenue ?? refreshed.monthlyInput?.revenue ?? 0,
+        asOfDate: refreshed.monthlyInput?.as_of_date ?? null,
         focusProductPct: refreshed.monthlyInput?.focus_product_pct ?? 0,
         incentive1Basis: refreshed.incentive1Basis ?? null,
-        incentive1ByBasis: refreshed.incentive1ByBasis ?? { perPax: 0, perOutlet: 0 },
+        incentive1ByBasis: refreshed.incentive1ByBasis ?? EMPTY_BASIS,
         target: refreshed.target ?? null,
       }])
     } else {
@@ -238,11 +261,12 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
         <span className="opacity-90">Incentive 2: <span className="font-semibold">{formatIDR(breakdown.incentive2.achieved)}</span></span>
         <span className="opacity-90">Incentive 3: <span className="font-semibold">{formatIDR(breakdown.incentive3.achieved)}</span></span>
         {isSingleOutlet && <TargetLine target={rows[0]?.target ?? null} />}
+        {isSingleOutlet && <ForecastLine revenue={rows[0]?.revenue ?? 0} forecastedRevenue={rows[0]?.forecastedRevenue ?? 0} asOfDate={rows[0]?.asOfDate ?? null} />}
 
         {isSingleOutlet && (
           !editing ? (
             <button type="button" onClick={() => setEditing(true)} className="ml-auto flex items-center gap-1 bg-white/15 hover:bg-white/25 rounded-md px-2.5 py-1.5 transition-colors">
-              <Pencil className="h-3 w-3" /> Revenue Up to Date Rp {(rows[0]?.revenue ?? 0).toLocaleString('id-ID')} · Focus Product % Up to Date {rows[0]?.focusProductPct ?? 0}%
+              <Pencil className="h-3 w-3" /> Revenue Up to Date Rp {(rows[0]?.revenue ?? 0).toLocaleString('id-ID')} · Focus Product % Up to Date {rows[0]?.focusProductPct ?? 0}%{rows[0]?.asOfDate ? ` (as of ${rows[0].asOfDate})` : ''}
             </button>
           ) : (
             <div className="ml-auto flex items-center gap-2 flex-wrap">
@@ -253,6 +277,10 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
               <label className="flex items-center gap-1.5">
                 Focus Product % Up to Date
                 <input type="number" value={draftFocus} onChange={e => setDraftFocus(e.target.value)} className="w-20 rounded-md px-2 py-1 text-gray-900 text-xs" />
+              </label>
+              <label className="flex items-center gap-1.5">
+                As of Date
+                <input type="date" value={draftAsOfDate} onChange={e => setDraftAsOfDate(e.target.value)} className="rounded-md px-2 py-1 text-gray-900 text-xs" />
               </label>
               <button type="button" onClick={save} disabled={saving} className="flex items-center gap-1 bg-white/20 hover:bg-white/30 disabled:opacity-70 rounded-md px-2 py-1.5">
                 {saving ? <span className="animate-pulse">Saving…</span> : <><Check className="h-3.5 w-3.5" /> Save</>}
@@ -275,6 +303,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <input type="number" value={rowDraftRevenue} onChange={e => setRowDraftRevenue(e.target.value)} placeholder="Revenue" className="w-24 rounded-md px-1.5 py-1 text-gray-900 text-xs" />
                   <input type="number" value={rowDraftFocus} onChange={e => setRowDraftFocus(e.target.value)} placeholder="Focus %" className="w-16 rounded-md px-1.5 py-1 text-gray-900 text-xs" />
+                  <input type="date" value={rowDraftAsOfDate} onChange={e => setRowDraftAsOfDate(e.target.value)} className="rounded-md px-1.5 py-1 text-gray-900 text-xs" />
                   <button type="button" onClick={saveRow} disabled={rowSaving} className="flex items-center gap-1 bg-white/20 hover:bg-white/30 disabled:opacity-70 rounded-md px-1.5 py-1">
                     {rowSaving ? <span className="animate-pulse">Saving…</span> : <Check className="h-3 w-3" />}
                   </button>
@@ -282,10 +311,11 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
                 </div>
               ) : (
                 <button type="button" onClick={() => startEditRow(r)} className="flex items-center gap-1 opacity-90 hover:opacity-100 self-start">
-                  <Pencil className="h-2.5 w-2.5" /> Revenue Rp {r.revenue.toLocaleString('id-ID')} · Focus {r.focusProductPct}%
+                  <Pencil className="h-2.5 w-2.5" /> Revenue Rp {r.revenue.toLocaleString('id-ID')} · Focus {r.focusProductPct}%{r.asOfDate ? ` (as of ${r.asOfDate})` : ''}
                 </button>
               )}
               <TargetLine target={r.target} />
+              <ForecastLine revenue={r.revenue} forecastedRevenue={r.forecastedRevenue} asOfDate={r.asOfDate} />
             </div>
           ))}
         </div>

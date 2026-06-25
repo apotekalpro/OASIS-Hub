@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { calcIncentive1, calcRewardBreakdown } from '@/lib/pillar/rewards'
+import { calcIncentive1, calcRewardBreakdown, forecastRevenue } from '@/lib/pillar/rewards'
 import { normalizeOutletCode } from '@/lib/pillar/outlet-code'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     admin.from('outlets').select('id, org_id, category, name, code').eq('id', outletId).single(),
     admin.from('pillar_assignments').select('status, incentive1_amount, incentive1_basis').eq('outlet_id', outletId).eq('month', month),
     admin.from('outlet_staff').select('user_id', { count: 'exact', head: true }).eq('outlet_id', outletId),
-    admin.from('pillar_monthly_inputs').select('revenue, focus_product_pct').eq('outlet_id', outletId).eq('month', month).maybeSingle(),
+    admin.from('pillar_monthly_inputs').select('revenue, focus_product_pct, as_of_date').eq('outlet_id', outletId).eq('month', month).maybeSingle(),
   ])
 
   const orgId = outletRes.data?.org_id
@@ -45,10 +45,12 @@ export async function GET(req: NextRequest) {
     : { data: null }
 
   const headcount = headcountRes.count ?? 1
+  const actualRevenue = inputRes.data?.revenue ?? 0
+  const forecastedRevenue = forecastRevenue(actualRevenue, inputRes.data?.as_of_date ?? null)
   const breakdown = calcRewardBreakdown({
     assignments: assignmentsRes.data ?? [],
     headcount,
-    revenue: inputRes.data?.revenue ?? 0,
+    revenue: forecastedRevenue,
     focusProductPct: inputRes.data?.focus_product_pct ?? 0,
     targets: targetRow ? { t1: targetRow.t1, t2: targetRow.t2, t3: targetRow.t3 } : null,
     matrix: matrixRes.data ?? null,
@@ -68,6 +70,7 @@ export async function GET(req: NextRequest) {
     headcount,
     category: category ?? null,
     monthlyInput: inputRes.data ?? null,
+    forecastedRevenue,
     target: targetRow ?? null,
     incentive1Basis,
     incentive1ByBasis: { perPax: incentive1PerPax.achieved, perOutlet: incentive1PerOutlet.achieved },

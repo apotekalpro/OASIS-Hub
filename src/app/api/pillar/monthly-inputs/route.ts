@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   const role = profile.data?.role as UserRole | undefined
   if (!orgId || !role) return NextResponse.json({ error: 'No org' }, { status: 400 })
 
-  const { outletId, month, revenue = 0, focusProductPct = 0 }: { outletId: string; month: string; revenue: number; focusProductPct: number } = body
+  const { outletId, month, revenue = 0, focusProductPct = 0, asOfDate = null }: { outletId: string; month: string; revenue: number; focusProductPct: number; asOfDate?: string | null } = body
   if (!outletId || !month) return NextResponse.json({ error: 'outletId and month required' }, { status: 400 })
 
   const featurePermissions = await getCachedFeaturePermissions(orgId)
@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
       month,
       revenue: Number(revenue) || 0,
       focus_product_pct: Number(focusProductPct) || 0,
+      as_of_date: asOfDate || null,
       reported_by: user.id,
     }, { onConflict: 'outlet_id,month' })
     .select()
