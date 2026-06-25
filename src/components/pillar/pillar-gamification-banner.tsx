@@ -219,7 +219,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
           <Award className="h-8 w-8 opacity-90 shrink-0" />
           <div>
             <p className="text-sm font-medium opacity-90">
-              Monthly Accumulated Reward{!isSingleOutlet && rows.length > 0 ? ` · ${rows.length} outlets combined` : ''}
+              Reward Akumulasi Bulanan{!isSingleOutlet && rows.length > 0 ? ` · ${rows.length} outlet digabung` : ''}
             </p>
             <p className="text-2xl font-bold">
               {formatIDR(achieved)}
@@ -233,7 +233,7 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
           </div>
         </div>
         <div className="text-right">
-          <p className="text-sm font-medium opacity-90 flex items-center gap-1 justify-end"><TrendingUp className="h-3.5 w-3.5" /> You could be earning</p>
+          <p className="text-sm font-medium opacity-90 flex items-center gap-1 justify-end"><TrendingUp className="h-3.5 w-3.5" /> Bisa kamu dapatkan</p>
           <p className="text-xl font-bold">{formatIDR(potential)}</p>
         </div>
       </div>
@@ -242,14 +242,14 @@ export function PillarGamificationBanner({ outletIds, month }: Props) {
         <p className="text-xs bg-black/20 rounded-lg px-3 py-2 flex items-start gap-2">
           <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
           <span>
-            Right now you&apos;re about to <span className="font-bold">lose {formatIDR(gap)}</span> ({pctOfPotentialLost}% of what&apos;s on the table) this month.
-            Hit your Pillars and revenue targets before month-end to keep it instead of giving it away.
+            Saat ini kamu akan <span className="font-bold">kehilangan {formatIDR(gap)}</span> ({pctOfPotentialLost}% dari yang bisa kamu dapatkan) bulan ini.
+            Capai target Pillar dan revenue sebelum akhir bulan agar tidak hilang sia-sia.
           </span>
         </p>
       )}
       {focusGapPct > 0 && (
         <p className="text-xs bg-black/15 rounded-lg px-3 py-2 inline-block">
-          Just <span className="font-bold">{focusGapPct.toFixed(1)}% more</span> Focus Product (to {FOCUS_PRODUCT_THRESHOLD_PCT}%) unlocks an extra <span className="font-bold">30% bonus</span> on Incentive 1 &amp; 2 — don&apos;t leave it unclaimed.
+          Tinggal <span className="font-bold">{focusGapPct.toFixed(1)}% lagi</span> Focus Product (menjadi {FOCUS_PRODUCT_THRESHOLD_PCT}%) untuk membuka bonus tambahan <span className="font-bold">30%</span> di Incentive 1 &amp; 2 — jangan sampai terlewat.
         </p>
       )}
 
