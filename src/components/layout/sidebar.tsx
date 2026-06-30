@@ -55,6 +55,7 @@ const ADMIN_NAV_ITEMS = [
   { href: '/admin/pillar-templates', icon: Award, label: 'Pillar Templates', feature: 'pillar' as FeatureName },
   { href: '/admin/pillar-targets', icon: Award, label: 'Pillar Targets', feature: 'pillar' as FeatureName },
   { href: '/admin/pillar-rewards', icon: Award, label: 'Pillar Rewards', feature: 'pillar' as FeatureName },
+  { href: '/admin/pillar-progress', icon: Award, label: 'Pillar Progress Export', feature: 'pillar' as FeatureName },
   { href: '/admin/analytics', icon: BarChart3, label: 'Analytics', feature: 'analytics' as FeatureName },
   { href: '/admin/roles', icon: KeyRound, label: 'Roles', minRole: 'org_admin' as UserRole },
   { href: '/admin/settings', icon: Settings, label: 'Settings', minRole: 'org_admin' as UserRole },
