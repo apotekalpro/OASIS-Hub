@@ -114,6 +114,7 @@ export function PillarProgressExportClient() {
         .map(row => ({
           krId: get(row, 'krid', 'kr id'),
           currentValue: Number(get(row, 'currentvalue', 'current value')) || 0,
+          targetValue: get(row, 'targetvalue', 'target') !== '' ? Number(get(row, 'targetvalue', 'target')) || undefined : undefined,
           status: get(row, 'status').toLowerCase().replace(/\s+/g, '_'),
         }))
         .filter(r => r.krId)
