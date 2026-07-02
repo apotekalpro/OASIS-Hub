@@ -113,6 +113,7 @@ export function PillarProgressExportClient() {
       const rows = parsed
         .map(row => ({
           krId: get(row, 'krid', 'kr id'),
+          title: get(row, 'keyresult', 'key result') || undefined,
           currentValue: Number(get(row, 'currentvalue', 'current value')) || 0,
           targetValue: get(row, 'targetvalue', 'target') !== '' ? Number(get(row, 'targetvalue', 'target')) || undefined : undefined,
           status: get(row, 'status').toLowerCase().replace(/\s+/g, '_'),
