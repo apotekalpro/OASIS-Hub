@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 const VALID_STATUSES = new Set(['not_started', 'on_track', 'at_risk', 'behind', 'completed'])
 
-type UpdateRow = { krId: string; currentValue: number; targetValue?: number; status?: string }
+type UpdateRow = { krId: string; title?: string; currentValue: number; targetValue?: number; status?: string }
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
 
   for (const row of rows) {
     if (!ownedIds.has(row.krId)) { failedIds.push(row.krId); continue }
-    const patch: { current_value: number; target_value?: number; status?: string } = { current_value: Number(row.currentValue) || 0 }
+    const patch: { current_value: number; title?: string; target_value?: number; status?: string } = { current_value: Number(row.currentValue) || 0 }
+    if (row.title?.trim()) patch.title = row.title.trim()
     if (row.targetValue !== undefined && !isNaN(row.targetValue)) patch.target_value = row.targetValue
     if (row.status && VALID_STATUSES.has(row.status)) patch.status = row.status
     const { error } = await admin.from('pillar_assignment_krs').update(patch).eq('id', row.krId)
