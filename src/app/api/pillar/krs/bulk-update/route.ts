@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic'
 
 const VALID_STATUSES = new Set(['not_started', 'on_track', 'at_risk', 'behind', 'completed'])
 
-type UpdateRow = { krId: string; title?: string; currentValue: number; targetValue?: number; status?: string }
+const VALID_METRIC_TYPES = new Set(['numeric', 'boolean', 'percentage'])
+type UpdateRow = { krId: string; title?: string; metricType?: string; currentValue: number; targetValue?: number; status?: string }
 type FailedRow = { krId: string; reason: string }
 
 export async function POST(req: NextRequest) {
@@ -76,8 +77,9 @@ export async function POST(req: NextRequest) {
       failedRows.push({ krId: row.krId, reason: 'Not authorised for this organisation' })
       continue
     }
-    const patch: { current_value: number; title?: string; target_value?: number; status?: string } = { current_value: Number(row.currentValue) || 0 }
+    const patch: { current_value: number; title?: string; metric_type?: string; target_value?: number; status?: string } = { current_value: Number(row.currentValue) || 0 }
     if (row.title?.trim()) patch.title = row.title.trim()
+    if (row.metricType && VALID_METRIC_TYPES.has(row.metricType.toLowerCase())) patch.metric_type = row.metricType.toLowerCase()
     if (row.targetValue !== undefined && !isNaN(row.targetValue)) patch.target_value = row.targetValue
     if (row.status && VALID_STATUSES.has(row.status)) patch.status = row.status
     const { error } = await admin.from('pillar_assignment_krs').update(patch).eq('id', row.krId)
