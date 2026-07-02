@@ -178,7 +178,7 @@ export function PillarProgressExportClient() {
           </div>
 
           <p className="text-xs text-gray-400">
-            Export the CSV, fill in the &quot;Current Value&quot; (and optionally &quot;Status&quot;) columns for each Key Result, then upload it back here.
+            Export the CSV, edit &quot;Key Result&quot; (title), &quot;Target&quot;, &quot;Current Value&quot;, and/or &quot;Status&quot; columns as needed, then upload it back here.
             Don&apos;t edit or remove the &quot;KR ID&quot; column — it&apos;s used to match each row back to the correct Key Result. Progress bars and rewards recalculate automatically.
           </p>
 
