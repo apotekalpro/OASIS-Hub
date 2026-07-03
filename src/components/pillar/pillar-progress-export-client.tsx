@@ -26,8 +26,9 @@ function currentMonth() {
 // ── Generic CSV helpers ─────────────────────────────────────────────────────
 
 function getCol(row: Record<string, string>, ...keys: string[]) {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
   for (const k of keys) {
-    const found = Object.keys(row).find(h => h.toLowerCase().replace(/[\s_-]/g, '') === k.toLowerCase().replace(/[\s_-]/g, ''))
+    const found = Object.keys(row).find(h => norm(h) === norm(k))
     if (found && row[found]?.trim()) return row[found].trim()
   }
   return ''
