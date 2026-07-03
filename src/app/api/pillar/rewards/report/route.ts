@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { canManagePillarTemplates } from '@/lib/auth/permissions'
 import { getCachedFeaturePermissions } from '@/lib/auth/get-user-profile'
-import { calcRewardBreakdown, forecastRevenue, type RewardAssignmentInput } from '@/lib/pillar/rewards'
+import { calcRewardBreakdown, forecastRevenue, forecastIncentive1, calcIncentive2, calcIncentive3, type RewardAssignmentInput } from '@/lib/pillar/rewards'
 import { normalizeOutletCode } from '@/lib/pillar/outlet-code'
 import type { UserRole } from '@/types/database'
 
@@ -60,16 +60,28 @@ export async function GET(req: NextRequest) {
     const matrix = category ? matrixByCategory.get(category) ?? null : null
 
     const paxCount = o.pax_count ?? 1
+    const asOfDate = input?.as_of_date ?? null
     const actualRevenue = input?.revenue ?? 0
-    const forecastedRevenue = forecastRevenue(actualRevenue, input?.as_of_date ?? null)
-    const breakdown = calcRewardBreakdown({
+    const forecastedRevenue = forecastRevenue(actualRevenue, asOfDate)
+    const focusProductPct = input?.focus_product_pct ?? 0
+
+    // Actual (completed pillars only)
+    const actualBreakdown = calcRewardBreakdown({
       assignments: outletAssignments,
       headcount: paxCount,
       revenue: forecastedRevenue,
-      focusProductPct: input?.focus_product_pct ?? 0,
+      focusProductPct,
       targets: target ? { t1: target.t1, t2: target.t2, t3: target.t3 } : null,
       matrix,
     })
+
+    // Forecasted: Inc 1 counts pillars on track to complete EOM, Inc 2 already uses forecastedRevenue
+    const fInc1 = forecastIncentive1(
+      outletAssignments as (typeof outletAssignments[0] & { progress: number })[],
+      paxCount, asOfDate, month
+    )
+    const fInc2 = calcIncentive2(forecastedRevenue, target ? { t1: target.t1, t2: target.t2, t3: target.t3 } : null, matrix, paxCount)
+    const fInc3 = calcIncentive3(focusProductPct, fInc1, fInc2)
 
     return {
       outletId: o.id,
@@ -83,21 +95,28 @@ export async function GET(req: NextRequest) {
       avgProgress: outletAssignments.length > 0 ? Math.round(outletAssignments.reduce((s, a) => s + Number(a.progress ?? 0), 0) / outletAssignments.length) : 0,
       revenue: actualRevenue,
       forecastedRevenue,
-      asOfDate: input?.as_of_date ?? null,
-      focusProductPct: input?.focus_product_pct ?? 0,
+      asOfDate,
+      focusProductPct,
       category,
       t1: target?.t1 ?? null,
       t2: target?.t2 ?? null,
       t3: target?.t3 ?? null,
-      incentive1Achieved: breakdown.incentive1.achieved,
-      incentive1Potential: breakdown.incentive1.potential,
-      incentive2Achieved: breakdown.incentive2.achieved,
-      incentive2Potential: breakdown.incentive2.potential,
-      incentive2TierHit: breakdown.incentive2.tierHit,
-      incentive3Achieved: breakdown.incentive3.achieved,
-      incentive3Potential: breakdown.incentive3.potential,
-      totalAchieved: breakdown.total.achieved,
-      totalPotential: breakdown.total.potential,
+      // Actual (what's locked in so far)
+      incentive1Achieved: actualBreakdown.incentive1.achieved,
+      incentive1Potential: actualBreakdown.incentive1.potential,
+      incentive2Achieved: actualBreakdown.incentive2.achieved,
+      incentive2Potential: actualBreakdown.incentive2.potential,
+      incentive2TierHit: actualBreakdown.incentive2.tierHit,
+      incentive3Achieved: actualBreakdown.incentive3.achieved,
+      incentive3Potential: actualBreakdown.incentive3.potential,
+      totalAchieved: actualBreakdown.total.achieved,
+      totalPotential: actualBreakdown.total.potential,
+      // Forecasted (EOM projection)
+      incentive1Forecasted: fInc1.achieved,
+      incentive2Forecasted: fInc2.achieved,
+      incentive2ForecastTierHit: fInc2.tierHit,
+      incentive3Forecasted: fInc3.achieved,
+      totalForecasted: fInc1.achieved + fInc2.achieved + fInc3.achieved,
     }
   })
 

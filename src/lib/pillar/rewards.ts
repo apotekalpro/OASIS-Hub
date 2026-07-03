@@ -42,6 +42,32 @@ export function calcIncentive1(assignments: RewardAssignmentInput[], headcount: 
   return { achieved, potential }
 }
 
+// Forecast pillar progress to end-of-month (same formula as pillar dashboard)
+function forecastPillarPct(currentPct: number, asOfDate: string | null, month: string): number {
+  if (!asOfDate) return currentPct
+  const d = new Date(asOfDate)
+  const day = d.getDate()
+  if (day <= 0) return currentPct
+  const [y, m] = month.split('-').map(Number)
+  const totalDays = new Date(y, m, 0).getDate()
+  return Math.min(100, Math.round((currentPct / day) * totalDays))
+}
+
+// Forecasted Incentive 1: assignments whose EOM-forecasted progress >= 100% count as earned
+export function forecastIncentive1(
+  assignments: (RewardAssignmentInput & { progress: number })[],
+  headcount: number,
+  asOfDate: string | null,
+  month: string,
+) {
+  const achieved = assignments
+    .filter(a => a.status === 'completed' || forecastPillarPct(a.progress, asOfDate, month) >= 100)
+    .reduce((sum, a) => sum + incentiveAmount(a.incentive1_amount, a.incentive1_basis, headcount), 0)
+  const potential = assignments
+    .reduce((sum, a) => sum + incentiveAmount(a.incentive1_amount, a.incentive1_basis, headcount), 0)
+  return { achieved, potential }
+}
+
 export function calcIncentive2(revenue: number, targets: RewardTargets | null, matrix: RewardTierMatrix | null, headcount: number) {
   if (!targets || !matrix) return { achieved: 0, potential: 0, tierHit: 0 as const }
   let tierHit: 0 | 1 | 2 | 3 = 0

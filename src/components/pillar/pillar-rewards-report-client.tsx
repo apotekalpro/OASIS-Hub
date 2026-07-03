@@ -34,6 +34,11 @@ type ReportRow = {
   totalAchieved: number
   totalPotential: number
   paxCount: number
+  incentive1Forecasted: number
+  incentive2Forecasted: number
+  incentive2ForecastTierHit: 0 | 1 | 2 | 3
+  incentive3Forecasted: number
+  totalForecasted: number
 }
 
 function monthOptions() {
@@ -56,7 +61,7 @@ function TierBadge({ tier }: { tier: 0 | 1 | 2 | 3 }) {
   return <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded', cls)}>L{tier}</span>
 }
 
-type SortKey = keyof Pick<ReportRow, 'outletName' | 'areaManagerName' | 'category' | 'avgProgress' | 'revenue' | 'forecastedRevenue' | 'focusProductPct' | 'paxCount' | 'incentive1Achieved' | 'incentive2Achieved' | 'incentive3Achieved' | 'totalAchieved'>
+type SortKey = keyof Pick<ReportRow, 'outletName' | 'areaManagerName' | 'category' | 'avgProgress' | 'revenue' | 'forecastedRevenue' | 'focusProductPct' | 'paxCount' | 'incentive1Achieved' | 'incentive2Achieved' | 'incentive3Achieved' | 'totalAchieved' | 'incentive1Forecasted' | 'incentive2Forecasted' | 'incentive3Forecasted' | 'totalForecasted'>
 
 function useSortState(init: SortKey, initDir: 'asc' | 'desc' = 'desc') {
   const [sortKey, setSortKey] = useState<SortKey>(init)
@@ -162,6 +167,10 @@ export function PillarRewardsReportClient() {
         incentive2Achieved: o.reduce((s, r) => s + r.incentive2Achieved, 0),
         incentive3Achieved: o.reduce((s, r) => s + r.incentive3Achieved, 0),
         totalAchieved: o.reduce((s, r) => s + r.totalAchieved, 0),
+        incentive1Forecasted: o.reduce((s, r) => s + r.incentive1Forecasted, 0),
+        incentive2Forecasted: o.reduce((s, r) => s + r.incentive2Forecasted, 0),
+        incentive3Forecasted: o.reduce((s, r) => s + r.incentive3Forecasted, 0),
+        totalForecasted: o.reduce((s, r) => s + r.totalForecasted, 0),
       }
     })
   }, [filteredRows])
@@ -198,17 +207,25 @@ export function PillarRewardsReportClient() {
     incentive2: acc.incentive2 + r.incentive2Achieved,
     incentive3: acc.incentive3 + r.incentive3Achieved,
     total: acc.total + r.totalAchieved,
-  }), { incentive1: 0, incentive2: 0, incentive3: 0, total: 0 })
+    inc1Forecast: acc.inc1Forecast + r.incentive1Forecasted,
+    inc2Forecast: acc.inc2Forecast + r.incentive2Forecasted,
+    inc3Forecast: acc.inc3Forecast + r.incentive3Forecasted,
+    totalForecast: acc.totalForecast + r.totalForecasted,
+  }), { incentive1: 0, incentive2: 0, incentive3: 0, total: 0, inc1Forecast: 0, inc2Forecast: 0, inc3Forecast: 0, totalForecast: 0 })
 
   function exportCSV() {
-    const header = ['Outlet Code', 'Outlet Name', 'Area Manager', 'Category', 'Pillars', 'Avg %', 'Revenue', 'Forecasted Revenue', 'As Of Date', 'Focus %', 'T1', 'T2', 'T3', 'Inc2 Tier', 'PAX', 'Inc 1', 'Inc 2', 'Inc 3', 'Total']
+    const header = ['Outlet Code', 'Outlet Name', 'Area Manager', 'Category', 'Pillars', 'Avg %', 'Revenue', 'Forecasted Revenue', 'As Of Date', 'Focus %', 'T1', 'T2', 'T3', 'Inc2 Tier', 'PAX', 'Inc 1', 'Inc 1 Forecast', 'Inc 2', 'Inc 2 Forecast', 'Inc 3', 'Inc 3 Forecast', 'Total', 'Total Forecast']
     const lines = sortedOutletRows.map(r => [
       r.outletCode ?? '', r.outletName, r.areaManagerName ?? '', r.category ?? '',
       `${r.pillarsCompleted}/${r.pillarsTotal}`, r.avgProgress,
       Math.round(r.revenue), Math.round(r.forecastedRevenue), r.asOfDate ?? '',
       r.focusProductPct, r.t1 ?? '', r.t2 ?? '', r.t3 ?? '',
       r.incentive2TierHit > 0 ? `L${r.incentive2TierHit}` : '',
-      r.paxCount, Math.round(r.incentive1Achieved), Math.round(r.incentive2Achieved), Math.round(r.incentive3Achieved), Math.round(r.totalAchieved),
+      r.paxCount,
+      Math.round(r.incentive1Achieved), Math.round(r.incentive1Forecasted),
+      Math.round(r.incentive2Achieved), Math.round(r.incentive2Forecasted),
+      Math.round(r.incentive3Achieved), Math.round(r.incentive3Forecasted),
+      Math.round(r.totalAchieved), Math.round(r.totalForecasted),
     ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
     const csv = [header.join(','), ...lines].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -260,10 +277,26 @@ export function PillarRewardsReportClient() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Incentive 1</p><p className="text-lg font-bold text-gray-900">Rp {formatIDR(Math.round(totals.incentive1))}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Incentive 2</p><p className="text-lg font-bold text-gray-900">Rp {formatIDR(Math.round(totals.incentive2))}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Incentive 3</p><p className="text-lg font-bold text-gray-900">Rp {formatIDR(Math.round(totals.incentive3))}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Total Payout</p><p className="text-lg font-bold text-orange-600">Rp {formatIDR(Math.round(totals.total))}</p></CardContent></Card>
+        <Card><CardContent className="p-4">
+          <p className="text-xs text-gray-500">Incentive 1</p>
+          <p className="text-lg font-bold text-gray-900">Rp {formatIDR(Math.round(totals.incentive1))}</p>
+          <p className="text-xs text-purple-500 mt-0.5">↗ Rp {formatIDR(Math.round(totals.inc1Forecast))} forecasted</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <p className="text-xs text-gray-500">Incentive 2</p>
+          <p className="text-lg font-bold text-gray-900">Rp {formatIDR(Math.round(totals.incentive2))}</p>
+          <p className="text-xs text-purple-500 mt-0.5">↗ Rp {formatIDR(Math.round(totals.inc2Forecast))} forecasted</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <p className="text-xs text-gray-500">Incentive 3</p>
+          <p className="text-lg font-bold text-gray-900">Rp {formatIDR(Math.round(totals.incentive3))}</p>
+          <p className="text-xs text-purple-500 mt-0.5">↗ Rp {formatIDR(Math.round(totals.inc3Forecast))} forecasted</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <p className="text-xs text-gray-500">Total Payout</p>
+          <p className="text-lg font-bold text-orange-600">Rp {formatIDR(Math.round(totals.total))}</p>
+          <p className="text-xs text-purple-500 mt-0.5">↗ Rp {formatIDR(Math.round(totals.totalForecast))} forecasted</p>
+        </CardContent></Card>
       </div>
 
       {/* View toggle */}
@@ -292,10 +325,22 @@ export function PillarRewardsReportClient() {
                 <th className="px-3 py-2 text-center whitespace-nowrap text-purple-500">L1 / L2 / L3</th>
                 <outletSort.SortHeader label="Focus %" sortKeyVal="focusProductPct" />
                 <outletSort.SortHeader label="PAX" sortKeyVal="paxCount" />
-                <outletSort.SortHeader label="Inc 1" sortKeyVal="incentive1Achieved" />
-                <outletSort.SortHeader label="Inc 2" sortKeyVal="incentive2Achieved" />
-                <outletSort.SortHeader label="Inc 3" sortKeyVal="incentive3Achieved" />
-                <outletSort.SortHeader label="Total" sortKeyVal="totalAchieved" />
+                <th className="px-3 py-2 text-right whitespace-nowrap cursor-pointer select-none hover:text-gray-700" onClick={() => outletSort.toggleSort('incentive1Achieved')}>
+                  <span className="inline-flex items-center gap-1 flex-row-reverse">Inc 1{outletSort.sortKey === 'incentive1Achieved' ? (outletSort.sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}</span>
+                  <span className="block text-xs font-normal text-purple-400 cursor-pointer" onClick={e => { e.stopPropagation(); outletSort.toggleSort('incentive1Forecasted') }}>↗ Forecast</span>
+                </th>
+                <th className="px-3 py-2 text-right whitespace-nowrap cursor-pointer select-none hover:text-gray-700" onClick={() => outletSort.toggleSort('incentive2Achieved')}>
+                  <span className="inline-flex items-center gap-1 flex-row-reverse">Inc 2{outletSort.sortKey === 'incentive2Achieved' ? (outletSort.sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}</span>
+                  <span className="block text-xs font-normal text-purple-400 cursor-pointer" onClick={e => { e.stopPropagation(); outletSort.toggleSort('incentive2Forecasted') }}>↗ Forecast</span>
+                </th>
+                <th className="px-3 py-2 text-right whitespace-nowrap cursor-pointer select-none hover:text-gray-700" onClick={() => outletSort.toggleSort('incentive3Achieved')}>
+                  <span className="inline-flex items-center gap-1 flex-row-reverse">Inc 3{outletSort.sortKey === 'incentive3Achieved' ? (outletSort.sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}</span>
+                  <span className="block text-xs font-normal text-purple-400 cursor-pointer" onClick={e => { e.stopPropagation(); outletSort.toggleSort('incentive3Forecasted') }}>↗ Forecast</span>
+                </th>
+                <th className="px-3 py-2 text-right whitespace-nowrap cursor-pointer select-none hover:text-gray-700" onClick={() => outletSort.toggleSort('totalAchieved')}>
+                  <span className="inline-flex items-center gap-1 flex-row-reverse">Total{outletSort.sortKey === 'totalAchieved' ? (outletSort.sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}</span>
+                  <span className="block text-xs font-normal text-purple-400 cursor-pointer" onClick={e => { e.stopPropagation(); outletSort.toggleSort('totalForecasted') }}>↗ Forecast</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -327,10 +372,22 @@ export function PillarRewardsReportClient() {
                   </td>
                   <td className="px-3 py-2 text-right text-gray-600">{r.focusProductPct}%</td>
                   <td className="px-3 py-2 text-right font-medium text-gray-700">{r.paxCount}</td>
-                  <td className="px-3 py-2 text-right text-gray-600">{formatIDR(Math.round(r.incentive1Achieved))}</td>
-                  <td className="px-3 py-2 text-right text-gray-600">{formatIDR(Math.round(r.incentive2Achieved))}</td>
-                  <td className="px-3 py-2 text-right text-gray-600">{formatIDR(Math.round(r.incentive3Achieved))}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-orange-600">{formatIDR(Math.round(r.totalAchieved))}</td>
+                  <td className="px-3 py-2 text-right">
+                    <p className="text-gray-600">{formatIDR(Math.round(r.incentive1Achieved))}</p>
+                    {r.incentive1Forecasted !== r.incentive1Achieved && <p className="text-xs text-purple-500">↗ {formatIDR(Math.round(r.incentive1Forecasted))}</p>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <p className="text-gray-600">{formatIDR(Math.round(r.incentive2Achieved))}</p>
+                    {r.incentive2Forecasted !== r.incentive2Achieved && <p className="text-xs text-purple-500">↗ {formatIDR(Math.round(r.incentive2Forecasted))}</p>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <p className="text-gray-600">{formatIDR(Math.round(r.incentive3Achieved))}</p>
+                    {r.incentive3Forecasted !== r.incentive3Achieved && <p className="text-xs text-purple-500">↗ {formatIDR(Math.round(r.incentive3Forecasted))}</p>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <p className="font-semibold text-orange-600">{formatIDR(Math.round(r.totalAchieved))}</p>
+                    {r.totalForecasted !== r.totalAchieved && <p className="text-xs text-purple-500">↗ {formatIDR(Math.round(r.totalForecasted))}</p>}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -369,10 +426,22 @@ export function PillarRewardsReportClient() {
                   <td className="px-3 py-2 text-right text-gray-600">{formatIDR(Math.round(am.revenue))}</td>
                   <td className="px-3 py-2 text-right font-medium text-purple-600">{formatIDR(Math.round(am.forecastedRevenue))}</td>
                   <td className="px-3 py-2 text-right text-gray-600">{am.focusProductPct}%</td>
-                  <td className="px-3 py-2 text-right text-gray-600">{formatIDR(Math.round(am.incentive1Achieved))}</td>
-                  <td className="px-3 py-2 text-right text-gray-600">{formatIDR(Math.round(am.incentive2Achieved))}</td>
-                  <td className="px-3 py-2 text-right text-gray-600">{formatIDR(Math.round(am.incentive3Achieved))}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-orange-600">{formatIDR(Math.round(am.totalAchieved))}</td>
+                  <td className="px-3 py-2 text-right">
+                    <p className="text-gray-600">{formatIDR(Math.round(am.incentive1Achieved))}</p>
+                    {am.incentive1Forecasted !== am.incentive1Achieved && <p className="text-xs text-purple-500">↗ {formatIDR(Math.round(am.incentive1Forecasted))}</p>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <p className="text-gray-600">{formatIDR(Math.round(am.incentive2Achieved))}</p>
+                    {am.incentive2Forecasted !== am.incentive2Achieved && <p className="text-xs text-purple-500">↗ {formatIDR(Math.round(am.incentive2Forecasted))}</p>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <p className="text-gray-600">{formatIDR(Math.round(am.incentive3Achieved))}</p>
+                    {am.incentive3Forecasted !== am.incentive3Achieved && <p className="text-xs text-purple-500">↗ {formatIDR(Math.round(am.incentive3Forecasted))}</p>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <p className="font-semibold text-orange-600">{formatIDR(Math.round(am.totalAchieved))}</p>
+                    {am.totalForecasted !== am.totalAchieved && <p className="text-xs text-purple-500">↗ {formatIDR(Math.round(am.totalForecasted))}</p>}
+                  </td>
                 </tr>
               ))}
             </tbody>
