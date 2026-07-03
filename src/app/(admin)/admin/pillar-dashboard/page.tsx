@@ -49,7 +49,8 @@ export default async function PillarDashboardPage({ searchParams }: { searchPara
   const safeAssignments = (assignments ?? []) as any[]
   const safeMonthlyInputs = (monthlyInputs ?? []) as { outlet_id: string; as_of_date: string | null }[]
 
-  const embedToken = generateEmbedToken(orgId)
+  const canEmbed = role === 'org_admin' || role === 'super_admin'
+  const embedToken = canEmbed ? generateEmbedToken(orgId) : null
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -58,7 +59,7 @@ export default async function PillarDashboardPage({ searchParams }: { searchPara
           <h1 className="text-2xl font-bold text-gray-900">Nationwide Pillar Dashboard</h1>
           <p className="text-gray-500 text-sm mt-0.5">Overview of pillar progress across all outlets and area managers</p>
         </div>
-        <EmbedCodeButton token={embedToken} />
+        {embedToken && <EmbedCodeButton token={embedToken} />}
       </div>
       <PillarDashboardClient initialAssignments={safeAssignments} initialMonth={month} monthlyInputs={safeMonthlyInputs} />
     </div>

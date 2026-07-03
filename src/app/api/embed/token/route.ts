@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { canManagePillarTemplates } from '@/lib/auth/permissions'
-import { getCachedFeaturePermissions } from '@/lib/auth/get-user-profile'
 import { generateEmbedToken } from '@/lib/embed-token'
 import type { UserRole } from '@/types/database'
 
@@ -18,8 +16,7 @@ export async function GET() {
   const role = profile.data?.role as UserRole | undefined
   if (!orgId || !role) return NextResponse.json({ error: 'No org' }, { status: 400 })
 
-  const featurePermissions = await getCachedFeaturePermissions(orgId)
-  if (!canManagePillarTemplates(role, featurePermissions)) {
+  if (role !== 'org_admin' && role !== 'super_admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
