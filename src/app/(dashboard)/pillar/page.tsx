@@ -25,7 +25,7 @@ export default async function PillarPage({ searchParams }: { searchParams: Promi
   const profileOutletId = (profile as { outlet_id?: string | null } | null)?.outlet_id ?? null
 
   let query = admin.from('pillar_assignments')
-    .select('*, outlets(name, code), profiles!pillar_assignments_assigned_to_fkey(full_name, avatar_url), departments(name), pillar_assignment_krs(id, title, metric_type, start_value, target_value, current_value, status)')
+    .select('*, outlets(name, code), profiles!pillar_assignments_assigned_to_fkey(full_name, avatar_url), area_manager:profiles!pillar_assignments_area_manager_id_fkey(id, full_name), departments(name), pillar_assignment_krs(id, title, metric_type, start_value, target_value, current_value, status)')
     .eq('org_id', orgId)
     .eq('month', month)
     .order('created_at', { ascending: false })
@@ -68,7 +68,7 @@ export default async function PillarPage({ searchParams }: { searchParams: Promi
         <h1 className="text-2xl font-bold text-gray-900">Alpro Pillar</h1>
         <p className="text-gray-500 text-sm mt-0.5">Your assigned Pillars, Key Results, and progress for the month</p>
       </div>
-      <PillarListClient initialAssignments={assignments ?? []} initialMonth={month} rewardOutletIds={rewardOutletIds} canDelete={isAdmin} />
+      <PillarListClient initialAssignments={assignments ?? []} initialMonth={month} rewardOutletIds={rewardOutletIds} canDelete={isAdmin} isElevated={isAdmin || role === 'area_manager'} />
     </div>
   )
 }
