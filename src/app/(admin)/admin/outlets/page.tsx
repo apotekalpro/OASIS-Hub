@@ -1,11 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { UserAvatar } from '@/components/ui/avatar'
-import { MapPin, Phone, Building2, Users } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Building2 } from 'lucide-react'
 import { OutletManagementClient } from '@/components/inspections/outlet-management-client'
 import { OutletImportClient } from '@/components/inspections/outlet-import-client'
 import { OutletSyncClient } from '@/components/inspections/outlet-sync-client'
+import { OutletFilterClient } from '@/components/inspections/outlet-filter-client'
 
 export default async function OutletsPage() {
   const supabase = await createClient()
@@ -86,7 +85,6 @@ export default async function OutletsPage() {
         </CardContent></Card>
       </div>
 
-      {/* Outlets grid */}
       {outlets.length === 0 ? (
         <Card>
           <CardContent className="p-12 flex flex-col items-center gap-3 text-center">
@@ -96,67 +94,7 @@ export default async function OutletsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {outlets.map(outlet => (
-            <Card key={outlet.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-10 w-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
-                      <Building2 className="h-5 w-5 text-indigo-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">{outlet.name}</p>
-                      {outlet.code && (
-                        <p className="text-xs text-gray-400 font-mono">{outlet.code}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant={outlet.status === 'active' ? 'success' : 'secondary'}>
-                      {outlet.status}
-                    </Badge>
-                    <OutletManagementClient
-                      orgId={orgId}
-                      departments={departments}
-                      users={users}
-                      outlet={outlet}
-                      mode="actions"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-2 text-sm text-gray-500">
-                  {(outlet.city || outlet.state) && (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{[outlet.city, outlet.state].filter(Boolean).join(', ')}</span>
-                    </div>
-                  )}
-                  {outlet.phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-3.5 w-3.5 shrink-0" />
-                      <span>{outlet.phone}</span>
-                    </div>
-                  )}
-                  {outlet.departments && (
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-3.5 w-3.5 shrink-0" />
-                      <span>{outlet.departments.name}</span>
-                    </div>
-                  )}
-                </div>
-
-                {outlet.profiles && (
-                  <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2">
-                    <UserAvatar name={outlet.profiles.full_name} avatarUrl={outlet.profiles.avatar_url} size="sm" />
-                    <span className="text-xs text-gray-500">Area Manager: <span className="font-medium text-gray-700">{outlet.profiles.full_name}</span></span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <OutletFilterClient outlets={outlets} departments={departments} users={users} orgId={orgId} />
       )}
     </div>
   )
