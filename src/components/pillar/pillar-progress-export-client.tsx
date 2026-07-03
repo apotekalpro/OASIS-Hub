@@ -21,7 +21,7 @@ function monthOptions() {
 
 type FailedRow = { krId: string; reason: string }
 type CsvRow = { krId: string; outletCode: string; outletName: string; pillar: string; keyResult: string }
-type UploadResult = { success: number; failed: number; failedRows: (FailedRow & Partial<CsvRow>)[] }
+type UploadResult = { success: number; failed: number; failedRows: (FailedRow & Partial<CsvRow>)[]; fatalError?: string }
 
 export function PillarProgressExportClient() {
   const fileRef = useRef<HTMLInputElement>(null)
@@ -129,14 +129,23 @@ export function PillarProgressExportClient() {
       if (rows.length === 0) { toast.error('No valid rows found — make sure the KR ID column is intact'); return }
 
       setUploading(true)
-      const res = await fetch('/api/pillar/krs/bulk-update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows }),
-      })
+      let res: Response
+      try {
+        res = await fetch('/api/pillar/krs/bulk-update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows }),
+        })
+      } catch (err) {
+        setUploading(false)
+        const msg = err instanceof Error ? err.message : 'Network error'
+        setUploadResult({ success: 0, failed: rows.length, failedRows: [], fatalError: msg })
+        return
+      }
       setUploading(false)
-      if (res.ok) {
-        const { successCount, failedCount, failedRows } = await res.json()
+      const json = await res.json().catch(() => null)
+      if (res.ok && json) {
+        const { successCount, failedCount, failedRows } = json
         const enrichedFailed = (failedRows ?? []).map((f: FailedRow) => ({
           ...f,
           ...(csvRowMap.get(f.krId) ?? {}),
@@ -145,8 +154,8 @@ export function PillarProgressExportClient() {
         if (failedCount > 0) toast.error(`Updated ${successCount}, failed ${failedCount}`)
         else toast.success(`Updated ${successCount} key results`)
       } else {
-        const { error } = await res.json().catch(() => ({ error: 'Import failed' }))
-        toast.error(error ?? 'Import failed')
+        const msg = json?.error ?? `Server error ${res.status}`
+        setUploadResult({ success: 0, failed: rows.length, failedRows: [], fatalError: msg })
       }
     }
     reader.readAsText(file)
@@ -198,12 +207,19 @@ export function PillarProgressExportClient() {
 
           {uploadResult !== null && (
             <div className="space-y-3">
+              {uploadResult.fatalError ? (
+                <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">
+                  <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span><strong>Import failed:</strong> {uploadResult.fatalError}</span>
+                </div>
+              ) : (
               <div className="flex items-center gap-4 text-sm">
                 <p className="flex items-center gap-1.5 text-green-600"><CheckCircle2 className="h-4 w-4" /> {uploadResult.success} updated</p>
                 {uploadResult.failed > 0 && (
                   <p className="flex items-center gap-1.5 text-red-600"><XCircle className="h-4 w-4" /> {uploadResult.failed} failed</p>
                 )}
               </div>
+              )}
 
               {uploadResult.failedRows.length > 0 && (
                 <div className="border border-red-200 rounded-lg overflow-x-auto">
