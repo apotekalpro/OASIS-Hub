@@ -65,27 +65,42 @@ export async function POST(req: NextRequest) {
     ownedKrsList.filter(k => orgAssignmentIds.has(k.assignment_id)).map(k => k.id)
   )
 
-  let successCount = 0
-  const failedRows: FailedRow[] = []
-
+  // Separate rows into invalid (skip DB) and valid (need update)
+  const invalidRows: FailedRow[] = []
+  const validRows: UpdateRow[] = []
   for (const row of rows) {
     if (!foundIds.has(row.krId)) {
-      failedRows.push({ krId: row.krId, reason: 'KR not found in database' })
-      continue
+      invalidRows.push({ krId: row.krId, reason: 'KR not found in database' })
+    } else if (!ownedIds.has(row.krId)) {
+      invalidRows.push({ krId: row.krId, reason: 'Not authorised for this organisation' })
+    } else {
+      validRows.push(row)
     }
-    if (!ownedIds.has(row.krId)) {
-      failedRows.push({ krId: row.krId, reason: 'Not authorised for this organisation' })
-      continue
-    }
-    const patch: { current_value: number; title?: string; metric_type?: string; target_value?: number; status?: string } = { current_value: Number(row.currentValue) || 0 }
-    if (row.title?.trim()) patch.title = row.title.trim()
-    if (row.metricType && VALID_METRIC_TYPES.has(row.metricType.toLowerCase())) patch.metric_type = row.metricType.toLowerCase()
-    if (row.targetValue !== undefined && !isNaN(row.targetValue)) patch.target_value = row.targetValue
-    if (row.status && VALID_STATUSES.has(row.status)) patch.status = row.status
-    const { error } = await admin.from('pillar_assignment_krs').update(patch).eq('id', row.krId)
-    if (error) failedRows.push({ krId: row.krId, reason: error.message })
-    else successCount++
   }
+
+  // Run DB updates in parallel batches of 50 to avoid timeouts
+  const BATCH = 50
+  const dbResults: FailedRow[] = []
+  let successCount = 0
+
+  for (let i = 0; i < validRows.length; i += BATCH) {
+    const chunk = validRows.slice(i, i + BATCH)
+    const results = await Promise.all(chunk.map(async row => {
+      const patch: { current_value: number; title?: string; metric_type?: string; target_value?: number; status?: string } = { current_value: Number(row.currentValue) || 0 }
+      if (row.title?.trim()) patch.title = row.title.trim()
+      if (row.metricType && VALID_METRIC_TYPES.has(row.metricType.toLowerCase())) patch.metric_type = row.metricType.toLowerCase()
+      if (row.targetValue !== undefined && !isNaN(row.targetValue)) patch.target_value = row.targetValue
+      if (row.status && VALID_STATUSES.has(row.status)) patch.status = row.status
+      const { error } = await admin.from('pillar_assignment_krs').update(patch).eq('id', row.krId)
+      return error ? { krId: row.krId, reason: error.message } : null
+    }))
+    for (const r of results) {
+      if (r) dbResults.push(r)
+      else successCount++
+    }
+  }
+
+  const failedRows: FailedRow[] = [...invalidRows, ...dbResults]
 
   return NextResponse.json({ successCount, failedCount: failedRows.length, failedRows })
 }
