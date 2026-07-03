@@ -74,7 +74,7 @@ export default async function UsersPage() {
           <Card key={role}>
             <CardContent className="p-4">
               <p className="text-2xl font-bold text-gray-900">
-                {users?.filter(u => u.role === role).length ?? 0}
+                {users?.filter(u => u.role === role && u.is_active).length ?? 0}
               </p>
               <p className="text-sm text-gray-500">{ROLE_LABELS[role]}</p>
             </CardContent>
