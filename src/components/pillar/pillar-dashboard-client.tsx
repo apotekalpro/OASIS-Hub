@@ -28,6 +28,7 @@ type Assignment = {
 interface Props {
   initialAssignments: Assignment[]
   initialMonth: string
+  monthlyInputs: { outlet_id: string; as_of_date: string | null }[]
 }
 
 function monthOptions() {
@@ -74,9 +75,21 @@ function ProgressBar({ pct, className }: { pct: number; className?: string }) {
   )
 }
 
+// Forecast current progress to end-of-month based on as_of_date
+// e.g. if 21% as of day 2 of 31 → forecast = 21/2*31 = 325% → capped at 100%
+function forecastProgress(currentPct: number, asOfDate: string, monthStr: string): number | null {
+  const d = new Date(asOfDate + 'T00:00:00')
+  if (isNaN(d.getTime())) return null
+  const dayElapsed = d.getDate()
+  if (dayElapsed <= 0) return null
+  const [year, month] = monthStr.split('-').map(Number)
+  const totalDays = new Date(year, month, 0).getDate() // last day of month
+  return Math.min(100, Math.round((currentPct / dayElapsed) * totalDays))
+}
+
 const SELECT_CLS = 'border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white h-10 appearance-none pr-8'
 
-export function PillarDashboardClient({ initialAssignments, initialMonth }: Props) {
+export function PillarDashboardClient({ initialAssignments, initialMonth, monthlyInputs }: Props) {
   const router = useRouter()
   const [month, setMonth] = useState(initialMonth)
   const [search, setSearch] = useState('')
@@ -88,6 +101,11 @@ export function PillarDashboardClient({ initialAssignments, initialMonth }: Prop
     router.push(`/admin/pillar-dashboard?month=${m}`)
   }
 
+  // outlet_id → as_of_date lookup
+  const asOfMap = useMemo(() => {
+    return new Map(monthlyInputs.filter(i => i.as_of_date).map(i => [i.outlet_id, i.as_of_date!]))
+  }, [monthlyInputs])
+
   // Nationwide summary
   const nationwide = useMemo(() => {
     const total = initialAssignments.length
@@ -96,6 +114,19 @@ export function PillarDashboardClient({ initialAssignments, initialMonth }: Prop
     const completed = initialAssignments.filter(a => avgKrProgress(a.pillar_assignment_krs) >= 100).length
     return { avg, completed, total }
   }, [initialAssignments])
+
+  // Pillar options
+  const pillarOptions = useMemo(() => {
+    const nums = new Set<string>()
+    for (const a of initialAssignments) {
+      const n = parsePillarNumber(a.title)
+      if (n) nums.add(n)
+    }
+    return Array.from(nums).sort()
+  }, [initialAssignments])
+
+  // Which pillar numbers should show forecast (pillar 1 and 2 only)
+  const forecastPillars = useMemo(() => new Set<string>(pillarOptions.filter(n => n === '1' || n === '2')), [pillarOptions])
 
   // Area manager breakdown
   const amBreakdown = useMemo(() => {
@@ -110,39 +141,42 @@ export function PillarDashboardClient({ initialAssignments, initialMonth }: Prop
     }
     return Array.from(map.values())
       .map(am => {
-        const pillarMap = new Map<string, number[]>()
+        // per-pillar: collect actual progress and forecast values across outlets
+        const pillarActual = new Map<string, number[]>()
+        const pillarForecast = new Map<string, number[]>()
         for (const a of am.assignments) {
           const n = parsePillarNumber(a.title)
-          if (n) {
-            if (!pillarMap.has(n)) pillarMap.set(n, [])
-            pillarMap.get(n)!.push(avgKrProgress(a.pillar_assignment_krs))
+          if (!n) continue
+          const pct = avgKrProgress(a.pillar_assignment_krs)
+          if (!pillarActual.has(n)) pillarActual.set(n, [])
+          pillarActual.get(n)!.push(pct)
+          if (forecastPillars.has(n) && a.outlet_id) {
+            const asOf = asOfMap.get(a.outlet_id)
+            if (asOf) {
+              const fp = forecastProgress(pct, asOf, month)
+              if (fp !== null) {
+                if (!pillarForecast.has(n)) pillarForecast.set(n, [])
+                pillarForecast.get(n)!.push(fp)
+              }
+            }
           }
         }
         const pillarAvgs = new Map(
-          Array.from(pillarMap.entries()).map(([n, vals]) => [n, Math.round(vals.reduce((s, v) => s + v, 0) / vals.length)])
+          Array.from(pillarActual.entries()).map(([n, vals]) => [n, Math.round(vals.reduce((s, v) => s + v, 0) / vals.length)])
+        )
+        const pillarForecasts = new Map(
+          Array.from(pillarForecast.entries()).map(([n, vals]) => [n, Math.round(vals.reduce((s, v) => s + v, 0) / vals.length)])
         )
         const avg = am.assignments.length > 0
           ? Math.round(am.assignments.reduce((s, a) => s + avgKrProgress(a.pillar_assignment_krs), 0) / am.assignments.length)
           : 0
-        return { ...am, avg, count: am.assignments.length, pillarAvgs }
+        return { ...am, avg, count: am.assignments.length, pillarAvgs, pillarForecasts }
       })
       .sort((a, b) => b.avg - a.avg)
-  }, [initialAssignments])
+  }, [initialAssignments, asOfMap, month, forecastPillars])
 
   // Unique area manager options for filter
-  const amOptions = useMemo(() => {
-    return amBreakdown.map(am => ({ id: am.id, name: am.name }))
-  }, [amBreakdown])
-
-  // Pillar options
-  const pillarOptions = useMemo(() => {
-    const nums = new Set<string>()
-    for (const a of initialAssignments) {
-      const n = parsePillarNumber(a.title)
-      if (n) nums.add(n)
-    }
-    return Array.from(nums).sort()
-  }, [initialAssignments])
+  const amOptions = useMemo(() => amBreakdown.map(am => ({ id: am.id, name: am.name })), [amBreakdown])
 
   // Filtered assignments for outlet table
   const filtered = useMemo(() => {
@@ -162,24 +196,28 @@ export function PillarDashboardClient({ initialAssignments, initialMonth }: Prop
     })
   }, [initialAssignments, search, amFilter, pillarFilter])
 
-  // Group filtered by outlet
+  // Group filtered by outlet, computing forecast per pillar
   const outletRows = useMemo(() => {
-    const map = new Map<string, { outletId: string; outletName: string; outletCode: string | null; amName: string; pillars: { title: string; progress: number }[] }>()
+    const map = new Map<string, {
+      outletId: string; outletName: string; outletCode: string | null; amName: string
+      pillars: { pillarNum: string | null; progress: number; forecast: number | null }[]
+    }>()
     for (const a of filtered) {
       const key = a.outlet_id ?? a.id
       if (!map.has(key)) {
-        map.set(key, {
-          outletId: key,
-          outletName: a.outlets?.name ?? '—',
-          outletCode: a.outlets?.code ?? null,
-          amName: a.area_manager?.full_name ?? '—',
-          pillars: [],
-        })
+        map.set(key, { outletId: key, outletName: a.outlets?.name ?? '—', outletCode: a.outlets?.code ?? null, amName: a.area_manager?.full_name ?? '—', pillars: [] })
       }
-      map.get(key)!.pillars.push({ title: a.title, progress: avgKrProgress(a.pillar_assignment_krs) })
+      const pct = avgKrProgress(a.pillar_assignment_krs)
+      const n = parsePillarNumber(a.title)
+      let forecast: number | null = null
+      if (n && forecastPillars.has(n) && a.outlet_id) {
+        const asOf = asOfMap.get(a.outlet_id)
+        if (asOf) forecast = forecastProgress(pct, asOf, month)
+      }
+      map.get(key)!.pillars.push({ pillarNum: n, progress: pct, forecast })
     }
     return Array.from(map.values()).sort((a, b) => a.outletName.localeCompare(b.outletName))
-  }, [filtered])
+  }, [filtered, asOfMap, month, forecastPillars])
 
   const activeFilters = [amFilter, pillarFilter].filter(Boolean).length
 
@@ -213,15 +251,25 @@ export function PillarDashboardClient({ initialAssignments, initialMonth }: Prop
                   <span className="text-sm font-bold text-gray-700 shrink-0 ml-2">{am.avg}%</span>
                 </div>
                 <ProgressBar pct={am.avg} />
-                <div className="mt-3 space-y-1.5">
+                <div className="mt-3 space-y-2">
                   {pillarOptions.map(n => {
                     const pct = am.pillarAvgs.get(n)
                     if (pct === undefined) return null
+                    const fp = am.pillarForecasts.get(n)
                     return (
-                      <div key={n} className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 w-14 shrink-0">Pillar {n}</span>
-                        <ProgressBar pct={pct} className="flex-1" />
-                        <span className="text-xs font-semibold text-gray-600 w-8 text-right shrink-0">{pct}%</span>
+                      <div key={n}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 w-14 shrink-0">Pillar {n}</span>
+                          <ProgressBar pct={pct} className="flex-1" />
+                          <span className="text-xs font-semibold text-gray-600 w-8 text-right shrink-0">{pct}%</span>
+                        </div>
+                        {fp != null && (
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-purple-400 w-14 shrink-0 pl-0.5">↗ Forecast</span>
+                            <ProgressBar pct={fp as number} className="flex-1 opacity-60" />
+                            <span className="text-xs font-semibold text-purple-500 w-8 text-right shrink-0">{fp}%</span>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -281,7 +329,10 @@ export function PillarDashboardClient({ initialAssignments, initialMonth }: Prop
                     <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">Outlet</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">Area Manager</th>
                     {pillarOptions.map(n => (
-                      <th key={n} className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">Pillar {n}</th>
+                      <th key={n} className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
+                        Pillar {n}
+                        {forecastPillars.has(n) && <span className="block text-xs font-normal text-purple-400">+ Forecast</span>}
+                      </th>
                     ))}
                     <th className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
                       <TrendingUp className="h-3.5 w-3.5 inline mr-1" />Overall
@@ -293,7 +344,7 @@ export function PillarDashboardClient({ initialAssignments, initialMonth }: Prop
                     const overallAvg = row.pillars.length > 0
                       ? Math.round(row.pillars.reduce((s, p) => s + p.progress, 0) / row.pillars.length)
                       : 0
-                    const pillarMap = new Map(row.pillars.map(p => [parsePillarNumber(p.title), p.progress]))
+                    const pillarMap = new Map(row.pillars.map(p => [p.pillarNum, p]))
                     return (
                       <tr key={row.outletId} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3">
@@ -302,13 +353,16 @@ export function PillarDashboardClient({ initialAssignments, initialMonth }: Prop
                         </td>
                         <td className="px-4 py-3 text-gray-600">{row.amName}</td>
                         {pillarOptions.map(n => {
-                          const pct = pillarMap.get(n)
+                          const entry = pillarMap.get(n)
                           return (
                             <td key={n} className="px-4 py-3">
-                              {pct !== undefined ? (
-                                <div className="flex flex-col items-center gap-1 min-w-[80px]">
-                                  <span className="font-semibold text-gray-700">{Math.round(pct)}%</span>
-                                  <ProgressBar pct={pct} className="w-16" />
+                              {entry !== undefined ? (
+                                <div className="flex flex-col items-center gap-0.5 min-w-[90px]">
+                                  <span className="font-semibold text-gray-700">{Math.round(entry.progress)}%</span>
+                                  <ProgressBar pct={entry.progress} className="w-16" />
+                                  {entry.forecast !== null && (
+                                    <span className="text-xs text-purple-500 mt-0.5">↗ {entry.forecast}%</span>
+                                  )}
                                 </div>
                               ) : <span className="text-gray-300 text-xs block text-center">—</span>}
                             </td>

@@ -29,15 +29,23 @@ export default async function PillarDashboardPage({ searchParams }: { searchPara
   const admin = createAdminClient()
 
   // Fetch all assignments for the month with KR data, outlet, and area manager
-  const { data: assignments } = await admin
-    .from('pillar_assignments')
-    .select('id, title, progress, status, outlet_id, outlets(id, name, code), area_manager:profiles!pillar_assignments_area_manager_id_fkey(id, full_name), pillar_assignment_krs(id, current_value, target_value, start_value, metric_type)')
-    .eq('org_id', orgId)
-    .eq('month', month)
-    .order('created_at', { ascending: false })
+  const [{ data: assignments }, { data: monthlyInputs }] = await Promise.all([
+    admin
+      .from('pillar_assignments')
+      .select('id, title, progress, status, outlet_id, outlets(id, name, code), area_manager:profiles!pillar_assignments_area_manager_id_fkey(id, full_name), pillar_assignment_krs(id, current_value, target_value, start_value, metric_type)')
+      .eq('org_id', orgId)
+      .eq('month', month)
+      .order('created_at', { ascending: false }),
+    admin
+      .from('pillar_monthly_inputs')
+      .select('outlet_id, as_of_date')
+      .eq('org_id', orgId)
+      .eq('month', month),
+  ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const safeAssignments = (assignments ?? []) as any[]
+  const safeMonthlyInputs = (monthlyInputs ?? []) as { outlet_id: string; as_of_date: string | null }[]
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -45,7 +53,7 @@ export default async function PillarDashboardPage({ searchParams }: { searchPara
         <h1 className="text-2xl font-bold text-gray-900">Nationwide Pillar Dashboard</h1>
         <p className="text-gray-500 text-sm mt-0.5">Overview of pillar progress across all outlets and area managers</p>
       </div>
-      <PillarDashboardClient initialAssignments={safeAssignments} initialMonth={month} />
+      <PillarDashboardClient initialAssignments={safeAssignments} initialMonth={month} monthlyInputs={safeMonthlyInputs} />
     </div>
   )
 }

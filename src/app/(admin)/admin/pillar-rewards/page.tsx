@@ -19,7 +19,7 @@ export default async function PillarRewardsPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Pillar Reward Report</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Incentives Reward Summary</h1>
         <p className="text-gray-500 text-sm mt-0.5">Monthly reward &amp; payroll breakdown by outlet — Incentive 1, 2 &amp; 3</p>
       </div>
       <PillarRewardsReportClient />
