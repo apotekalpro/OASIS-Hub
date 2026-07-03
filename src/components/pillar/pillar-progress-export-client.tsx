@@ -153,8 +153,8 @@ function MonthlyInputsCard({ month }: { month: string }) {
     if (d.error) { toast.error(d.error); return }
     const rows: { outletId: string; outletCode: string; outletName: string; revenue: number; focusProductPct: number; asOfDate: string }[] = d.rows ?? []
     if (rows.length === 0) { toast.error('No outlets found'); return }
-    const header = ['Outlet ID', 'Outlet Code', 'Outlet Name', 'Revenue (Rp)', 'Focus Product %', 'As Of Date']
-    const lines = rows.map(r => [r.outletId, r.outletCode, r.outletName, r.revenue, r.focusProductPct, r.asOfDate])
+    const header = ['Outlet ID', 'Outlet Code', 'Outlet Name', 'Revenue (Rp)', 'Focus Product %', 'As Of Date (YYYY-MM-DD)']
+    const lines = rows.map(r => [r.outletId, r.outletCode, r.outletName, r.revenue, r.focusProductPct, r.asOfDate ?? ''])
     triggerDownload(buildBlob(header, lines as string[][]), `pillar-monthly-inputs-${month.slice(0, 7)}.csv`)
   }
 
@@ -173,7 +173,7 @@ function MonthlyInputsCard({ month }: { month: string }) {
         if (outletId) csvMap.set(outletId, { outletCode, outletName })
         const revRaw = getCol(row, 'revenue', 'revenuerp', 'revenue(rp)')
         const focusRaw = getCol(row, 'focusproduct', 'focusproductpct', 'focusproduct%')
-        const asOfDate = getCol(row, 'asofdate', 'as of date')
+        const asOfDate = getCol(row, 'asofdate', 'as of date', 'asofdateyyyymmdd')
         return {
           outletId,
           month,
@@ -212,8 +212,8 @@ function MonthlyInputsCard({ month }: { month: string }) {
           <UploadZone fileRef={fileRef} fileName={fileName} uploading={uploading} onChange={handleFile} />
         </div>
         <p className="text-xs text-gray-400">
-          Edit &quot;Revenue (Rp)&quot;, &quot;Focus Product %&quot;, and/or &quot;As Of Date&quot; columns. Don&apos;t touch &quot;Outlet ID&quot; — it links each row back to the correct outlet.
-          Leave a cell blank to keep the existing value unchanged.
+          Edit &quot;Revenue (Rp)&quot;, &quot;Focus Product %&quot;, and/or &quot;As Of Date (YYYY-MM-DD)&quot; columns (column F — scroll right if not visible).
+          Don&apos;t touch &quot;Outlet ID&quot;. Leave a cell blank to keep the existing value unchanged.
         </p>
         {uploading && <p className="text-xs text-gray-500 animate-pulse">Updating outlets…</p>}
         {result && <UploadResultDisplay result={result} colHeaders={['Outlet', 'Outlet ID', 'Reason']}
