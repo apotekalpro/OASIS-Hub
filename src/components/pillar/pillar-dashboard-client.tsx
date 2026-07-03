@@ -109,13 +109,23 @@ export function PillarDashboardClient({ initialAssignments, initialMonth }: Prop
       }
     }
     return Array.from(map.values())
-      .map(am => ({
-        ...am,
-        avg: am.assignments.length > 0
+      .map(am => {
+        const pillarMap = new Map<string, number[]>()
+        for (const a of am.assignments) {
+          const n = parsePillarNumber(a.title)
+          if (n) {
+            if (!pillarMap.has(n)) pillarMap.set(n, [])
+            pillarMap.get(n)!.push(avgKrProgress(a.pillar_assignment_krs))
+          }
+        }
+        const pillarAvgs = new Map(
+          Array.from(pillarMap.entries()).map(([n, vals]) => [n, Math.round(vals.reduce((s, v) => s + v, 0) / vals.length)])
+        )
+        const avg = am.assignments.length > 0
           ? Math.round(am.assignments.reduce((s, a) => s + avgKrProgress(a.pillar_assignment_krs), 0) / am.assignments.length)
-          : 0,
-        count: am.assignments.length,
-      }))
+          : 0
+        return { ...am, avg, count: am.assignments.length, pillarAvgs }
+      })
       .sort((a, b) => b.avg - a.avg)
   }, [initialAssignments])
 
@@ -203,7 +213,20 @@ export function PillarDashboardClient({ initialAssignments, initialMonth }: Prop
                   <span className="text-sm font-bold text-gray-700 shrink-0 ml-2">{am.avg}%</span>
                 </div>
                 <ProgressBar pct={am.avg} />
-                <p className="text-xs text-gray-400 mt-1.5">{am.count} assignment{am.count !== 1 ? 's' : ''}</p>
+                <div className="mt-3 space-y-1.5">
+                  {pillarOptions.map(n => {
+                    const pct = am.pillarAvgs.get(n)
+                    if (pct === undefined) return null
+                    return (
+                      <div key={n} className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 w-14 shrink-0">Pillar {n}</span>
+                        <ProgressBar pct={pct} className="flex-1" />
+                        <span className="text-xs font-semibold text-gray-600 w-8 text-right shrink-0">{pct}%</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">{am.count} assignment{am.count !== 1 ? 's' : ''}</p>
               </div>
             ))}
           </div>
