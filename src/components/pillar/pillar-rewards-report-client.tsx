@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Search, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, Users, Store } from 'lucide-react'
+import { Download, Search, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, Users, Store, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -33,6 +33,7 @@ type ReportRow = {
   incentive3Potential: number
   totalAchieved: number
   totalPotential: number
+  paxCount: number
 }
 
 function monthOptions() {
@@ -55,7 +56,7 @@ function TierBadge({ tier }: { tier: 0 | 1 | 2 | 3 }) {
   return <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded', cls)}>L{tier}</span>
 }
 
-type SortKey = keyof Pick<ReportRow, 'outletName' | 'areaManagerName' | 'category' | 'avgProgress' | 'revenue' | 'forecastedRevenue' | 'focusProductPct' | 'incentive1Achieved' | 'incentive2Achieved' | 'incentive3Achieved' | 'totalAchieved'>
+type SortKey = keyof Pick<ReportRow, 'outletName' | 'areaManagerName' | 'category' | 'avgProgress' | 'revenue' | 'forecastedRevenue' | 'focusProductPct' | 'paxCount' | 'incentive1Achieved' | 'incentive2Achieved' | 'incentive3Achieved' | 'totalAchieved'>
 
 function useSortState(init: SortKey, initDir: 'asc' | 'desc' = 'desc') {
   const [sortKey, setSortKey] = useState<SortKey>(init)
@@ -90,6 +91,21 @@ export function PillarRewardsReportClient() {
 
   const outletSort = useSortState('totalAchieved')
   const amSort = useSortState('totalAchieved')
+  const [syncingPax, setSyncingPax] = useState(false)
+  const [paxSyncMsg, setPaxSyncMsg] = useState<string | null>(null)
+
+  async function syncPax() {
+    setSyncingPax(true); setPaxSyncMsg(null)
+    try {
+      const r = await fetch('/api/outlets/sync-pax', { method: 'POST' })
+      const d = await r.json()
+      if (d.error) { setPaxSyncMsg(`Error: ${d.error}`); return }
+      setPaxSyncMsg(`Synced: ${d.updated} outlets updated, ${d.unmatched} unmatched`)
+      // Reload report data with fresh pax counts
+      fetch(`/api/pillar/rewards/report?month=${month}`).then(r => r.json()).then(d => setRows(d.rows ?? []))
+    } catch { setPaxSyncMsg('Network error') }
+    finally { setSyncingPax(false) }
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -185,14 +201,14 @@ export function PillarRewardsReportClient() {
   }), { incentive1: 0, incentive2: 0, incentive3: 0, total: 0 })
 
   function exportCSV() {
-    const header = ['Outlet Code', 'Outlet Name', 'Area Manager', 'Category', 'Pillars', 'Avg %', 'Revenue', 'Forecasted Revenue', 'As Of Date', 'Focus %', 'T1', 'T2', 'T3', 'Inc2 Tier', 'Inc 1', 'Inc 2', 'Inc 3', 'Total']
+    const header = ['Outlet Code', 'Outlet Name', 'Area Manager', 'Category', 'Pillars', 'Avg %', 'Revenue', 'Forecasted Revenue', 'As Of Date', 'Focus %', 'T1', 'T2', 'T3', 'Inc2 Tier', 'PAX', 'Inc 1', 'Inc 2', 'Inc 3', 'Total']
     const lines = sortedOutletRows.map(r => [
       r.outletCode ?? '', r.outletName, r.areaManagerName ?? '', r.category ?? '',
       `${r.pillarsCompleted}/${r.pillarsTotal}`, r.avgProgress,
       Math.round(r.revenue), Math.round(r.forecastedRevenue), r.asOfDate ?? '',
       r.focusProductPct, r.t1 ?? '', r.t2 ?? '', r.t3 ?? '',
       r.incentive2TierHit > 0 ? `L${r.incentive2TierHit}` : '',
-      Math.round(r.incentive1Achieved), Math.round(r.incentive2Achieved), Math.round(r.incentive3Achieved), Math.round(r.totalAchieved),
+      r.paxCount, Math.round(r.incentive1Achieved), Math.round(r.incentive2Achieved), Math.round(r.incentive3Achieved), Math.round(r.totalAchieved),
     ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
     const csv = [header.join(','), ...lines].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -229,9 +245,17 @@ export function PillarRewardsReportClient() {
             <button onClick={() => { setSearch(''); setAmFilter('') }} className="text-xs text-gray-400 hover:text-gray-700 underline underline-offset-2">Clear</button>
           )}
         </div>
-        <Button variant="outline" onClick={exportCSV} disabled={rows.length === 0}>
-          <Download className="h-4 w-4" /> Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col items-end">
+            <Button variant="outline" size="sm" onClick={syncPax} disabled={syncingPax} className="gap-1.5">
+              <RefreshCw className={cn('h-4 w-4', syncingPax && 'animate-spin')} /> Sync Pax
+            </Button>
+            {paxSyncMsg && <p className="text-xs text-gray-400 mt-0.5">{paxSyncMsg}</p>}
+          </div>
+          <Button variant="outline" onClick={exportCSV} disabled={rows.length === 0}>
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -267,6 +291,7 @@ export function PillarRewardsReportClient() {
                 <outletSort.SortHeader label="Forecast EOM" sortKeyVal="forecastedRevenue" />
                 <th className="px-3 py-2 text-center whitespace-nowrap text-purple-500">L1 / L2 / L3</th>
                 <outletSort.SortHeader label="Focus %" sortKeyVal="focusProductPct" />
+                <outletSort.SortHeader label="PAX" sortKeyVal="paxCount" />
                 <outletSort.SortHeader label="Inc 1" sortKeyVal="incentive1Achieved" />
                 <outletSort.SortHeader label="Inc 2" sortKeyVal="incentive2Achieved" />
                 <outletSort.SortHeader label="Inc 3" sortKeyVal="incentive3Achieved" />
@@ -275,9 +300,9 @@ export function PillarRewardsReportClient() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={14} className="px-3 py-8 text-center text-gray-400">Loading…</td></tr>
               ) : sortedOutletRows.length === 0 ? (
-                <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">No outlets found</td></tr>
+                <tr><td colSpan={14} className="px-3 py-8 text-center text-gray-400">No outlets found</td></tr>
               ) : sortedOutletRows.map(r => (
                 <tr key={r.outletId} className="hover:bg-gray-50">
                   <td className="px-3 py-2 whitespace-nowrap"><p className="font-medium text-gray-900">{r.outletName}</p><p className="text-xs text-gray-400">{r.outletCode}</p></td>
@@ -301,6 +326,7 @@ export function PillarRewardsReportClient() {
                     <div className="flex justify-center mt-0.5"><TierBadge tier={r.incentive2TierHit} /></div>
                   </td>
                   <td className="px-3 py-2 text-right text-gray-600">{r.focusProductPct}%</td>
+                  <td className="px-3 py-2 text-right font-medium text-gray-700">{r.paxCount}</td>
                   <td className="px-3 py-2 text-right text-gray-600">{formatIDR(Math.round(r.incentive1Achieved))}</td>
                   <td className="px-3 py-2 text-right text-gray-600">{formatIDR(Math.round(r.incentive2Achieved))}</td>
                   <td className="px-3 py-2 text-right text-gray-600">{formatIDR(Math.round(r.incentive3Achieved))}</td>
