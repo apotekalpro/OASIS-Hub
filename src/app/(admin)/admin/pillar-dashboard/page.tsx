@@ -32,7 +32,7 @@ export default async function PillarDashboardPage({ searchParams }: { searchPara
   const [{ data: assignments }, { data: monthlyInputs }] = await Promise.all([
     admin
       .from('pillar_assignments')
-      .select('id, title, progress, status, outlet_id, outlets(id, name, code), area_manager:profiles!pillar_assignments_area_manager_id_fkey(id, full_name), pillar_assignment_krs(id, current_value, target_value, start_value, metric_type)')
+      .select('id, title, progress, status, outlet_id, outlets(id, name, code, area_manager:area_manager_id(id, full_name)), pillar_assignment_krs(id, current_value, target_value, start_value, metric_type)')
       .eq('org_id', orgId)
       .eq('month', month)
       .order('created_at', { ascending: false }),

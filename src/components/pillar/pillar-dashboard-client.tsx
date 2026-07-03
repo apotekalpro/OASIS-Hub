@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Award, ChevronDown, TrendingUp, Store, Users } from 'lucide-react'
+import { Search, Award, ChevronDown, TrendingUp, Store, Users, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
@@ -20,10 +20,12 @@ type Assignment = {
   progress: number
   status: string
   outlet_id: string | null
-  outlets: { id: string; name: string; code: string | null } | null
-  area_manager: { id: string; full_name: string } | null
+  outlets: { id: string; name: string; code: string | null; area_manager: { id: string; full_name: string } | null } | null
   pillar_assignment_krs: KR[]
 }
+
+type SortKey = 'outlet' | 'am' | 'overall' | string // string covers pillar numbers
+type SortDir = 'asc' | 'desc'
 
 interface Props {
   initialAssignments: Assignment[]
@@ -87,6 +89,22 @@ function forecastProgress(currentPct: number, asOfDate: string, monthStr: string
   return Math.min(100, Math.round((currentPct / dayElapsed) * totalDays))
 }
 
+function SortTh({ label, sortK, current, dir, onSort, align, sub, icon }: {
+  label: string; sortK: string; current: string; dir: SortDir
+  onSort: (k: string) => void; align: 'left' | 'center'; sub?: string; icon?: React.ReactNode
+}) {
+  const active = current === sortK
+  return (
+    <th className={cn('px-4 py-3 font-medium text-gray-600 whitespace-nowrap cursor-pointer select-none hover:bg-gray-100 transition-colors', align === 'center' ? 'text-center' : 'text-left')} onClick={() => onSort(sortK)}>
+      <span className="inline-flex items-center gap-1">
+        {icon}{label}
+        {active ? (dir === 'asc' ? <ArrowUp className="h-3 w-3 text-orange-500" /> : <ArrowDown className="h-3 w-3 text-orange-500" />) : <ArrowUpDown className="h-3 w-3 text-gray-300" />}
+      </span>
+      {sub && <span className="block text-xs font-normal text-purple-400">{sub}</span>}
+    </th>
+  )
+}
+
 const SELECT_CLS = 'border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white h-10 appearance-none pr-8'
 
 export function PillarDashboardClient({ initialAssignments, initialMonth, monthlyInputs }: Props) {
@@ -101,10 +119,19 @@ export function PillarDashboardClient({ initialAssignments, initialMonth, monthl
     router.push(`/admin/pillar-dashboard?month=${m}`)
   }
 
-  // outlet_id → as_of_date lookup
+  // outlet_id → as_of_date lookup; fall back to today if not set
+  const todayStr = useMemo(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }, [])
+
   const asOfMap = useMemo(() => {
-    return new Map(monthlyInputs.filter(i => i.as_of_date).map(i => [i.outlet_id, i.as_of_date!]))
-  }, [monthlyInputs])
+    const map = new Map<string, string>()
+    for (const i of monthlyInputs) {
+      map.set(i.outlet_id, i.as_of_date ?? todayStr)
+    }
+    return map
+  }, [monthlyInputs, todayStr])
 
   // Nationwide summary
   const nationwide = useMemo(() => {
@@ -132,11 +159,12 @@ export function PillarDashboardClient({ initialAssignments, initialMonth, monthl
   const amBreakdown = useMemo(() => {
     const map = new Map<string, { id: string; name: string; assignments: Assignment[] }>()
     for (const a of initialAssignments) {
-      if (a.area_manager?.id) {
-        if (!map.has(a.area_manager.id)) {
-          map.set(a.area_manager.id, { id: a.area_manager.id, name: a.area_manager.full_name, assignments: [] })
+      const am = a.outlets?.area_manager
+      if (am?.id) {
+        if (!map.has(am.id)) {
+          map.set(am.id, { id: am.id, name: am.full_name, assignments: [] })
         }
-        map.get(a.area_manager.id)!.assignments.push(a)
+        map.get(am.id)!.assignments.push(a)
       }
     }
     return Array.from(map.values())
@@ -151,13 +179,11 @@ export function PillarDashboardClient({ initialAssignments, initialMonth, monthl
           if (!pillarActual.has(n)) pillarActual.set(n, [])
           pillarActual.get(n)!.push(pct)
           if (forecastPillars.has(n) && a.outlet_id) {
-            const asOf = asOfMap.get(a.outlet_id)
-            if (asOf) {
-              const fp = forecastProgress(pct, asOf, month)
-              if (fp !== null) {
-                if (!pillarForecast.has(n)) pillarForecast.set(n, [])
-                pillarForecast.get(n)!.push(fp)
-              }
+            const asOf = asOfMap.get(a.outlet_id) ?? todayStr
+            const fp = forecastProgress(pct, asOf, month)
+            if (fp !== null) {
+              if (!pillarForecast.has(n)) pillarForecast.set(n, [])
+              pillarForecast.get(n)!.push(fp)
             }
           }
         }
@@ -187,37 +213,65 @@ export function PillarDashboardClient({ initialAssignments, initialMonth, monthl
           a.title.toLowerCase().includes(q) ||
           (a.outlets?.name ?? '').toLowerCase().includes(q) ||
           (a.outlets?.code ?? '').toLowerCase().includes(q) ||
-          (a.area_manager?.full_name ?? '').toLowerCase().includes(q)
+          (a.outlets?.area_manager?.full_name ?? '').toLowerCase().includes(q)
         if (!matches) return false
       }
-      if (amFilter && a.area_manager?.id !== amFilter) return false
+      if (amFilter && a.outlets?.area_manager?.id !== amFilter) return false
       if (pillarFilter && parsePillarNumber(a.title) !== pillarFilter) return false
       return true
     })
   }, [initialAssignments, search, amFilter, pillarFilter])
 
+  const [sortKey, setSortKey] = useState<SortKey>('outlet')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
   // Group filtered by outlet, computing forecast per pillar
   const outletRows = useMemo(() => {
     const map = new Map<string, {
-      outletId: string; outletName: string; outletCode: string | null; amName: string
+      outletId: string; outletName: string; outletCode: string | null; amName: string; amId: string | null
       pillars: { pillarNum: string | null; progress: number; forecast: number | null }[]
     }>()
     for (const a of filtered) {
       const key = a.outlet_id ?? a.id
       if (!map.has(key)) {
-        map.set(key, { outletId: key, outletName: a.outlets?.name ?? '—', outletCode: a.outlets?.code ?? null, amName: a.area_manager?.full_name ?? '—', pillars: [] })
+        map.set(key, { outletId: key, outletName: a.outlets?.name ?? '—', outletCode: a.outlets?.code ?? null, amName: a.outlets?.area_manager?.full_name ?? '—', amId: a.outlets?.area_manager?.id ?? null, pillars: [] })
       }
       const pct = avgKrProgress(a.pillar_assignment_krs)
       const n = parsePillarNumber(a.title)
       let forecast: number | null = null
       if (n && forecastPillars.has(n) && a.outlet_id) {
-        const asOf = asOfMap.get(a.outlet_id)
-        if (asOf) forecast = forecastProgress(pct, asOf, month)
+        const asOf = asOfMap.get(a.outlet_id) ?? todayStr
+        forecast = forecastProgress(pct, asOf, month)
       }
       map.get(key)!.pillars.push({ pillarNum: n, progress: pct, forecast })
     }
-    return Array.from(map.values()).sort((a, b) => a.outletName.localeCompare(b.outletName))
-  }, [filtered, asOfMap, month, forecastPillars])
+    const rows = Array.from(map.values())
+    rows.sort((a, b) => {
+      if (sortKey === 'outlet') {
+        const cmp = a.outletName.localeCompare(b.outletName)
+        return sortDir === 'asc' ? cmp : -cmp
+      }
+      if (sortKey === 'am') {
+        const cmp = a.amName.localeCompare(b.amName)
+        return sortDir === 'asc' ? cmp : -cmp
+      }
+      let av: number, bv: number
+      if (sortKey === 'overall') {
+        av = a.pillars.length > 0 ? a.pillars.reduce((s, p) => s + p.progress, 0) / a.pillars.length : -1
+        bv = b.pillars.length > 0 ? b.pillars.reduce((s, p) => s + p.progress, 0) / b.pillars.length : -1
+      } else {
+        av = a.pillars.find(p => p.pillarNum === sortKey)?.progress ?? -1
+        bv = b.pillars.find(p => p.pillarNum === sortKey)?.progress ?? -1
+      }
+      return sortDir === 'asc' ? av - bv : bv - av
+    })
+    return rows
+  }, [filtered, asOfMap, month, forecastPillars, sortKey, sortDir])
 
   const activeFilters = [amFilter, pillarFilter].filter(Boolean).length
 
@@ -326,17 +380,13 @@ export function PillarDashboardClient({ initialAssignments, initialMonth, monthl
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">Outlet</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">Area Manager</th>
+                    <SortTh label="Outlet" sortK="outlet" current={sortKey} dir={sortDir} onSort={handleSort} align="left" />
+                    <SortTh label="Area Manager" sortK="am" current={sortKey} dir={sortDir} onSort={handleSort} align="left" />
                     {pillarOptions.map(n => (
-                      <th key={n} className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
-                        Pillar {n}
-                        {forecastPillars.has(n) && <span className="block text-xs font-normal text-purple-400">+ Forecast</span>}
-                      </th>
+                      <SortTh key={n} label={`Pillar ${n}`} sortK={n} current={sortKey} dir={sortDir} onSort={handleSort} align="center"
+                        sub={forecastPillars.has(n) ? '+ Forecast' : undefined} />
                     ))}
-                    <th className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
-                      <TrendingUp className="h-3.5 w-3.5 inline mr-1" />Overall
-                    </th>
+                    <SortTh label="Overall" sortK="overall" current={sortKey} dir={sortDir} onSort={handleSort} align="center" icon={<TrendingUp className="h-3.5 w-3.5 inline mr-1" />} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
