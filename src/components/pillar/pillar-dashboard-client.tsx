@@ -31,6 +31,7 @@ interface Props {
   initialAssignments: Assignment[]
   initialMonth: string
   monthlyInputs: { outlet_id: string; as_of_date: string | null }[]
+  embedToken?: string
 }
 
 function monthOptions() {
@@ -107,7 +108,7 @@ function SortTh({ label, sortK, current, dir, onSort, align, sub, icon }: {
 
 const SELECT_CLS = 'border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white h-10 appearance-none pr-8'
 
-export function PillarDashboardClient({ initialAssignments, initialMonth, monthlyInputs }: Props) {
+export function PillarDashboardClient({ initialAssignments, initialMonth, monthlyInputs, embedToken }: Props) {
   const router = useRouter()
   const [month, setMonth] = useState(initialMonth)
   const [search, setSearch] = useState('')
@@ -116,7 +117,8 @@ export function PillarDashboardClient({ initialAssignments, initialMonth, monthl
 
   function changeMonth(m: string) {
     setMonth(m)
-    router.push(`/admin/pillar-dashboard?month=${m}`)
+    if (embedToken) router.push(`/embed/pillar-dashboard?token=${embedToken}&month=${m}`)
+    else router.push(`/admin/pillar-dashboard?month=${m}`)
   }
 
   // outlet_id → as_of_date lookup; fall back to today if not set

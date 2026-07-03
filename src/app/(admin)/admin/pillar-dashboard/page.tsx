@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/server'
 import type { UserRole } from '@/types/database'
 import { redirect } from 'next/navigation'
 import { PillarDashboardClient } from '@/components/pillar/pillar-dashboard-client'
+import { generateEmbedToken } from '@/lib/embed-token'
+import { EmbedCodeButton } from '@/components/pillar/embed-code-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,11 +49,16 @@ export default async function PillarDashboardPage({ searchParams }: { searchPara
   const safeAssignments = (assignments ?? []) as any[]
   const safeMonthlyInputs = (monthlyInputs ?? []) as { outlet_id: string; as_of_date: string | null }[]
 
+  const embedToken = generateEmbedToken(orgId)
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Nationwide Pillar Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Overview of pillar progress across all outlets and area managers</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Nationwide Pillar Dashboard</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Overview of pillar progress across all outlets and area managers</p>
+        </div>
+        <EmbedCodeButton token={embedToken} />
       </div>
       <PillarDashboardClient initialAssignments={safeAssignments} initialMonth={month} monthlyInputs={safeMonthlyInputs} />
     </div>

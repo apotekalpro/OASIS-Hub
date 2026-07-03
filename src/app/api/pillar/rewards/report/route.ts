@@ -3,6 +3,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { canManagePillarTemplates } from '@/lib/auth/permissions'
 import { getCachedFeaturePermissions } from '@/lib/auth/get-user-profile'
 import { calcRewardBreakdown, forecastRevenue, type RewardAssignmentInput } from '@/lib/pillar/rewards'
+import { normalizeOutletCode } from '@/lib/pillar/outlet-code'
 import type { UserRole } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
@@ -46,10 +47,10 @@ export async function GET(req: NextRequest) {
   }, {})
 
   // Build outlet_code → outlet_id map to resolve targets that were saved without outlet_id
-  const outletCodeToId = new Map(outlets.map(o => [o.code?.toLowerCase().trim() ?? '', o.id]))
+  const outletCodeToId = new Map(outlets.map(o => [normalizeOutletCode(o.code), o.id]))
   const targetByOutlet = new Map<string, typeof targets[0]>()
   for (const t of targets) {
-    const id = t.outlet_id ?? (t.outlet_code ? outletCodeToId.get(t.outlet_code.toLowerCase().trim()) ?? null : null)
+    const id = t.outlet_id ?? (t.outlet_code ? outletCodeToId.get(normalizeOutletCode(t.outlet_code)) ?? null : null)
     if (id) targetByOutlet.set(id, t)
   }
   const inputByOutlet = new Map(inputs.map(i => [i.outlet_id, i]))
