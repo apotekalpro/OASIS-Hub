@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Award, Store, Calendar, Building2 } from 'lucide-react'
+import { Search, Award, Store, Calendar, Building2, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -40,6 +40,7 @@ interface Props {
   initialAssignments: PillarAssignment[]
   initialMonth: string
   rewardOutletIds: string[]
+  isAdmin?: boolean
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -85,10 +86,26 @@ function monthOptions() {
   return opts
 }
 
-export function PillarListClient({ initialAssignments, initialMonth, rewardOutletIds }: Props) {
+export function PillarListClient({ initialAssignments, initialMonth, rewardOutletIds, isAdmin }: Props) {
   const router = useRouter()
   const [assignments, setAssignments] = useState(initialAssignments)
   useEffect(() => { setAssignments(initialAssignments) }, [initialAssignments])
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  async function deleteAssignment(id: string, e: { preventDefault: () => void; stopPropagation: () => void }) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!confirm('Delete this Pillar assignment? This cannot be undone.')) return
+    setDeletingId(id)
+    const res = await fetch(`/api/pillar/assignments/${id}`, { method: 'DELETE' })
+    setDeletingId(null)
+    if (res.ok) {
+      setAssignments(prev => prev.filter(a => a.id !== id))
+    } else {
+      const { error } = await res.json().catch(() => ({ error: 'Failed to delete' }))
+      alert(error ?? 'Failed to delete')
+    }
+  }
   const [search, setSearch] = useState('')
   const [month, setMonth] = useState(initialMonth)
 
@@ -170,6 +187,17 @@ export function PillarListClient({ initialAssignments, initialMonth, rewardOutle
                       {a.title}
                     </h3>
                   </div>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={e => deleteAssignment(a.id, e)}
+                      disabled={deletingId === a.id}
+                      className="shrink-0 text-gray-300 hover:text-red-500 disabled:opacity-40 transition-colors p-0.5"
+                      title="Delete assignment"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 <div>

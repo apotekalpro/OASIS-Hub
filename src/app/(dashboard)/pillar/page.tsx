@@ -54,7 +54,7 @@ export default async function PillarPage({ searchParams }: { searchParams: Promi
   let rewardOutletIds: string[] = []
   if (role === 'area_manager') {
     const { data: amOutlets } = await admin.from('outlets').select('id').eq('area_manager_id', user.id).ilike('name', '%Apotek Alpro%').order('name')
-    rewardOutletIds = (amOutlets ?? []).map(o => o.id)
+    rewardOutletIds = (amOutlets ?? []).map((o: { id: string }) => o.id)
   } else if (profileOutletId) {
     rewardOutletIds = [profileOutletId]
   } else {
@@ -68,7 +68,7 @@ export default async function PillarPage({ searchParams }: { searchParams: Promi
         <h1 className="text-2xl font-bold text-gray-900">Alpro Pillar</h1>
         <p className="text-gray-500 text-sm mt-0.5">Your assigned Pillars, Key Results, and progress for the month</p>
       </div>
-      <PillarListClient initialAssignments={assignments ?? []} initialMonth={month} rewardOutletIds={rewardOutletIds} />
+      <PillarListClient initialAssignments={assignments ?? []} initialMonth={month} rewardOutletIds={rewardOutletIds} isAdmin={isAdmin} />
     </div>
   )
 }
