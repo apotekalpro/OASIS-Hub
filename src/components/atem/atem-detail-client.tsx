@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import {
   ArrowLeft, Calendar, Clock, Tag, Users, Edit2, Send,
   Trash2, CornerDownRight, Smile, X, Eye, UserPlus, Search,
-  FileText, Download, Paperclip,
+  FileText, Download, Paperclip, CheckCircle2,
 } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { hasRole } from '@/lib/auth/permissions'
@@ -53,6 +53,7 @@ type Comment = {
 
 type AtemItem = {
   id: string
+  title: string | null
   task: string
   deadline: string | null
   deadline_text: string | null
@@ -525,6 +526,12 @@ export function AtemDetailClient({
     router.push('/atem')
   }
 
+  async function handleCompleteItem() {
+    if (!confirm('Mark this ATEM item as completed? It will be archived and hidden from the main list.')) return
+    await updateField({ status: 'completed' })
+    toast.success('ATEM item marked as completed')
+  }
+
   // ─── Assignees ───────────────────────────────────────────────────────────
   async function addAssignee(u: OrgUser) {
     if (assigneesList.some(a => a.id === u.id)) {
@@ -741,6 +748,7 @@ export function AtemDetailClient({
 
   const itemAsExisting: ExistingAtemItem = {
     id: item.id,
+    title: item.title ?? null,
     task: item.task,
     priority: item.priority,
     status: item.status,
@@ -771,6 +779,12 @@ export function AtemDetailClient({
               <Button variant="outline" size="sm" onClick={handleDeleteItem} className="text-red-600 hover:bg-red-50 hover:border-red-300">
                 <Trash2 className="h-4 w-4" />
                 Delete
+              </Button>
+            )}
+            {canEdit && item.status !== 'completed' && (
+              <Button variant="outline" size="sm" onClick={handleCompleteItem} className="text-green-600 hover:bg-green-50 hover:border-green-300">
+                <CheckCircle2 className="h-4 w-4" />
+                Mark Complete
               </Button>
             )}
             {canEdit && (
@@ -818,6 +832,9 @@ export function AtemDetailClient({
               </span>
             </div>
           </div>
+          {item.title && (
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">{item.title}</h2>
+          )}
           <div className="prose prose-sm max-w-none text-gray-900 [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1" dangerouslySetInnerHTML={{ __html: item.task }} />
           {item.tags?.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-4 pt-4 border-t border-gray-100">
@@ -903,7 +920,10 @@ export function AtemDetailClient({
               <span className="text-base">📋</span>
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Action Plan</span>
             </div>
-            <div className="prose prose-sm max-w-none text-gray-700" dangerouslySetInnerHTML={{ __html: item.action_plan }} />
+            <div
+              className="prose prose-sm max-w-none text-gray-700 [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-2 [&_ul[data-type=taskList]_li_label]:mt-0.5 [&_ul[data-type=taskList]_li_label]:shrink-0 [&_ul[data-type=taskList]_li_div]:flex-1"
+              dangerouslySetInnerHTML={{ __html: item.action_plan }}
+            />
           </div>
         )}
 

@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
   const { data: item, error } = await admin.from('atem_items').insert({
     org_id: orgId,
     created_by: user.id,
+    title: fields.title || null,
     task: fields.task,
     deadline: fields.deadline || null,
     deadline_text: fields.deadline_text || null,
