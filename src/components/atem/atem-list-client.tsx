@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn, formatDate } from '@/lib/utils'
-import { Search, Filter, X, Edit2, Trash2, Clock, Calendar } from 'lucide-react'
+import { Search, Filter, X, Edit2, Trash2, Clock, Calendar, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { hasRole } from '@/lib/auth/permissions'
 import type { UserRole } from '@/types/database'
@@ -24,6 +24,7 @@ type Team = { id: string; name: string }
 
 type AtemItem = {
   id: string
+  title: string | null
   task: string
   deadline: string | null
   deadline_text: string | null
@@ -96,12 +97,16 @@ export function AtemListClient({ initialItems, orgId, currentUserId, currentUser
   const [filterPriority, setFilterPriority] = useState<string[]>([])
   const [showFilters, setShowFilters] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [completingId, setCompletingId] = useState<string | null>(null)
+  const [showCompleted, setShowCompleted] = useState(false)
 
   const filtered = useMemo(() => {
     let result = items
+    if (!showCompleted) result = result.filter(item => item.status !== 'completed')
     if (search) {
       const q = search.toLowerCase()
       result = result.filter(item =>
+        (item.title ?? '').toLowerCase().includes(q) ||
         stripHtml(item.task).toLowerCase().includes(q) ||
         item.impact?.toLowerCase().includes(q) ||
         item.tags?.some(t => t.includes(q))
@@ -110,7 +115,7 @@ export function AtemListClient({ initialItems, orgId, currentUserId, currentUser
     if (filterStatus.length > 0) result = result.filter(item => filterStatus.includes(item.status))
     if (filterPriority.length > 0) result = result.filter(item => filterPriority.includes(item.priority))
     return result
-  }, [items, search, filterStatus, filterPriority])
+  }, [items, search, filterStatus, filterPriority, showCompleted])
 
   const activeFilters = filterStatus.length + filterPriority.length
 
@@ -132,6 +137,23 @@ export function AtemListClient({ initialItems, orgId, currentUserId, currentUser
       toast.success('ATEM item deleted')
     }
     setDeletingId(null)
+  }
+
+  async function handleComplete(id: string) {
+    if (!confirm('Mark this ATEM item as completed? It will be archived and hidden from the main list.')) return
+    setCompletingId(id)
+    const res = await fetch(`/api/atem/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'completed' }),
+    })
+    if (!res.ok) {
+      toast.error('Failed to mark complete')
+    } else {
+      setItems(prev => prev.map(item => item.id === id ? { ...item, status: 'completed' } : item))
+      toast.success('ATEM item marked as completed')
+    }
+    setCompletingId(null)
   }
 
   function getAssigneeUsers(item: AtemItem): OrgUser[] {
@@ -161,14 +183,17 @@ export function AtemListClient({ initialItems, orgId, currentUserId, currentUser
         >{counts.in_progress} in progress</button>
         <span className="text-gray-300">·</span>
         <button
-          onClick={() => setFilterStatus(prev => prev.length === 1 && prev[0] === 'completed' ? [] : ['completed'])}
-          className={cn('px-2 py-0.5 rounded-md font-medium transition-colors', filterStatus.length === 1 && filterStatus[0] === 'completed' ? 'bg-green-100 text-green-800' : 'text-green-600 hover:bg-green-50')}
+          onClick={() => setShowCompleted(v => !v)}
+          className={cn('px-2 py-0.5 rounded-md font-medium transition-colors', showCompleted ? 'bg-green-100 text-green-800' : 'text-green-600 hover:bg-green-50')}
         >{counts.completed} completed</button>
         <span className="text-gray-300">·</span>
         <button
           onClick={() => setFilterStatus(prev => prev.length === 1 && prev[0] === 'blocked' ? [] : ['blocked'])}
           className={cn('px-2 py-0.5 rounded-md font-medium transition-colors', filterStatus.length === 1 && filterStatus[0] === 'blocked' ? 'bg-red-100 text-red-800' : 'text-red-600 hover:bg-red-50')}
         >{counts.blocked} blocked</button>
+        {!showCompleted && counts.completed > 0 && (
+          <span className="text-xs text-gray-400 ml-1">(completed hidden)</span>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -267,6 +292,7 @@ export function AtemListClient({ initialItems, orgId, currentUserId, currentUser
             const extra = assigneeUsers.length - shown.length
             const itemAsExisting: ExistingAtemItem = {
               id: item.id,
+              title: item.title ?? null,
               task: item.task,
               priority: item.priority,
               status: item.status,
@@ -300,10 +326,13 @@ export function AtemListClient({ initialItems, orgId, currentUserId, currentUser
                     <div className="flex-1 min-w-0">
                       <Link
                         href={`/atem/${item.id}`}
-                        className="text-sm font-semibold text-gray-900 hover:text-indigo-600 transition-colors line-clamp-2 leading-snug"
+                        className="text-sm font-semibold text-gray-900 hover:text-indigo-600 transition-colors leading-snug"
                       >
-                        {stripHtml(item.task)}
+                        {item.title ? item.title : <span className="line-clamp-2">{stripHtml(item.task)}</span>}
                       </Link>
+                      {item.title && (
+                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{stripHtml(item.task)}</p>
+                      )}
 
                       {/* Row 2: badges row */}
                       <div className="flex items-center gap-2 flex-wrap mt-2">
@@ -375,7 +404,7 @@ export function AtemListClient({ initialItems, orgId, currentUserId, currentUser
                         )}
                       </div>
 
-                      {/* Edit/Delete — visible on hover */}
+                      {/* Edit/Delete/Complete — visible on hover */}
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <AtemForm
                           orgId={orgId}
@@ -392,6 +421,16 @@ export function AtemListClient({ initialItems, orgId, currentUserId, currentUser
                           }
                           onCreated={() => router.refresh()}
                         />
+                        {item.status !== 'completed' && (
+                          <button
+                            disabled={completingId === item.id}
+                            onClick={() => handleComplete(item.id)}
+                            className="p-1.5 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50 transition-colors disabled:opacity-50"
+                            title="Mark as Complete"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         <button
                           disabled={deletingId === item.id}
                           onClick={() => handleDelete(item.id)}

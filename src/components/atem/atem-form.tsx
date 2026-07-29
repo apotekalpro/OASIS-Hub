@@ -30,6 +30,7 @@ type Team = { id: string; name: string; team_members?: Array<{ user_id: string; 
 
 export type ExistingAtemItem = {
   id: string
+  title: string | null
   task: string
   priority: string
   status: string
@@ -73,6 +74,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
   const [strategicAlignment, setStrategicAlignment] = useState(item?.strategic_alignment ?? '')
   const [consequencesOfDelay, setConsequencesOfDelay] = useState(item?.consequences_of_delay ?? '')
   const [actionPlan, setActionPlan] = useState(item?.action_plan ?? '')
+  const [title, setTitle] = useState(item?.title ?? '')
 
   useEffect(() => {
     if (open && item?.id) {
@@ -96,6 +98,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
       setStrategicAlignment(item?.strategic_alignment ?? '')
       setConsequencesOfDelay(item?.consequences_of_delay ?? '')
       setActionPlan(item?.action_plan ?? '')
+      setTitle(item?.title ?? '')
     }
   }, [open, item?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -120,6 +123,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
     setTaskError('')
     try {
       const payload = {
+        title: title.trim() || null,
         task: taskContent,
         priority: data.priority,
         status: data.status,
@@ -170,6 +174,7 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
       setStrategicAlignment('')
       setConsequencesOfDelay('')
       setActionPlan('')
+      setTitle('')
       if (!onCreated) router.refresh()
     } catch (err) {
       toast.error((err as Error).message)
@@ -201,6 +206,17 @@ export function AtemForm({ orgId, currentUserId, users, departments, teams, item
 
           <div className="overflow-y-auto flex-1 p-6">
             <form id="atem-form" onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+              {/* Title */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title <span className="text-gray-400 font-normal">(short friendly name)</span></label>
+                <Input
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="e.g. Corporate Profile 2027"
+                  maxLength={120}
+                />
+              </div>
+
               {/* T — Task */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
