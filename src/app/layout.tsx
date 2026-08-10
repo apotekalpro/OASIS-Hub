@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 import { PWARegister } from "@/components/pwa-register";
-
-const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
   title: "OASIS Hub",
@@ -32,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           });
         `}} />
       </head>
-      <body className={`${geist.variable} font-sans min-h-full`}>
+      <body className={`${GeistSans.variable} font-sans min-h-full`}>
         <PWARegister />
         {children}
       </body>
