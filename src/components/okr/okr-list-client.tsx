@@ -81,6 +81,8 @@ export function OkrListClient({ initialObjectives, orgId, currentUserId, users, 
   const [filterStatus, setFilterStatus] = useState<string[]>([])
   const [filterPeriod, setFilterPeriod] = useState<string[]>([])
   const [scope, setScope] = useState<'all' | 'mine'>('all')
+  const [showCompleted, setShowCompleted] = useState(false)
+  const [showCancelled, setShowCancelled] = useState(false)
 
   function toggleStatus(s: string) {
     setFilterStatus(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
@@ -92,6 +94,8 @@ export function OkrListClient({ initialObjectives, orgId, currentUserId, users, 
 
   const filtered = useMemo(() => {
     let result = objectives
+    if (!showCompleted) result = result.filter(o => o.status !== 'completed')
+    if (!showCancelled) result = result.filter(o => o.status !== 'cancelled')
     if (scope === 'mine') {
       result = result.filter(o =>
         o.okr_assignees.some(a => a.user_id === currentUserId) ||
@@ -114,7 +118,7 @@ export function OkrListClient({ initialObjectives, orgId, currentUserId, users, 
       )
     }
     return result
-  }, [objectives, search, filterStatus, filterPeriod, scope, currentUserId])
+  }, [objectives, search, filterStatus, filterPeriod, scope, currentUserId, showCompleted, showCancelled])
 
   // Stats
   const total = objectives.length
@@ -122,25 +126,49 @@ export function OkrListClient({ initialObjectives, orgId, currentUserId, users, 
   const atRisk = objectives.filter(o => o.status === 'at_risk').length
   const behind = objectives.filter(o => o.status === 'behind').length
   const completed = objectives.filter(o => o.status === 'completed').length
+  const cancelled = objectives.filter(o => o.status === 'cancelled').length
   const avgProgress = total > 0 ? Math.round(objectives.reduce((s, o) => s + Number(o.progress), 0) / total) : 0
 
   return (
     <div className="space-y-5">
       {/* Summary Stats */}
       {total > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          {[
-            { label: 'Total', value: total, color: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200' },
-            { label: 'On Track', value: onTrack, color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
-            { label: 'At Risk', value: atRisk, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
-            { label: 'Behind', value: behind, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' },
-            { label: 'Avg Progress', value: `${avgProgress}%`, color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
-          ].map(s => (
-            <div key={s.label} className={cn('rounded-xl border p-3 text-center', s.bg, s.border)}>
-              <div className={cn('text-xl font-bold', s.color)}>{s.value}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            {[
+              { label: 'Total', value: total, color: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200' },
+              { label: 'On Track', value: onTrack, color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
+              { label: 'At Risk', value: atRisk, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
+              { label: 'Behind', value: behind, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' },
+              { label: 'Avg Progress', value: `${avgProgress}%`, color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
+            ].map(s => (
+              <div key={s.label} className={cn('rounded-xl border p-3 text-center', s.bg, s.border)}>
+                <div className={cn('text-xl font-bold', s.color)}>{s.value}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
+              </div>
+            ))}
+          </div>
+          {(completed > 0 || cancelled > 0) && (
+            <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+              <span>Hidden:</span>
+              {completed > 0 && (
+                <button
+                  onClick={() => setShowCompleted(v => !v)}
+                  className={cn('px-2 py-0.5 rounded-md font-medium transition-colors', showCompleted ? 'bg-green-100 text-green-800' : 'text-green-600 hover:bg-green-50')}
+                >
+                  {completed} completed {showCompleted ? '(shown)' : '(click to show)'}
+                </button>
+              )}
+              {cancelled > 0 && (
+                <button
+                  onClick={() => setShowCancelled(v => !v)}
+                  className={cn('px-2 py-0.5 rounded-md font-medium transition-colors', showCancelled ? 'bg-gray-200 text-gray-700' : 'text-gray-500 hover:bg-gray-100')}
+                >
+                  {cancelled} cancelled {showCancelled ? '(shown)' : '(click to show)'}
+                </button>
+              )}
             </div>
-          ))}
+          )}
         </div>
       )}
 

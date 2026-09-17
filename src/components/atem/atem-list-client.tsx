@@ -99,10 +99,12 @@ export function AtemListClient({ initialItems, orgId, currentUserId, currentUser
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [completingId, setCompletingId] = useState<string | null>(null)
   const [showCompleted, setShowCompleted] = useState(false)
+  const [showBlocked, setShowBlocked] = useState(false)
 
   const filtered = useMemo(() => {
     let result = items
     if (!showCompleted) result = result.filter(item => item.status !== 'completed')
+    if (!showBlocked) result = result.filter(item => item.status !== 'blocked')
     if (search) {
       const q = search.toLowerCase()
       result = result.filter(item =>
@@ -115,7 +117,7 @@ export function AtemListClient({ initialItems, orgId, currentUserId, currentUser
     if (filterStatus.length > 0) result = result.filter(item => filterStatus.includes(item.status))
     if (filterPriority.length > 0) result = result.filter(item => filterPriority.includes(item.priority))
     return result
-  }, [items, search, filterStatus, filterPriority, showCompleted])
+  }, [items, search, filterStatus, filterPriority, showCompleted, showBlocked])
 
   const activeFilters = filterStatus.length + filterPriority.length
 
@@ -188,12 +190,14 @@ export function AtemListClient({ initialItems, orgId, currentUserId, currentUser
         >{counts.completed} completed</button>
         <span className="text-gray-300">·</span>
         <button
-          onClick={() => setFilterStatus(prev => prev.length === 1 && prev[0] === 'blocked' ? [] : ['blocked'])}
-          className={cn('px-2 py-0.5 rounded-md font-medium transition-colors', filterStatus.length === 1 && filterStatus[0] === 'blocked' ? 'bg-red-100 text-red-800' : 'text-red-600 hover:bg-red-50')}
+          onClick={() => setShowBlocked(v => !v)}
+          className={cn('px-2 py-0.5 rounded-md font-medium transition-colors', showBlocked ? 'bg-red-100 text-red-800' : 'text-red-600 hover:bg-red-50')}
         >{counts.blocked} blocked</button>
-        {!showCompleted && counts.completed > 0 && (
-          <span className="text-xs text-gray-400 ml-1">(completed hidden)</span>
-        )}
+        {(!showCompleted && counts.completed > 0) || (!showBlocked && counts.blocked > 0) ? (
+          <span className="text-xs text-gray-400 ml-1">
+            ({[!showCompleted && counts.completed > 0 && 'completed', !showBlocked && counts.blocked > 0 && 'blocked'].filter(Boolean).join(', ')} hidden)
+          </span>
+        ) : null}
       </div>
 
       {/* Toolbar */}
