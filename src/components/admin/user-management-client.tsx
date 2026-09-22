@@ -203,11 +203,13 @@ export function UserManagementClient({ departments, orgId, userId, user, initial
 
   async function handleSendInvite() {
     if (!userId) return
-    try {
-      await sendUserInvite(userId)
+    const result = await sendUserInvite(userId)
+    if (!result.success) {
+      toast.error(result.error ?? 'Failed to send invitation')
+    } else if (result.skipped) {
+      toast.info('Email not configured — user was not notified. Set up Gmail credentials in Netlify environment variables.')
+    } else {
       toast.success('Invitation email sent')
-    } catch (err) {
-      toast.error((err as Error).message)
     }
   }
 

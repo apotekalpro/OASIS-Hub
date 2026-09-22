@@ -314,27 +314,32 @@ export async function deleteCustomRole(slug: string) {
 }
 
 // ─── Send invitation email to an existing user ────────────────────────────────
-export async function sendUserInvite(userId: string) {
-  const supabase = await createClient()
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('email, contact_email, full_name')
-    .eq('id', userId)
-    .single()
+export async function sendUserInvite(userId: string): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
+  try {
+    const adminClient = createAdminClient()
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('email, contact_email, full_name')
+      .eq('id', userId)
+      .single()
 
-  if (!profile?.email) throw new Error('User not found')
+    if (!profile?.email) return { success: false, error: 'User not found' }
 
-  // Use contact_email for delivery if set, otherwise fall back to login email
-  const deliveryEmail = profile.contact_email || profile.email
+    const deliveryEmail = profile.contact_email || profile.email
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.URL ?? 'https://oasishub.netlify.app'
-  const tpl = welcomeUserEmail({
-    recipientName: profile.full_name,
-    email: profile.email,
-    defaultPassword: DEFAULT_PASSWORD,
-    loginUrl: `${appUrl}/login`,
-  })
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.URL ?? 'https://oasishub.netlify.app'
+    const tpl = welcomeUserEmail({
+      recipientName: profile.full_name,
+      email: profile.email,
+      defaultPassword: DEFAULT_PASSWORD,
+      loginUrl: `${appUrl}/login`,
+    })
 
-  const result = await sendEmail({ to: deliveryEmail, subject: tpl.subject, html: tpl.html })
-  if (!result.success && !result.skipped) throw new Error('Failed to send email')
+    const result = await sendEmail({ to: deliveryEmail, subject: tpl.subject, html: tpl.html })
+    if (result.skipped) return { success: true, skipped: true }
+    if (!result.success) return { success: false, error: 'Email sending failed — check Gmail credentials in Netlify environment variables.' }
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: (err as Error).message }
+  }
 }
