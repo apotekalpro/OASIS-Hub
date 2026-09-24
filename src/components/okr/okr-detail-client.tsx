@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Edit2, Trash2, Plus, Send, Smile, CornerDownRight,
   X, Users, Eye, Target, Calendar, Building2, Search, CheckCircle2,
-  ChevronDown, ChevronRight, Loader2, Paperclip, FileText, Download,
+  ChevronDown, ChevronRight, Loader2, Paperclip, FileText, Download, Copy,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -802,6 +802,39 @@ export function OkrDetailClient({
     }
   }
 
+  // ── Duplicate objective ───────────────────────────────────────────────────────
+  async function duplicateObjective() {
+    const source = await fetch(`/api/okr/${objective.id}`).then(r => r.json())
+    const payload = {
+      title: `${objective.title} (Copy)`,
+      description: objective.description,
+      period_type: objective.period_type,
+      period_label: objective.period_label,
+      start_date: objective.start_date,
+      end_date: objective.end_date,
+      status: 'on_track',
+      dept_id: objective.dept_id,
+      team_id: objective.team_id,
+      assigneeIds: [currentUserId],
+      watcherIds: [],
+      keyResults: (source.keyResults ?? []).map((kr: { title: string; metric_type: string; start_value: number; target_value: number; unit: string | null; due_date: string | null; description: string | null }) => ({
+        title: kr.title,
+        metric_type: kr.metric_type,
+        start_value: kr.start_value,
+        target_value: kr.target_value,
+        unit: kr.unit,
+        due_date: kr.due_date,
+        description: kr.description,
+        subtasks: [],
+      })),
+    }
+    const res = await fetch('/api/okr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    if (!res.ok) { toast.error('Failed to duplicate'); return }
+    const { objective: newObj } = await res.json()
+    toast.success('Objective duplicated — opening copy to edit')
+    router.push(`/okr/${newObj.id}`)
+  }
+
   // ── Delete objective ─────────────────────────────────────────────────────────
   async function deleteObjective() {
     if (!confirm('Delete this objective and all its key results? This cannot be undone.')) return
@@ -836,6 +869,10 @@ export function OkrDetailClient({
                 Delete
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={duplicateObjective} className="text-gray-600">
+              <Copy className="h-4 w-4" />
+              Duplicate
+            </Button>
             {canManage && (
               <OkrForm
                 orgId={orgId}
