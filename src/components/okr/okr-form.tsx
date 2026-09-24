@@ -209,7 +209,8 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
         assigneeIds: assignees.map(u => u.id),
         watcherIds: watchers.map(u => u.id),
         keyResults: validKrs.map(kr => ({
-          ...(kr._id ? { id: kr._id } : {}),
+          // Only include id if _id is a real DB UUID (contains hyphens); temp draft ids are short alphanumeric
+          ...(kr._id.includes('-') ? { id: kr._id } : {}),
           title: kr.title.trim(),
           metric_type: kr.metric_type,
           start_value: parseFloat(kr.start_value) || 0,
@@ -218,7 +219,7 @@ export function OkrForm({ orgId, currentUserId, users, departments, teams, objec
           due_date: kr.due_date || null,
           description: kr.description || null,
           subtasks: kr.subtasks.filter(s => s.title.trim()).map(s => ({
-            ...(s._id ? { id: s._id } : {}),
+            ...(s._id.includes('-') ? { id: s._id } : {}),
             title: s.title.trim(),
             priority: s.priority,
           })),
