@@ -817,7 +817,7 @@ export function OkrDetailClient({
       team_id: objective.team_id,
       assigneeIds: [currentUserId],
       watcherIds: [],
-      keyResults: (source.keyResults ?? []).map((kr: { title: string; metric_type: string; start_value: number; target_value: number; unit: string | null; due_date: string | null; description: string | null }) => ({
+      keyResults: (source.keyResults ?? []).map((kr: { title: string; metric_type: string; start_value: number; target_value: number; unit: string | null; due_date: string | null; description: string | null; subtasks?: Array<{ title: string; priority: string }> }) => ({
         title: kr.title,
         metric_type: kr.metric_type,
         start_value: kr.start_value,
@@ -825,7 +825,7 @@ export function OkrDetailClient({
         unit: kr.unit,
         due_date: kr.due_date,
         description: kr.description,
-        subtasks: [],
+        subtasks: (kr.subtasks ?? []).map(s => ({ title: s.title, priority: s.priority })),
       })),
     }
     const res = await fetch('/api/okr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
