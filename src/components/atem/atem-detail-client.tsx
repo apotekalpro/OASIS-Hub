@@ -602,7 +602,12 @@ export function AtemDetailClient({
       const ext = file.name.split('.').pop() ?? 'bin'
       const path = `atem/${itemId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
       const { error } = await supabase.storage.from('task-attachments').upload(path, file)
-      if (error) { toast.error(`Upload failed: ${file.name}`); continue }
+      if (error) {
+        const msg = error.message?.toLowerCase().includes('size') || error.message?.includes('413')
+          ? `File too large: ${file.name} (max 50 MB)`
+          : `Upload failed: ${file.name} — ${error.message}`
+        toast.error(msg); continue
+      }
       const { data: urlData } = supabase.storage.from('task-attachments').getPublicUrl(path)
       results.push({ name: file.name, url: urlData.publicUrl, type: file.type.startsWith('image/') ? 'image' : 'file' })
     }
