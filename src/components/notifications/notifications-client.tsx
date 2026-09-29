@@ -29,6 +29,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
 function getLink(n: AppNotification): string | null {
   const d = n.data as Record<string, unknown>
   if (d?.task_id) return `/tasks/${d.task_id}`
+  if (d?.objective_id) return `/okr/${d.objective_id}`
   if (d?.form_id && d?.submission_id) return `/forms/${d.form_id}/submissions/${d.submission_id}`
   if (d?.form_id) return `/forms/${d.form_id}`
   if (d?.channel_id) return `/messages`
