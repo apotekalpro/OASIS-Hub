@@ -430,6 +430,7 @@ export function OkrDetailClient({
       ...c,
       replies: comments.filter(r => r.parent_comment_id === c.id),
     }))
+    .reverse()
 
   // ── Key Results CRUD ─────────────────────────────────────────────────────────
   async function updateKrValue(kr: KeyResult) {

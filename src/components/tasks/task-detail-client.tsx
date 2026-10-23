@@ -388,6 +388,7 @@ export function TaskDetailClient({
       ...c,
       replies: comments.filter(r => r.parent_comment_id === c.id),
     }))
+    .reverse()
 
   const fetchReactions = useCallback(async (commentIds: string[]): Promise<Record<string, Reaction[]>> => {
     if (!commentIds.length) return {}

@@ -488,6 +488,7 @@ export function AtemDetailClient({
       ...c,
       replies: comments.filter(r => r.parent_comment_id === c.id),
     }))
+    .reverse()
 
   const isOwner = item.created_by === currentUserId
   const isDeptHeadPlus = ['super_admin', 'org_admin', 'dept_head', 'chief', 'lead', 'area_manager', 'team_leader'].includes(currentUserRole)
