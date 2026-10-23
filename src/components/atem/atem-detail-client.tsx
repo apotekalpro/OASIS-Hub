@@ -676,7 +676,6 @@ export function AtemDetailClient({
       setCommentText('')
       setReplyTo(null)
       setPendingFiles([])
-      setTimeout(() => commentEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
     }
     setSubmittingComment(false)
   }

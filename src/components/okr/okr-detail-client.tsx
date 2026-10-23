@@ -643,7 +643,6 @@ export function OkrDetailClient({
       setCommentText('')
       setPendingFiles([])
       setReplyTo(null)
-      setTimeout(() => commentEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
     } catch (err) {
       toast.error((err as Error).message)
     } finally {

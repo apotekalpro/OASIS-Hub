@@ -442,7 +442,6 @@ export function TaskDetailClient({
             reactions: [],
           }]
         })
-        setTimeout(() => commentEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
       })
       .subscribe()
 
@@ -559,7 +558,6 @@ export function TaskDetailClient({
       setCommentText('')
       setReplyTo(null)
       setPendingFiles([])
-      setTimeout(() => commentEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
     }
     setSubmittingComment(false)
   }
