@@ -55,6 +55,43 @@ function playMessageSound() {
   audio.play().catch(() => {})
 }
 
+async function registerPushSubscription(userId: string) {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+  if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) return
+
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js')
+    await navigator.serviceWorker.ready
+
+    // Check existing subscription first
+    let sub = await reg.pushManager.getSubscription()
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+      })
+    }
+
+    await fetch('/api/notifications/web-push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: sub.endpoint, keys: { p256dh: arrayBufferToBase64(sub.getKey('p256dh')!), auth: arrayBufferToBase64(sub.getKey('auth')!) } }),
+    })
+  } catch { /* ignore — user may have denied permission */ }
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = atob(base64)
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)))
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const profile = useAuthStore(s => s.profile)
   const { setNotifications, addNotification, setUnreadMessages } = useNotificationStore()
@@ -76,6 +113,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       document.removeEventListener('touchstart', unlock)
     }
   }, [])
+
+  // Register push subscription after profile loads + first interaction
+  useEffect(() => {
+    if (!profile?.id) return
+    if (Notification.permission === 'denied') return
+
+    function trySubscribe() {
+      if (Notification.permission === 'granted') {
+        registerPushSubscription(profile!.id)
+      } else if (Notification.permission === 'default') {
+        Notification.requestPermission().then(perm => {
+          if (perm === 'granted') registerPushSubscription(profile!.id)
+        })
+      }
+    }
+
+    // Request on first click interaction (avoids immediate browser prompt)
+    document.addEventListener('click', trySubscribe, { once: true })
+    return () => document.removeEventListener('click', trySubscribe)
+  }, [profile?.id])
 
   useEffect(() => {
     if (!profile?.id) return
