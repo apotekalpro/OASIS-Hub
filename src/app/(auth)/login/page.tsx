@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -18,14 +18,32 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
+const LOADING_MESSAGES = [
+  'Signing you in…',
+  'Verifying credentials…',
+  'Loading your workspace…',
+  'Preparing your dashboard…',
+  'Almost there…',
+]
+
 export default function LoginPage() {
   const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [redirecting, setRedirecting] = useState(false)
+  const [msgIndex, setMsgIndex] = useState(0)
 
-  const { register, handleSubmit, formState: { errors, isSubmitting }, getValues } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
+
+  useEffect(() => {
+    if (!redirecting) return
+    const interval = setInterval(() => {
+      setMsgIndex(i => Math.min(i + 1, LOADING_MESSAGES.length - 1))
+    }, 1800)
+    return () => clearInterval(interval)
+  }, [redirecting])
 
   async function onSubmit(data: FormData) {
     setError(null)
@@ -34,11 +52,35 @@ export default function LoginPage() {
       setError(result.error || 'Login failed. Please check your credentials.')
       return
     }
+    setRedirecting(true)
     router.push('/dashboard')
   }
 
+  const busy = isSubmitting || redirecting
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-purple-900 to-blue-950 flex items-center justify-center p-4">
+
+      {/* Full-screen redirect overlay */}
+      {redirecting && (
+        <div className="fixed inset-0 z-50 bg-indigo-950/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6">
+          <div className="relative">
+            <div className="w-16 h-16 rounded-full border-4 border-indigo-500/30 border-t-indigo-400 animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Image src="/alpro-logo.jpg" alt="" width={32} height={32} className="h-8 w-auto object-contain rounded-md opacity-80" />
+            </div>
+          </div>
+          <div className="text-center">
+            <p className="text-white font-medium text-lg">{LOADING_MESSAGES[msgIndex]}</p>
+            <p className="text-indigo-400 text-sm mt-1">OASIS Hub</p>
+          </div>
+          <div className="flex gap-1.5 mt-2">
+            {LOADING_MESSAGES.map((_, i) => (
+              <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i <= msgIndex ? 'w-6 bg-indigo-400' : 'w-1.5 bg-indigo-700'}`} />
+            ))}
+          </div>
+        </div>
+      )}
       {/* Background decorative circles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl" />
@@ -111,18 +153,8 @@ export default function LoginPage() {
               </div>
             )}
 
-            {isSubmitting && (
-              <div className="flex items-center justify-center gap-2 text-indigo-300 text-sm">
-                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Logging in…
-              </div>
-            )}
-
-            <Button type="submit" className="w-full bg-indigo-500 hover:bg-indigo-400 text-white border-0" size="lg" loading={isSubmitting}>
-              Sign In
+            <Button type="submit" className="w-full bg-indigo-500 hover:bg-indigo-400 text-white border-0" size="lg" loading={busy} disabled={busy}>
+              {redirecting ? 'Loading workspace…' : isSubmitting ? 'Signing in…' : 'Sign In'}
             </Button>
           </form>
 
