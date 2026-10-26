@@ -114,24 +114,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, [])
 
-  // Register push subscription after profile loads + first interaction
+  // Register push subscription as soon as profile is available
   useEffect(() => {
     if (!profile?.id) return
+    if (typeof Notification === 'undefined') return
     if (Notification.permission === 'denied') return
 
-    function trySubscribe() {
-      if (Notification.permission === 'granted') {
-        registerPushSubscription(profile!.id)
-      } else if (Notification.permission === 'default') {
-        Notification.requestPermission().then(perm => {
-          if (perm === 'granted') registerPushSubscription(profile!.id)
-        })
-      }
+    if (Notification.permission === 'granted') {
+      registerPushSubscription(profile.id)
+    } else if (Notification.permission === 'default') {
+      Notification.requestPermission().then(perm => {
+        if (perm === 'granted') registerPushSubscription(profile!.id)
+      })
     }
-
-    // Request on first click interaction (avoids immediate browser prompt)
-    document.addEventListener('click', trySubscribe, { once: true })
-    return () => document.removeEventListener('click', trySubscribe)
   }, [profile?.id])
 
   useEffect(() => {
