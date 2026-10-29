@@ -1213,7 +1213,7 @@ export function AtemDetailClient({
               </div>
               <p className="text-xs text-gray-400 ml-10">Enter to send · Shift+Enter for new line · @ to mention</p>
             </div>
-            <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" onChange={handleFileSelect} />
+            <input ref={fileInputRef} type="file" multiple accept="*/*" className="hidden" onChange={handleFileSelect} />
           </div>
         </div>
 

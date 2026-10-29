@@ -996,7 +996,7 @@ export function TaskDetailClient({
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  accept="*/*"
                   className="hidden"
                   onChange={handleFileSelect}
                 />

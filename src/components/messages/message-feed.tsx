@@ -500,7 +500,7 @@ export function MessageFeed({ channelId, orgId, currentUserId, currentUserName, 
 
         <div className="flex gap-2 items-end">
           {/* Hidden file input */}
-          <input ref={fileInputRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" onChange={handleFileSelect} />
+          <input ref={fileInputRef} type="file" multiple accept="*/*" className="hidden" onChange={handleFileSelect} />
 
           <div className="flex-1 relative">
             <textarea
