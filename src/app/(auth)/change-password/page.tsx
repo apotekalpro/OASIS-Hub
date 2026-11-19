@@ -38,12 +38,12 @@ export default function ChangePasswordPage() {
 
   async function onSubmit(data: FormData) {
     setError(null)
-    try {
-      await changePassword(data.password)
-      router.push('/dashboard')
-    } catch (err) {
-      setError((err as Error).message)
+    const result = await changePassword(data.password)
+    if (!result.success) {
+      setError(result.error)
+      return
     }
+    router.push('/dashboard')
   }
 
   return (

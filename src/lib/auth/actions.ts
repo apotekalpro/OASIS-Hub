@@ -136,11 +136,11 @@ export async function resetUserPassword(userId: string) {
 }
 
 // ─── Change own password (user action) ───────────────────────────────────────
-export async function changePassword(newPassword: string) {
+export async function changePassword(newPassword: string): Promise<{ success: true } | { success: false; error: string }> {
   const supabase = await createClient()
 
   const { error } = await supabase.auth.updateUser({ password: newPassword })
-  if (error) throw new Error(error.message)
+  if (error) return { success: false, error: error.message }
 
   const { data: { user } } = await supabase.auth.getUser()
   if (user) {
